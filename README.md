@@ -32,9 +32,19 @@ Each backup task is defined by:
 - Source directory
 - Destination directory
 - Backup type (Full or Differential)
+- File length
 
 ---
 
+## 🔧 Architecture
+
+The version 1 of EasySave is based on an MVC architecture. Follow the links if you want to see our diagrams :
+
+[View the UML class diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-class%20diagram.drawio.png)
+[View the UML activity diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-activity%20diagram.drawio.png)
+[View the UML sequence diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-sequence%20diagram.drawio.png)
+
+---
 ## 📝 Daily Log File
 
 The application writes a **daily JSON log file** in real time, containing the following details for each processed file:
@@ -42,7 +52,7 @@ The application writes a **daily JSON log file** in real time, containing the fo
 - 📝 Backup task name
 - 📂 Full UNC path of the source file
 - 📁 Full UNC path of the destination file
-- 📐 File size
+- 📐 File length
 - 🕐 Transfer time in milliseconds (negative if an error occurs)
 
 The JSON log should have line breaks between elements for better readability.
@@ -54,7 +64,7 @@ Example:
   "Name": "MyBackup1",
   "Source": "\\\\server\\folder\\file.txt",
   "Destination": "\\\\backup\\folder\\file.txt",
-  "Size": 991,
+  "Length": 991,
   "TransferTime": 142
 }
 
