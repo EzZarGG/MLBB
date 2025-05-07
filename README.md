@@ -40,9 +40,9 @@ Each backup task is defined by:
 
 The version 1 of EasySave is based on an MVC architecture. Follow the links if you want to see our diagrams :
 
-[View the UML class diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-class%20diagram.drawio.png)
-[View the UML activity diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-activity%20diagram.drawio.png)
-[View the UML sequence diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-sequence%20diagram.drawio.png)
+[View the UML class diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-class%20diagram.drawio.png)  
+[View the UML activity diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-activity%20diagram.drawio.png)  
+[View the UML sequence diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-sequence%20diagram.drawio.png)  
 
 ---
 ## 📝 Daily Log File
