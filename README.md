@@ -3,51 +3,51 @@
 
 ## 📦 Description
 
-**EasySave v1.0** est une application console développée en .NET Core, destinée à la gestion de travaux de sauvegarde pour utilisateurs francophones et anglophones. Elle permet la création, l’exécution et le suivi de sauvegardes complètes ou différentielles, tout en assurant une traçabilité rigoureuse via des fichiers de logs et d’état au format JSON.
+**EasySave v1.0** is a console-based application developed with .NET Core, designed to manage backup tasks for both English and French users. It allows the creation, execution, and monitoring of full or differential backups while maintaining detailed logs and real-time status reports in JSON format.
 
 ---
 
-## ⚙️ Fonctionnalités
+## ⚙️ Features
 
-- Interface en ligne de commande (CLI)
-- Jusqu’à **5 travaux de sauvegarde** définissables
-- Types de sauvegarde :
-  - Sauvegarde complète
-  - Sauvegarde différentielle
-- Multilingue : **Français** et **Anglais**
-- Support de différents types de répertoires :
-  - Disques locaux
-  - Disques externes
-  - Lecteurs réseaux
-- Exécution d’un ou plusieurs travaux :
-  - Exemple `1-3` → exécute les sauvegardes 1, 2 et 3
-  - Exemple `1;3` → exécute les sauvegardes 1 et 3
-
----
-
-## 📁 Structure d’un travail de sauvegarde
-
-Chaque travail est défini par :
-- Nom de la sauvegarde
-- Répertoire source
-- Répertoire cible
-- Type de sauvegarde (complète ou différentielle)
+- Command Line Interface (CLI)
+- Supports up to **5 backup tasks**
+- Backup types:
+  - Full backup
+  - Differential backup
+- Multilingual support: **English** and **French**
+- Source and destination directories can be:
+  - Local drives
+  - External drives
+  - Network drives
+- Execute one or multiple backup tasks via CLI:
+  - Example `1-3` → executes backups 1, 2, and 3
+  - Example `1;3` → executes backups 1 and 3
 
 ---
 
-## 📝 Fichier Log Journalier
+## 📁 Backup Task Structure
 
-Le logiciel écrit en temps réel un **fichier log journalier JSON**, contenant pour chaque fichier traité :
-- ⏱ Horodatage
-- 📝 Nom du travail de sauvegarde
-- 📂 Chemin complet du fichier source (format UNC)
-- 📁 Chemin complet du fichier de destination (format UNC)
-- 📐 Taille du fichier
-- 🕐 Temps de transfert (en ms, négatif si erreur)
+Each backup task is defined by:
+- Backup name
+- Source directory
+- Destination directory
+- Backup type (Full or Differential)
 
-Le fichier est structuré en JSON, avec un retour à la ligne entre chaque élément pour faciliter la lecture.
+---
 
-Exemple :
+## 📝 Daily Log File
+
+The application writes a **daily JSON log file** in real time, containing the following details for each processed file:
+- ⏱ Timestamp
+- 📝 Backup task name
+- 📂 Full UNC path of the source file
+- 📁 Full UNC path of the destination file
+- 📐 File size
+- 🕐 Transfer time in milliseconds (negative if an error occurs)
+
+The JSON log should have line breaks between elements for better readability.
+
+Example:
 ```json
 {
   "Date": "2020-12-17T14:25:43",
@@ -57,3 +57,4 @@ Exemple :
   "Size": 991,
   "TransferTime": 142
 }
+
