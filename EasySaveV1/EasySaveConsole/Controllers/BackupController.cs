@@ -146,8 +146,8 @@ namespace EasySaveV1.EasySaveConsole.Controllers
                     _view.DisplayBackupList(_manager.Jobs); // Display all jobs
                     if (_view.ConfirmSearch(_language)) // Confirm if the user wants to search
                     {
-                        var name = _view.AskBackupName(_language); // Ask for the backup name
-                        var b = _manager.GetJob(name); // Retrieve the job by name
+                        var backupName = _view.AskBackupName(_language); // Ask for the backup name
+                        var b = _manager.GetJob(backupName); // Retrieve the job by name
                         if (b != null) _view.DisplayBackup(b); // Display the job if found
                         else _view.ShowMessage("not_found", _language); // Show error if not found
                     }

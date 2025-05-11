@@ -158,6 +158,10 @@ namespace EasySaveV1.EasySaveConsole.Managers
 
             return true;
         }
+
+        public Backup GetJob(string name) =>
+           _jobs.FirstOrDefault(b => b.Name == name);
+
         public void ExecuteJobsByIndices(IEnumerable<int> indices)
         {
 
