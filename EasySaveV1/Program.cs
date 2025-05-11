@@ -1,9 +1,8 @@
 ﻿using System;
 using System.IO;
-using EasySaveConsole;
 using EasySaveV1.EasySaveConsole.Controllers;
 using EasySaveV1.EasySaveLogging;
-using EasySaveConsole.config;
+using EasySaveV1.EasySaveConsole;
 
 namespace EasySaveV1
 {
