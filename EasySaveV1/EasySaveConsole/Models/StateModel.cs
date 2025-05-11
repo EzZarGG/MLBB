@@ -1,8 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace EasySaveV1.EasySaveConsole.Models
 {
@@ -10,7 +6,7 @@ namespace EasySaveV1.EasySaveConsole.Models
     {
         public string Name { get; set; }
         public DateTime LastActionTime { get; set; }
-        public string Status { get; set; } // "Active" or "Inactive"
+        public string Status { get; set; } // "Pending" or "Active" or "Inactive"
         public int TotalFilesCount { get; set; }
         public long TotalFilesSize { get; set; }
 

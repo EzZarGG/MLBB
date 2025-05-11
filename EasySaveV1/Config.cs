@@ -4,7 +4,7 @@ using System.IO;
 using System.Text.Json;
 using EasySaveV1.EasySaveConsole.Models;
 
-namespace EasySaveConsole.config
+namespace EasySaveV1
 {
     public static class Config
     {
