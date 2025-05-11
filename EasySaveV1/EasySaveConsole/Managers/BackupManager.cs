@@ -192,7 +192,7 @@ namespace EasySaveV1.EasySaveConsole.Managers
                     state.CurrentTargetFile = job.TargetPath;
                 });
 
-                // Affichage immédiat à la console
+                // Display Active state in the console
                 Console.WriteLine($"\nJob : {job.Name}");
                 Console.WriteLine($"État : Active");
                 Console.WriteLine($"Total fichiers : {totalFiles}");
