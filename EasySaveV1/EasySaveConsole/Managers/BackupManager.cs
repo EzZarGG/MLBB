@@ -157,5 +157,136 @@ namespace EasySaveV1.EasySaveConsole.Managers
 
             return true;
         }
+        public void ExecuteJobsByIndices(IEnumerable<int> indices)
+        {
+
+            foreach (var i in indices)
+                if (i >= 1 && i <= _jobs.Count)
+                    RunBackup(_jobs[i - 1]);
+
+        }
+
+        private void RunBackup(Backup job)
+        {
+
+            // Log the start of execution
+            _logger.LogAdminAction(job.Name, "EXECUTE_START", $"Started executing backup job: {job.Name}");
+
+            try
+            {
+                // Prepare file list
+                var allFiles = Directory
+                    .EnumerateFiles(job.SourcePath, "*", SearchOption.AllDirectories)
+                    .ToList();
+
+                long totalBytes = allFiles.Sum(f => new FileInfo(f).Length);
+                int totalFiles = allFiles.Count;
+
+                UpdateJobState(job.Name, state => {
+                    state.Status = "Active";
+                    state.TotalFilesCount = totalFiles;
+                    state.TotalFilesSize = totalBytes;
+                    state.FilesRemaining = totalFiles;
+                    state.BytesRemaining = totalBytes;
+                    state.CurrentSourceFile = job.SourcePath;
+                    state.CurrentTargetFile = job.TargetPath;
+                });
+
+                // Affichage immédiat à la console
+                Console.WriteLine($"\nJob : {job.Name}");
+                Console.WriteLine($"État : Active");
+                Console.WriteLine($"Total fichiers : {totalFiles}");
+                Console.WriteLine($"Taille totale : {totalBytes} o");
+                Console.WriteLine($"Fichiers restants : {totalFiles}");
+                Console.WriteLine($"Taille restante : {totalBytes} o");
+                Console.WriteLine($"Fichier source en cours : {job.SourcePath}");
+                Console.WriteLine($"Destination : {job.TargetPath}");
+
+                // Process each file
+                foreach (var src in allFiles)
+                {
+                    var rel = Path.GetRelativePath(job.SourcePath, src);
+                    var dst = Path.Combine(job.TargetPath, rel);
+                    long fileSize = new FileInfo(src).Length;
+
+                    // Ensure target directory exists
+                    Directory.CreateDirectory(Path.GetDirectoryName(dst));
+
+                    // Update state before copying file
+                    UpdateJobState(job.Name, state => {
+                        state.CurrentSourceFile = src;
+                        state.CurrentTargetFile = dst;
+                    });
+
+                    var sw = System.Diagnostics.Stopwatch.StartNew();
+
+                    try
+                    {
+                        File.Copy(src, dst, true);
+                        sw.Stop();
+                        _logger.CreateLog(
+                            job.Name,
+                            sw.Elapsed,
+                            fileSize,
+                            DateTime.Now,
+                            src,
+                            dst,
+                            "INFO"
+                        );
+
+                        // Update state after successful copy
+                        UpdateJobState(job.Name, state => {
+                            state.FilesRemaining -= 1;
+                            state.BytesRemaining -= fileSize;
+                        });
+                    }
+                    catch (Exception ex)
+                    {
+                        sw.Stop();
+                        _logger.CreateLog(
+                            job.Name,
+                            sw.Elapsed.Negate(),
+                            0,
+                            DateTime.Now,
+                            src,
+                            dst,
+                            "ERROR"
+                        );
+
+                        // Log the error but continue with next file
+                        _logger.LogAdminAction(job.Name, "ERROR", $"Error copying file {src}: {ex.Message}");
+                    }
+                }
+
+                // Set final state to Inactive
+                UpdateJobState(job.Name, state => {
+                    state.Status = "Inactive";
+                    state.FilesRemaining = 0;
+                    state.BytesRemaining = 0;
+                    state.CurrentSourceFile = "";
+                    state.CurrentTargetFile = "";
+                });
+
+                // Log successful completion
+                _logger.LogAdminAction(job.Name, "EXECUTE_COMPLETE", $"Completed executing backup job: {job.Name}");
+            }
+            catch (Exception ex)
+            {
+                // Handle directory not found or other critical errors
+                _logger.LogAdminAction(job.Name, "ERROR", $"Critical error during backup: {ex.Message}");
+
+                // Set state to Inactive (but with error indication)
+                UpdateJobState(job.Name, state => {
+                    state.Status = "Inactive";
+                    state.CurrentSourceFile = "";
+                    state.CurrentTargetFile = "";
+                });
+            }
+        }
+
+        public void ShowLogs()
+        {
+            _logger.DisplayLogs();
+        }
     }
 }
