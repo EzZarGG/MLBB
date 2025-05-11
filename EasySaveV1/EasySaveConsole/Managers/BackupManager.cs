@@ -98,6 +98,64 @@ namespace EasySaveV1.EasySaveConsole.Managers
             // Save all states
             SaveStates(_jobStates.Values.ToList());
         }
+        public bool AddJob(Backup job)
+        {
+            if (_jobs.Count >= MaxJobs) return false;
+            _jobs.Add(job);
+            Config.SaveJobs(_jobs);
 
+            // Initialize state for the new job
+            _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
+            SaveStates(_jobStates.Values.ToList());
+
+            // Log the action
+            _logger.LogAdminAction(job.Name, "CREATE", $"Backup job created: {job.Name}");
+
+            return true;
+        }
+        public bool RemoveJob(string name)
+        {
+            var job = _jobs.FirstOrDefault(b => b.Name == name);
+            if (job == null) return false;
+            _jobs.Remove(job);
+            Config.SaveJobs(_jobs);
+
+            // Remove the job's state
+            if (_jobStates.ContainsKey(name))
+            {
+                _jobStates.Remove(name);
+                SaveStates(_jobStates.Values.ToList());
+            }
+
+            // Log the action
+            _logger.LogAdminAction(name, "DELETE", $"Backup job deleted: {name}");
+
+            return true;
+        }
+
+        public bool UpdateJob(string name, Backup updated)
+        {
+            var idx = _jobs.FindIndex(b => b.Name == name);
+            if (idx < 0) return false;
+
+            // Update the job
+            _jobs[idx] = updated;
+            Config.SaveJobs(_jobs);
+
+            // Update the state if name changed
+            if (name != updated.Name && _jobStates.ContainsKey(name))
+            {
+                var state = _jobStates[name];
+                _jobStates.Remove(name);
+                state.Name = updated.Name;
+                _jobStates[updated.Name] = state;
+                SaveStates(_jobStates.Values.ToList());
+            }
+
+            // Log the action
+            _logger.LogAdminAction(updated.Name, "UPDATE", $"Backup job updated: {name} to {updated.Name}");
+
+            return true;
+        }
     }
 }

@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace EasySaveV1.EasySaveConsole.Models
 {
-    internal class Backup
+    public class Backup
     {
     }
 }
