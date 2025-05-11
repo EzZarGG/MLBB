@@ -1,70 +1,51 @@
-# MLBB
-# EasySave - Version 1.0
+# EasySaveV1
 
-## 📦 Description
+## English
 
-**EasySave v1.0** is a console-based application developed with .NET Core, designed to manage backup tasks for both English and French users. It allows the creation, execution, and monitoring of full or differential backups while maintaining detailed logs and real-time status reports in JSON format.
+### Overview
+EasySaveV1 is a backup software application designed to provide efficient and user-friendly backup solutions. This application allows users to create, manage, and execute backup jobs with features such as real-time backup, differential backup, and complete backup.
 
----
+### Features
+- **Multiple Backup Types**: Create complete or differential backups
+- **Job Management**: Create, edit, and delete backup jobs
+- **Real-time Monitoring**: Track backup progress and status
+- **Logging System**: Detailed logs of backup operations
+- **User-friendly Interface**: Simple console interface for easy navigation
 
-## ⚙️ Features
+### System Requirements
+- Windows operating system
+- .NET Core 6/7/8
 
-- Command Line Interface (CLI)
-- Supports up to **5 backup tasks**
-- Backup types:
-  - Full backup
-  - Differential backup
-- Multilingual support: **English** and **French**
-- Source and destination directories can be:
-  - Local drives
-  - External drives
-  - Network drives
-- Execute one or multiple backup tasks via CLI:
-  - Example `1-3` → executes backups 1, 2, and 3
-  - Example `1;3` → executes backups 1 and 3
+### Installation
+1. Clone the repository: `git clone https://github.com/EzZarGG/MLBB.git`
+2. Open the solution in Visual Studio
+3. Build the solution
+4. Run the application from the build directory
 
----
+### Getting Started
+Refer to the User Guide for detailed instructions on how to use EasySaveV1.
 
-## 📁 Backup Task Structure
+## Français
 
-Each backup task is defined by:
-- Backup name
-- Source directory
-- Destination directory
-- Backup type (Full or Differential)
-- File length
+### Aperçu
+EasySaveV1 est une application de sauvegarde conçue pour offrir des solutions de sauvegarde efficaces et conviviales. Cette application permet aux utilisateurs de créer, gérer et exécuter des travaux de sauvegarde avec des fonctionnalités telles que la sauvegarde en temps réel, la sauvegarde différentielle et la sauvegarde complète.
 
----
+### Fonctionnalités
+- **Types de sauvegarde multiples** : Créez des sauvegardes complètes ou différentielles
+- **Gestion des travaux** : Créez, modifiez et supprimez des travaux de sauvegarde
+- **Suivi en temps réel** : Suivez la progression et l'état des sauvegardes
+- **Système de journalisation** : Journaux détaillés des opérations de sauvegarde
+- **Interface conviviale** : Interface console simple pour une navigation facile
 
-## 🔧 Architecture
+### Configuration requise
+- Système d'exploitation Windows
+- .NET Core 6/7/8
 
-The version 1 of EasySave is based on an MVC architecture. Follow the links if you want to see our diagrams :
+### Installation
+1. Clonez le dépôt : `git clone https://github.com/EzZarGG/MLBB.git`
+2. Ouvrez la solution dans Visual Studio
+3. Compilez la solution
+4. Exécutez l'application à partir du répertoire de compilation
 
-[View the UML class diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-class%20diagram.drawio.png)  
-[View the UML activity diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-activity%20diagram.drawio.png)  
-[View the UML sequence diagram for EasySave](UML%20diagram%20-%20EasySave%20-%20V1-sequence%20diagram.drawio.png)  
-
----
-## 📝 Daily Log File
-
-The application writes a **daily JSON log file** in real time, containing the following details for each processed file:
-- ⏱ Timestamp
-- 📝 Backup task name
-- 📂 Full UNC path of the source file
-- 📁 Full UNC path of the destination file
-- 📐 File length
-- 🕐 Transfer time in milliseconds (negative if an error occurs)
-
-The JSON log should have line breaks between elements for better readability.
-
-Example:
-```json
-{
-  "Date": "2020-12-17T14:25:43",
-  "Name": "MyBackup1",
-  "Source": "\\\\server\\folder\\file.txt",
-  "Destination": "\\\\backup\\folder\\file.txt",
-  "Length": 991,
-  "TransferTime": 142
-}
-
+### Démarrage
+Consultez le Guide d'Utilisateur pour des instructions détaillées sur l'utilisation d'EasySaveV1.
