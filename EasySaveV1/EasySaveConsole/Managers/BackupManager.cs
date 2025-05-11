@@ -75,7 +75,29 @@ namespace EasySaveV1.EasySaveConsole.Managers
 
             return states;
         }
+    private void SaveStates(List<StateModel> states)
+        {
+            var json = JsonSerializer.Serialize(states, _jsonOptions);
+            File.WriteAllText(_stateFile, json);
+        }
+
+        private void UpdateJobState(string jobName, Action<StateModel> updateAction)
+        {
+            // Ensure the job has a state record
+            if (!_jobStates.ContainsKey(jobName))
+            {
+                _jobStates[jobName] = StateModel.CreateInitialState(jobName);
+            }
+
+            // Apply the update
+            updateAction(_jobStates[jobName]);
+
+            // Update the last action time
+            _jobStates[jobName].LastActionTime = DateTime.Now;
+
+            // Save all states
+            SaveStates(_jobStates.Values.ToList());
+        }
+
     }
-
-
 }
