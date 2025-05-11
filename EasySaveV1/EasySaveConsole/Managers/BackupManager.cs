@@ -6,7 +6,7 @@ using EasySaveV1;
 using EasySaveV1.EasySaveConsole.Models;
 using EasySaveV1.EasySaveLogging;
 using System.Text.Json;
-using EasySaveConsole.config;
+using EasySaveV1.EasySaveConsole;
 
 namespace EasySaveV1.EasySaveConsole.Managers
 {
