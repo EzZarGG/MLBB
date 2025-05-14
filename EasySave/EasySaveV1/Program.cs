@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using EasySaveV1.EasySaveConsole.Controllers;
-using EasySaveV1.EasySaveLogging;
+using EasySaveLogging;
 using EasySaveV1.EasySaveConsole;
 
 namespace EasySaveV1
@@ -27,7 +27,7 @@ namespace EasySaveV1
             Directory.CreateDirectory(stateDir);
         }
 
-        // Lancer le Controller
+        // Launch the controller
         var controller = new BackupController();
         controller.Start(args);
     }
