@@ -3,9 +3,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
-namespace EasySaveV1.EasySaveLogging
-{
-    
+namespace EasySaveLogging
+{    
     /// Represents a single entry in the log.
     
     internal class LogEntry
@@ -21,9 +20,9 @@ namespace EasySaveV1.EasySaveLogging
         public string ActionType { get; set; }
     }
 
-    
+
     /// Singleton logger that writes entries to a JSON file.
-    
+
     public class Logger
     {
         // Lazy singleton instance
@@ -43,14 +42,14 @@ namespace EasySaveV1.EasySaveLogging
         // Private constructor to enforce singleton pattern
         private Logger() { }
 
-        
+
         /// Gets the singleton instance of the Logger.
-        
+
         public static Logger GetInstance() => _instance.Value;
 
-        
+
         /// Sets the file path for the log file. Creates directory and file if they do not exist.
-        
+
         public void SetLogFilePath(string path)
         {
             _logFilePath = path;
@@ -62,7 +61,7 @@ namespace EasySaveV1.EasySaveLogging
         }
 
         /// Creates a log entry for a file transfer operation.
-       
+
         public void CreateLog(string backupName,
                               TimeSpan transferTime,
                               long fileSize,
@@ -89,9 +88,9 @@ namespace EasySaveV1.EasySaveLogging
             AddLogEntry(entry);
         }
 
-        
+
         /// Logs an administrative action (e.g., start/stop backup, configuration changes).
-        
+
         public void LogAdminAction(string backupName, string actionType, string message)
         {
             var entry = new LogEntry
@@ -110,9 +109,9 @@ namespace EasySaveV1.EasySaveLogging
             AddLogEntry(entry);
         }
 
-        
+
         /// Adds a new entry to the JSON log file in a thread-safe manner.
-       
+
         private void AddLogEntry(LogEntry entry)
         {
             lock (_instance)
@@ -131,9 +130,9 @@ namespace EasySaveV1.EasySaveLogging
             }
         }
 
-        
+
         /// Reads the entire log file and writes the JSON to the console.
-        
+
         public void DisplayLogs()
         {
             var json = File.ReadAllText(_logFilePath);

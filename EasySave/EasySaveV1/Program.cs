@@ -1,7 +1,7 @@
 ﻿using System;
 using System.IO;
 using EasySaveV1.EasySaveConsole.Controllers;
-using EasySaveV1.EasySaveLogging;
+using EasySaveLogging;
 using EasySaveV1.EasySaveConsole;
 
 namespace EasySaveV1
