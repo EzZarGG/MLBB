@@ -3,7 +3,7 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.13.35931.197
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasySaveV1", "EasySaveV1.csproj", "{E3623714-F36C-41CF-850C-EEE257397049}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasySaveV1", "EasySaveV1\EasySaveV1.csproj", "{E3623714-F36C-41CF-850C-EEE257397049}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "EasySaveLogging", "..\EasySaveLogging\EasySaveLogging.csproj", "{291AF0DE-ADA3-47FF-ADE0-AF17E632B718}"
 EndProject
