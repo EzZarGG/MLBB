@@ -27,7 +27,7 @@ namespace EasySaveV1
             Directory.CreateDirectory(stateDir);
         }
 
-        // Lancer le Controller
+        // Launch the controller
         var controller = new BackupController();
         controller.Start(args);
     }
