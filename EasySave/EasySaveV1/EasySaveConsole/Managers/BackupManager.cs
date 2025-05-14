@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using EasySaveV1;
 using EasySaveV1.EasySaveConsole.Models;
-using EasySaveV1.EasySaveLogging;
+using EasySaveLogging;
 using System.Text.Json;
 using EasySaveV1.EasySaveConsole;
 
