@@ -239,93 +239,93 @@ The logger implements thread safety through the use of a lock mechanism on the s
 
 ---
 
-## Version FranÁaise
+## Version Fran√ßaise
 
-### AperÁu
+### Aper√ßu
 
-La DLL EasySaveLogging fournit une solution robuste de journalisation pour l'application de sauvegarde EasySave. Elle implÈmente un logger singleton thread-safe qui enregistre les opÈrations de sauvegarde et les actions administratives dans un fichier. Le logger prend en charge deux formats de fichier :
+La DLL EasySaveLogging fournit une solution robuste de journalisation pour l'application de sauvegarde EasySave. Elle impl√©mente un logger singleton thread-safe qui enregistre les op√©rations de sauvegarde et les actions administratives dans un fichier. Le logger prend en charge deux formats de fichier :
 
-- **Format JSON** (format par dÈfaut)
+- **Format JSON** (format par d√©faut)
 - **Format XML**
 
-Si aucun format n'est explicitement sÈlectionnÈ, le logger utilisera JSON comme format par dÈfaut.
+Si aucun format n'est explicitement s√©lectionn√©, le logger utilisera JSON comme format par d√©faut.
 
-### SpÈcifications Techniques
+### Sp√©cifications Techniques
 
 - **Framework**: .NET 8.0
 - **Langage**: C#
-- **Type de Projet**: BibliothËque de Classes
-- **DÈpendance**: System.Text.Json (inclus dans .NET 8.0)
+- **Type de Projet**: Biblioth√®que de Classes
+- **D√©pendance**: System.Text.Json (inclus dans .NET 8.0)
 
 ### Composants Principaux
 
 #### Classe Logger
 
-La classe `Logger` est le composant principal de la DLL EasySaveLogging. Elle est implÈmentÈe comme un singleton thread-safe pour assurer une journalisation cohÈrente ‡ travers plusieurs threads.
+La classe `Logger` est le composant principal de la DLL EasySaveLogging. Elle est impl√©ment√©e comme un singleton thread-safe pour assurer une journalisation coh√©rente √† travers plusieurs threads.
 
-##### FonctionnalitÈs ClÈs
+##### Fonctionnalit√©s Cl√©s
 
 - **Patron Singleton**: Garantit une seule instance du logger dans toute l'application
-- **SÈcuritÈ Thread**: Utilise un mÈcanisme de verrouillage pour empÍcher les Ècritures concurrentes
-- **Support de Formats Multiples**: Prend en charge les formats JSON (par dÈfaut) et XML
-- **Types de Journaux Multiples**: Prend en charge ‡ la fois les journaux d'opÈration et les journaux administratifs
+- **S√©curit√© Thread**: Utilise un m√©canisme de verrouillage pour emp√™cher les √©critures concurrentes
+- **Support de Formats Multiples**: Prend en charge les formats JSON (par d√©faut) et XML
+- **Types de Journaux Multiples**: Prend en charge √† la fois les journaux d'op√©ration et les journaux administratifs
 
-##### MÈthodes Publiques
+##### M√©thodes Publiques
 
-| MÈthode | ParamËtres | Description |
+| M√©thode | Param√®tres | Description |
 |---------|------------|-------------|
 | `GetInstance()` | Aucun | Renvoie l'instance singleton du Logger |
-| `SetLogFilePath(string path)` | path: Le chemin du fichier journal | DÈfinit l'emplacement du fichier journal et crÈe les rÈpertoires nÈcessaires |
-| `SetLogFormat(string format)` | format: Le format pour les journaux ("JSON" ou "XML") | DÈfinit le format pour les fichiers journaux (JSON est le dÈfaut si non spÈcifiÈ) |
-| `CreateLog(...)` | Voir les paramËtres dÈtaillÈs ci-dessous | Enregistre une opÈration de transfert de fichier |
-| `LogAdminAction(...)` | Voir les paramËtres dÈtaillÈs ci-dessous | Enregistre une action administrative |
+| `SetLogFilePath(string path)` | path: Le chemin du fichier journal | D√©finit l'emplacement du fichier journal et cr√©e les r√©pertoires n√©cessaires |
+| `SetLogFormat(string format)` | format: Le format pour les journaux ("JSON" ou "XML") | D√©finit le format pour les fichiers journaux (JSON est le d√©faut si non sp√©cifi√©) |
+| `CreateLog(...)` | Voir les param√®tres d√©taill√©s ci-dessous | Enregistre une op√©ration de transfert de fichier |
+| `LogAdminAction(...)` | Voir les param√®tres d√©taill√©s ci-dessous | Enregistre une action administrative |
 | `DisplayLogs()` | Aucun | Affiche le contenu du fichier journal dans la console |
 
-###### ParamËtres de la MÈthode CreateLog
+###### Param√®tres de la M√©thode CreateLog
 
-| ParamËtre | Type | Description |
+| Param√®tre | Type | Description |
 |-----------|------|-------------|
-| backupName | string | Nom de la t‚che de sauvegarde |
-| transferTime | TimeSpan | DurÈe du transfert de fichier |
-| fileSize | long | Taille du fichier transfÈrÈ en octets |
-| date | DateTime | Horodatage de l'opÈration |
+| backupName | string | Nom de la t√¢che de sauvegarde |
+| transferTime | TimeSpan | Dur√©e du transfert de fichier |
+| fileSize | long | Taille du fichier transf√©r√© en octets |
+| date | DateTime | Horodatage de l'op√©ration |
 | sourcePath | string | Chemin source du fichier |
 | targetPath | string | Chemin de destination du fichier |
 | logType | string | Type de journal (ex: "INFO", "ERROR") |
 
-###### ParamËtres de la MÈthode LogAdminAction
+###### Param√®tres de la M√©thode LogAdminAction
 
-| ParamËtre | Type | Description |
+| Param√®tre | Type | Description |
 |-----------|------|-------------|
-| backupName | string | Nom de la t‚che de sauvegarde (peut Ítre vide) |
+| backupName | string | Nom de la t√¢che de sauvegarde (peut √™tre vide) |
 | actionType | string | Type d'action administrative |
 | message | string | Description de l'action |
 
 #### Classe LogEntry
 
-La classe `LogEntry` est une classe interne utilisÈe pour structurer les donnÈes de journal avant leur sÈrialisation en JSON.
+La classe `LogEntry` est une classe interne utilis√©e pour structurer les donn√©es de journal avant leur s√©rialisation en JSON.
 
-##### PropriÈtÈs
+##### Propri√©t√©s
 
-| PropriÈtÈ | Type | Description |
+| Propri√©t√© | Type | Description |
 |-----------|------|-------------|
-| Timestamp | DateTime | Quand l'entrÈe de journal a ÈtÈ crÈÈe |
-| BackupName | string | Nom de la t‚che de sauvegarde |
+| Timestamp | DateTime | Quand l'entr√©e de journal a √©t√© cr√©√©e |
+| BackupName | string | Nom de la t√¢che de sauvegarde |
 | SourcePath | string | Chemin source du fichier |
 | TargetPath | string | Chemin de destination du fichier |
 | FileSize | long | Taille du fichier en octets |
-| TransferTime | long | DurÈe du transfert en millisecondes |
+| TransferTime | long | Dur√©e du transfert en millisecondes |
 | Message | string | Description ou message d'erreur |
-| LogType | string | Type d'entrÈe de journal (ex: "INFO", "ERROR") |
+| LogType | string | Type d'entr√©e de journal (ex: "INFO", "ERROR") |
 | ActionType | string | Type d'action (ex: "FILE_TRANSFER") |
 
 ### Format du Fichier Journal
 
 Le logger prend en charge deux formats de fichier :
 
-#### Format JSON (Par DÈfaut)
+#### Format JSON (Par D√©faut)
 
-Lorsque vous utilisez le format JSON par dÈfaut, le fichier journal est stockÈ sous forme d'un tableau JSON d'entrÈes de journal. Chaque entrÈe contient les champs dÈcrits dans la classe LogEntry ci-dessus.
+Lorsque vous utilisez le format JSON par d√©faut, le fichier journal est stock√© sous forme d'un tableau JSON d'entr√©es de journal. Chaque entr√©e contient les champs d√©crits dans la classe LogEntry ci-dessus.
 
 Exemple de contenu de fichier journal (JSON) :
 ```json
@@ -337,7 +337,7 @@ Exemple de contenu de fichier journal (JSON) :
     "targetPath": "D:\\Backups\\Documents",
     "fileSize": 1024,
     "transferTime": 150,
-    "message": "Fichier transfÈrÈ",
+    "message": "Fichier transf√©r√©",
     "logType": "INFO",
     "actionType": "FILE_TRANSFER"
   },
@@ -348,7 +348,7 @@ Exemple de contenu de fichier journal (JSON) :
     "targetPath": "",
     "fileSize": 0,
     "transferTime": 0,
-    "message": "Sauvegarde terminÈe avec succËs",
+    "message": "Sauvegarde termin√©e avec succ√®s",
     "logType": "INFO",
     "actionType": "BACKUP_COMPLETE"
   }
@@ -357,7 +357,7 @@ Exemple de contenu de fichier journal (JSON) :
 
 #### Format XML
 
-Lorsque vous utilisez le format XML, le fichier journal est stockÈ sous forme d'un document XML avec un ÈlÈment racine `<Logs>` contenant plusieurs ÈlÈments `<LogEntry>`.
+Lorsque vous utilisez le format XML, le fichier journal est stock√© sous forme d'un document XML avec un √©l√©ment racine `<Logs>` contenant plusieurs √©l√©ments `<LogEntry>`.
 
 Exemple de contenu de fichier journal (XML) :
 ```xml
@@ -370,7 +370,7 @@ Exemple de contenu de fichier journal (XML) :
     <TargetPath>D:\Backups\Documents</TargetPath>
     <FileSize>1024</FileSize>
     <TransferTime>150</TransferTime>
-    <Message>Fichier transfÈrÈ</Message>
+    <Message>Fichier transf√©r√©</Message>
     <LogType>INFO</LogType>
     <ActionType>FILE_TRANSFER</ActionType>
   </LogEntry>
@@ -381,7 +381,7 @@ Exemple de contenu de fichier journal (XML) :
     <TargetPath></TargetPath>
     <FileSize>0</FileSize>
     <TransferTime>0</TransferTime>
-    <Message>Sauvegarde terminÈe avec succËs</Message>
+    <Message>Sauvegarde termin√©e avec succ√®s</Message>
     <LogType>INFO</LogType>
     <ActionType>BACKUP_COMPLETE</ActionType>
   </LogEntry>
@@ -396,10 +396,10 @@ Exemple de contenu de fichier journal (XML) :
 // Obtenir l'instance du logger
 var logger = EasySaveLogging.Logger.GetInstance();
 
-// DÈfinir le chemin du fichier journal
+// D√©finir le chemin du fichier journal
 logger.SetLogFilePath("C:\\Logs\\EasySave\\backup_log.json");
 
-// Optionnel : DÈfinir le format du journal (JSON est le format par dÈfaut si non spÈcifiÈ)
+// Optionnel : D√©finir le format du journal (JSON est le format par d√©faut si non sp√©cifi√©)
 // Pour le format JSON :
 logger.SetLogFormat("JSON");
 // OU pour le format XML :
@@ -409,7 +409,7 @@ logger.SetLogFormat("JSON");
 #### Journalisation d'un Transfert de Fichier
 
 ```csharp
-// Journaliser un transfert de fichier rÈussi
+// Journaliser un transfert de fichier r√©ussi
 logger.CreateLog(
     backupName: "Sauvegarde Quotidienne",
     transferTime: TimeSpan.FromMilliseconds(150),
@@ -420,7 +420,7 @@ logger.CreateLog(
     logType: "INFO"
 );
 
-// Journaliser un transfert de fichier ÈchouÈ
+// Journaliser un transfert de fichier √©chou√©
 logger.CreateLog(
     backupName: "Sauvegarde Quotidienne",
     transferTime: TimeSpan.FromMilliseconds(50),
@@ -435,18 +435,18 @@ logger.CreateLog(
 #### Journalisation d'Actions Administratives
 
 ```csharp
-// Journaliser le dÈbut d'une t‚che de sauvegarde
+// Journaliser le d√©but d'une t√¢che de sauvegarde
 logger.LogAdminAction(
     backupName: "Sauvegarde Quotidienne",
     actionType: "BACKUP_START",
-    message: "DÈmarrage de l'opÈration de sauvegarde quotidienne"
+    message: "D√©marrage de l'op√©ration de sauvegarde quotidienne"
 );
 
 // Journaliser les changements de configuration
 logger.LogAdminAction(
     backupName: null,
     actionType: "CONFIG_CHANGE",
-    message: "Changement du rÈpertoire cible vers D:\\NouvellesSauvegardes"
+    message: "Changement du r√©pertoire cible vers D:\\NouvellesSauvegardes"
 );
 ```
 
@@ -457,21 +457,21 @@ logger.LogAdminAction(
 logger.DisplayLogs();
 ```
 
-### SÈcuritÈ Thread
+### S√©curit√© Thread
 
-Le logger implÈmente la sÈcuritÈ thread gr‚ce ‡ l'utilisation d'un mÈcanisme de verrouillage sur l'instance singleton. Cela garantit que plusieurs threads peuvent Ècrire en toute sÈcuritÈ dans le fichier journal sans corruption de donnÈes.
+Le logger impl√©mente la s√©curit√© thread gr√¢ce √† l'utilisation d'un m√©canisme de verrouillage sur l'instance singleton. Cela garantit que plusieurs threads peuvent √©crire en toute s√©curit√© dans le fichier journal sans corruption de donn√©es.
 
 ### Bonnes Pratiques
 
-1. **Initialisation PrÈcoce**: DÈfinir le chemin du fichier journal au dÈmarrage de l'application
-2. **Surveillance RÈguliËre**: ImplÈmenter une stratÈgie de rotation des journaux pour les applications ‡ longue durÈe d'exÈcution
-3. **Gestion des Erreurs**: ImplÈmenter des blocs try-catch autour des opÈrations de journalisation
-4. **Performance**: Envisager de journaliser uniquement les informations essentielles lors d'opÈrations ‡ haut dÈbit
+1. **Initialisation Pr√©coce**: D√©finir le chemin du fichier journal au d√©marrage de l'application
+2. **Surveillance R√©guli√®re**: Impl√©menter une strat√©gie de rotation des journaux pour les applications √† longue dur√©e d'ex√©cution
+3. **Gestion des Erreurs**: Impl√©menter des blocs try-catch autour des op√©rations de journalisation
+4. **Performance**: Envisager de journaliser uniquement les informations essentielles lors d'op√©rations √† haut d√©bit
 
-### Notes d'ImplÈmentation
+### Notes d'Impl√©mentation
 
-- Le logger crÈe le rÈpertoire du journal et initialise une structure de journal vide si le fichier n'existe pas
-- Toutes les entrÈes de journal sont ajoutÈes au fichier journal existant
-- JSON est utilisÈ comme format par dÈfaut si aucun format n'est spÈcifiÈ
-- Lors de l'utilisation du format JSON, la sortie est formatÈe avec indentation pour une meilleure lisibilitÈ
+- Le logger cr√©e le r√©pertoire du journal et initialise une structure de journal vide si le fichier n'existe pas
+- Toutes les entr√©es de journal sont ajout√©es au fichier journal existant
+- JSON est utilis√© comme format par d√©faut si aucun format n'est sp√©cifi√©
+- Lors de l'utilisation du format JSON, la sortie est format√©e avec indentation pour une meilleure lisibilit√©
 - Lors du changement de format, tout fichier journal existant sera converti au nouveau format

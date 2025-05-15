@@ -131,10 +131,116 @@ Run with dotnet or exe arguments.
 
 ### Help
 
+=======
+# EasySaveV1 User Guide
+
+## English
+
+### Table of Contents
+1. [Introduction](#introduction)
+2. [Installation](#installation)
+3. [Getting Started](#getting-started)
+4. [Creating a Backup Job](#creating-a-backup-job)
+5. [Managing Backup Jobs](#managing-backup-jobs)
+6. [Executing Backups](#executing-backups)
+7. [Understanding Logs](#understanding-logs)
+8. [Troubleshooting](#troubleshooting)
+9. [Command Line Usage](#command-line-usage)
+
+### Introduction
+EasySaveV1 is a backup software solution designed to provide reliable and efficient backup capabilities. This guide will walk you through all the features and functionality of the application to help you secure your data effectively.
+
+### Installation
+1. Ensure your system meets the minimum requirements:
+   - Windows operating system
+   - .NET Core 6/7/8
+
+2. Installation steps:
+   - Download or clone the repository from GitHub: https://github.com/EzZarGG/MLBB.git
+   - Open the solution file in Visual Studio
+   - Build the solution (Ctrl+Shift+B)
+   - Navigate to the output directory and run the executable file
+
+### Getting Started
+When you first launch EasySaveV1, you'll be presented with the main menu showing the following options:
+- Create a new backup job
+- View existing backup jobs
+- Execute a backup job
+- Modify a backup job
+- Delete a backup job
+- Exit the application
+
+Navigate through the menu by typing the corresponding number and pressing Enter.
+
+### Creating a Backup Job
+To create a new backup job:
+
+1. Select "Create a new backup job" from the main menu
+2. Enter a unique name for your backup job
+3. Enter the source directory path (the folder you want to back up)
+4. Enter the target directory path (where you want the backup to be stored)
+5. Select the backup type:
+   - Complete backup: Copies all files from source to target
+   - Differential backup: Copies only files that have changed since the last backup
+
+6. Confirm your selection to create the job
+
+### Managing Backup Jobs
+You can view, modify, or delete existing backup jobs from the main menu:
+
+- **View Jobs**: Lists all created backup jobs with their settings
+- **Modify Jobs**: Allows you to update the source path, target path, or backup type
+- **Delete Jobs**: Removes a backup job from the system
+
+### Executing Backups
+To execute a backup job:
+
+1. Select "Execute a backup job" from the main menu
+2. Choose the job you want to execute from the list
+3. The backup process will begin, and you'll see progress information displayed
+4. Upon completion, a summary will be shown with statistics about the operation
+
+### Understanding Logs
+EasySaveV1 maintains two types of logs:
+
+1. **Status Logs**: Real-time information about ongoing backup jobs
+   - Location: [AppDirectory]/Logs/status
+   - Format: JSON files with timestamp information
+
+2. **Activity Logs**: Detailed history of all backup operations
+   - Location: [AppDirectory]/Logs/activity
+   - Format: JSON and/or XML files with comprehensive details
+
+These logs include information such as:
+- Job name
+- Source and target path
+- File size and count
+- Transfer time
+- Encryption status
+
+### Troubleshooting
+Common issues and solutions:
+
+- **Access Denied Errors**: Ensure the application has proper permissions to access the source and target directories
+- **Job Not Found**: Verify that the job name exists in the system
+- **Path Not Found**: Confirm that the specified paths are valid and accessible
+- **Backup Failed**: Check logs for specific error messages and ensure adequate disk space is available
+
+For additional support, please submit issues on the GitHub repository.
+
+### Command Line Usage
+EasySaveV1 can be used either in interactive mode or through command line. Here's how to use the command line functionality:
+
+#### Prerequisites
+- .NET 8.0 or higher installed
+- EasySaveV1 source code extracted
+
+#### Available Commands
+
+##### Display Help
 ```bash
 dotnet run -- help
 ```
-
 ### Create
 
 ```bash
@@ -153,24 +259,28 @@ dotnet run -- update "Name" "C:\NewSrc" "D:\NewDst" Differential
 dotnet run -- delete "Name"
 ```
 
-### List
-
+### List Existing Backups
 ```bash
 dotnet run -- list
 ```
-
-### Execute
+### Execute Backups
 
 ```bash
-dotnet run -- execute "1-3"
+dotnet run -- execute "1-3"   # Executes backups 1 to 3
+dotnet run -- execute "1;2;4" # Executes backups 1, 2 and 4
 ```
 
-### Logs
+Or simply:
+```bash
+dotnet run -- "1-3"   # The "execute" command is implicit
+dotnet run -- "1;2;4"
+```
+
+### Display Logs
 
 ```bash
 dotnet run -- logs
 ```
-
 Notes:
 
 * Running without args enters interactive mode
@@ -233,21 +343,21 @@ For help or to contribute:
 ---
 ---
 
-## Guide de l’utilisateur EasySave V1 & V1.1
+## Guide de lÂ’utilisateur EasySave V1 & V1.1
 
-### Table des matières
+### Table des matiÃ¨res
 
 1. [Introduction](#introduction)
 2. [Installation](#installation)
 3. [Premiers pas (V1)](#premiers-pas-v1)
-4. [Création et gestion des travaux de sauvegarde (V1)](#jobs-v1)
-5. [Exécution des sauvegardes (V1)](#executing-v1)
-6. [Journaux et dépannage (V1)](#logs-v1)
+4. [CrÃ©ation et gestion des travaux de sauvegarde (V1)](#jobs-v1)
+5. [ExÃ©cution des sauvegardes (V1)](#executing-v1)
+6. [Journaux et dÃ©pannage (V1)](#logs-v1)
 7. [Utilisation en ligne de commande (V1)](#cli-v1)
-8. [Nouveautés de la V1.1](#whats-new-v11)
+8. [NouveautÃ©s de la V1.1](#whats-new-v11)
 
-   * 8.1 [Nouvelles fonctionnalités](#new-features-v11)
-   * 8.2 [Améliorations et corrections](#enhancements-v11)
+   * 8.1 [Nouvelles fonctionnalitÃ©s](#new-features-v11)
+   * 8.2 [AmÃ©liorations et corrections](#enhancements-v11)
 9. [Premiers pas (V1.1)](#getting-started-v11)
 10. [Support et contribution](#support)
 
@@ -255,16 +365,16 @@ For help or to contribute:
 
 ## Introduction
 
-EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la version initiale V1 et la mise à jour incrémentale V1.1, détaillant l’installation, les flux de travail principaux, le dépannage et les améliorations apportées.
+EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la version initiale V1 et la mise Ã  jour incrÃ©mentale V1.1, dÃ©taillant lÂ’installation, les flux de travail principaux, le dÃ©pannage et les amÃ©liorations apportÃ©es.
 
 ---
 
 ## Installation
 
-1. **Prérequis** :
+1. **PrÃ©requis** :
 
-   * Système d’exploitation Windows
-   * [.NET Core 6, 7 ou 8](https://dotnet.microsoft.com/) installé
+   * SystÃ¨me dÂ’exploitation Windows
+   * [.NET Core 6, 7 ou 8](https://dotnet.microsoft.com/) installÃ©
 2. **Clonage et build** :
 
    ```bash
@@ -275,7 +385,7 @@ EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la vers
 
    * Ouvrez `EasySave.sln` dans Visual Studio
    * Compilez (Ctrl+Shift+B)
-4. **Exécution** :
+4. **ExÃ©cution** :
 
    * Allez dans `bin/Debug/net8.0/` (ou le dossier correspondant)
    * Lancez `EasySave.exe`
@@ -286,97 +396,95 @@ EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la vers
 
 Au premier lancement, le menu interactif principal propose :
 
-* Créer un nouveau travail de sauvegarde
+* CrÃ©er un nouveau travail de sauvegarde
 * Afficher les travaux existants
-* Exécuter un travail
+* ExÃ©cuter un travail
 * Modifier un travail
 * Supprimer un travail
 * Quitter
 
-Naviguez à l’aide des numéros correspondants.
+Naviguez Ã  lÂ’aide des numÃ©ros correspondants.
 
 ---
 
-## Création et gestion des travaux de sauvegarde (V1)
+## CrÃ©ation et gestion des travaux de sauvegarde (V1)
 
-### Créer un travail
+### CrÃ©er un travail
 
-1. Choisissez **Créer un nouveau travail de sauvegarde**
+1. Choisissez **CrÃ©er un nouveau travail de sauvegarde**
 2. Saisissez un nom unique
-3. Indiquez le **répertoire source**
-4. Indiquez le **répertoire de destination**
-5. Sélectionnez le type de sauvegarde :
+3. Indiquez le **rÃ©pertoire source**
+4. Indiquez le **rÃ©pertoire de destination**
+5. SÃ©lectionnez le type de sauvegarde :
 
-   * **Complète** : copie tous les fichiers à chaque exécution
-   * **Différentielle** : copie seulement les fichiers modifiés depuis la dernière sauvegarde
+   * **ComplÃ¨te** : copie tous les fichiers Ã  chaque exÃ©cution
+   * **DiffÃ©rentielle** : copie seulement les fichiers modifiÃ©s depuis la derniÃ¨re sauvegarde
 6. Confirmez pour enregistrer le travail
 
 ### Afficher les travaux
 
-Affiche la liste numérotée des travaux enregistrés (nom, source, destination, type).
+Affiche la liste numÃ©rotÃ©e des travaux enregistrÃ©s (nom, source, destination, type).
 
 ### Modifier un travail
 
-1. Sélectionnez **Modifier un travail de sauvegarde**
-2. Choisissez le numéro du travail
-3. Mettez à jour le source, la destination ou le type
+1. SÃ©lectionnez **Modifier un travail de sauvegarde**
+2. Choisissez le numÃ©ro du travail
+3. Mettez Ã  jour le source, la destination ou le type
 4. Enregistrez les modifications
 
 ### Supprimer un travail
 
-1. Sélectionnez **Supprimer un travail de sauvegarde**
-2. Choisissez le numéro du travail à supprimer
+1. SÃ©lectionnez **Supprimer un travail de sauvegarde**
+2. Choisissez le numÃ©ro du travail Ã  supprimer
 
 ---
 
-## Exécution des sauvegardes (V1)
+## ExÃ©cution des sauvegardes (V1)
 
-1. Sélectionnez **Exécuter un travail de sauvegarde**
+1. SÃ©lectionnez **ExÃ©cuter un travail de sauvegarde**
 2. Choisissez un ou plusieurs travaux (ex. `1-3` ou `1;2;4`)
-3. Suivez la progression en temps réel
-4. À la fin, un récapitulatif indique :
+3. Suivez la progression en temps rÃ©el
+4. Ã€ la fin, un rÃ©capitulatif indique :
 
-   * Nombre de fichiers scannés
-   * Nombre de fichiers copiés
-   * Durée de l’opération
+   * Nombre de fichiers scannÃ©s
+   * Nombre de fichiers copiÃ©s
+   * DurÃ©e de lÂ’opÃ©ration
 
 ---
 
-## Journaux et dépannage (V1)
+## Journaux et dÃ©pannage (V1)
 
 ### Types de journaux
 
-* **Journaux d’état** : JSON en temps réel dans `Logs/status`
-* **Journaux d’activité** : historique en JSON/XML dans `Logs/activity`
+* **Journaux dÂ’Ã©tat** : JSON en temps rÃ©el dans `Logs/status`
+* **Journaux dÂ’activitÃ©** : historique en JSON/XML dans `Logs/activity`
 
 Les journaux contiennent : nom du travail, chemins, nombre et taille de fichiers, horodatages, statut de chiffrement.
 
-### Problèmes courants
+### ProblÃ¨mes courants
 
-* **Accès refusé** : vérifiez les permissions des dossiers
+* **AccÃ¨s refusÃ©** : vÃ©rifiez les permissions des dossiers
 * **Travail introuvable** : confirmez le nom du travail
-* **Chemin introuvable** : vérifiez l’existence des chemins
-* **Échec de la sauvegarde** : consultez les journaux et libérez de l’espace disque
+* **Chemin introuvable** : vÃ©rifiez lÂ’existence des chemins
+* **Ã‰chec de la sauvegarde** : consultez les journaux et libÃ©rez de lÂ’espace disque
 
 ---
 
 ## Utilisation en ligne de commande (V1)
 
-Lancez l’application avec des arguments dotnet ou exe.
+Lancez lÂ’application avec des arguments dotnet ou exe.
 
-### Aide
-
+### Afficher l'aide
 ```bash
 dotnet run -- help
 ```
-
-### Créer
+### CrÃ©er
 
 ```bash
 dotnet run -- create "Nom" "C:\Src" "D:\Dst" Full
 ```
 
-### Mettre à jour
+### Mettre Ã  jour
 
 ```bash
 dotnet run -- update "Nom" "C:\NewSrc" "D:\NewDst" Differential
@@ -389,15 +497,21 @@ dotnet run -- delete "Nom"
 ```
 
 ### Lister
-
 ```bash
 dotnet run -- list
 ```
-
-### Exécuter
+### ExÃ©cuter
 
 ```bash
-dotnet run -- execute "1-3"
+dotnet run -- execute "1-3"   # ExÃ©cute les sauvegardes 1 Ã  3
+dotnet run -- execute "1;2;4" # ExÃ©cute les sauvegardes 1, 2 et 4
+```
+
+Ou simplement:
+
+```bash
+dotnet run -- "1-3"   # La commande "execute" est implicite
+dotnet run -- "1;2;4"
 ```
 
 ### Journaux
@@ -411,30 +525,30 @@ dotnet run -- logs
 * Sans arguments, le mode interactif se lance
 * Maximum 5 travaux de sauvegarde
 * Personnalisez le dossier des journaux via `EASYSAVE_LOG_DIR`
-* Personnalisez le dossier d’état via `EASYSAVE_STATE_DIR`
+* Personnalisez le dossier dÂ’Ã©tat via `EASYSAVE_STATE_DIR`
 
 ---
 
-## Nouveautés de la V1.1
+## NouveautÃ©s de la V1.1
 
-### 8.1 Nouvelles fonctionnalités
+### 8.1 Nouvelles fonctionnalitÃ©s
 
-* **Mode collaboration** : partage et synchronisation des travaux en temps réel
-* **Notifications WebSocket** : alertes en direct sur l’état des travaux
-* **Archives chiffrées** : chiffrement AES-256 optionnel des sauvegardes
+* **Mode collaboration** : partage et synchronisation des travaux en temps rÃ©el
+* **Notifications WebSocket** : alertes en direct sur lÂ’Ã©tat des travaux
+* **Archives chiffrÃ©es** : chiffrement AES-256 optionnel des sauvegardes
 
-### 8.2 Améliorations et corrections
+### 8.2 AmÃ©liorations et corrections
 
-* Mise à jour des dépendances pour la sécurité
+* Mise Ã  jour des dÃ©pendances pour la sÃ©curitÃ©
 * Correction du bug de pagination dans la liste des travaux
-* Optimisation des requêtes API et de l’énumération des fichiers
-* Messages d’erreur et journaux plus détaillés
+* Optimisation des requÃªtes API et de lÂ’Ã©numÃ©ration des fichiers
+* Messages dÂ’erreur et journaux plus dÃ©taillÃ©s
 
 ---
 
 ## Premiers pas (V1.1)
 
-1. **Mettez à jour l’application** :
+1. **Mettez Ã  jour lÂ’application** :
 
    ```bash
    git pull && dotnet build
@@ -444,16 +558,43 @@ dotnet run -- logs
    ```bash
    dotnet run -- start:v1.1
    ```
-3. **Migration (mise à jour)** :
+3. **Migration (mise Ã  jour)** :
 
    ```bash
    dotnet run -- migrate:v11
    ```
-4. **Utilisez les nouvelles options** :
+   
+---
 
-   * Activez la collaboration dans les paramètres
-   * Basculez le chiffrement pour chaque travail
-   * Abonnez-vous aux notifications
+#### Exemples d'utilisation
+
+```bash
+# CrÃ©er trois sauvegardes
+dotnet run -- create "Documents" "C:\Users\User\Documents" "D:\Backup\Documents" "Full"
+dotnet run -- create "Images" "C:\Users\User\Pictures" "D:\Backup\Pictures" "Full"
+dotnet run -- create "Projets" "C:\Users\User\Projects" "D:\Backup\Projects" "Differential"
+
+# Lister les sauvegardes
+dotnet run -- list
+
+# Mettre Ã  jour une sauvegarde
+dotnet run -- update "Documents" "C:\Users\User\Documents" "E:\Backup\Documents" "Full"
+
+# ExÃ©cuter plusieurs sauvegardes
+dotnet run -- "1-2"
+
+# Afficher les logs
+dotnet run -- logs
+
+# Supprimer une sauvegarde
+dotnet run -- delete "Images"
+```
+
+#### Notes
+- Si vous exÃ©cutez l'application sans arguments, le mode interactif sera lancÃ©
+- Le nombre maximum de sauvegardes est limitÃ© Ã  5
+- Les logs sont enregistrÃ©s dans le dossier "Logs" Ã  la racine de l'application, sauf si la variable d'environnement `EASYSAVE_LOG_DIR` est dÃ©finie
+- Les Ã©tats de sauvegarde sont enregistrÃ©s dans le dossier "State" Ã  la racine de l'application, sauf si la variable d'environnement `EASYSAVE_STATE_DIR` est dÃ©finie
 
 ---
 
@@ -464,5 +605,4 @@ Pour toute aide ou contribution :
 * Ouvrez une issue ou proposez une PR sur [GitHub](https://github.com/EzZarGG/MLBB)
 * Rejoignez notre forum de discussion
 
-*Merci d’avoir choisi EasySave !*
-
+*Merci dÂ’avoir choisi EasySave !*
