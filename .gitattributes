@@ -61,3 +61,8 @@
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
 #*.RTF   diff=astextplain
+
+###############################################################################
+# Ignore EasySaveV1 from exports (releases)
+###############################################################################
+/EasySaveV1/** export-ignore

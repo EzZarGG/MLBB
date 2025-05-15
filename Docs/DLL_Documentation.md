@@ -1,341 +1,477 @@
-# EasySaveLogging - DLL Documentation
+# EasySaveLogging DLL Documentation
 
-## English
+## English Version
 
-### Description
+### Overview
 
-`EasySaveLogging` is a reusable, versioned DLL written in C# targeting .NET Core.  
-It is designed to manage structured and readable JSON log files for the **EasySave** backup application, and can be integrated into other C# applications needing consistent logging of actions and events.
+The EasySaveLogging DLL provides a robust logging solution for the EasySave backup application. It implements a thread-safe singleton logger that records backup operations and administrative actions to a file. The logger supports two file formats:
 
-This library implements a **singleton logger**, ensuring centralized and thread-safe logging.
+- **JSON format** (default format)
+- **XML format**
 
----
+If no format is explicitly selected, the logger will use JSON as the default format.
 
-### Features
+### Technical Specifications
 
-- Singleton-based logger pattern
-- Writes structured JSON log files
-- Supports two log types:
-  - **File transfer logs** (`CreateLog`)
-  - **Administrative logs** (`LogAdminAction`)
-- Human-readable JSON output (indented, camelCase)
-- Thread-safe writing
-- Dynamically creates log file and directory if missing
+- **Framework**: .NET 8.0
+- **Language**: C#
+- **Project Type**: Class Library
+- **Dependency**: System.Text.Json (included in .NET 8.0)
 
----
+### Core Components
 
-### Setup and Usage
+#### Logger Class
 
-#### 1. Reference the DLL in your project
+The `Logger` class is the main component of the EasySaveLogging DLL. It is implemented as a thread-safe singleton to ensure consistent logging across multiple threads.
 
-- Add the compiled `EasySaveLogging.dll` to your Visual Studio project
-- Or include the project `EasySaveLogging.csproj` in your solution and add a reference to it
+##### Key Features
 
-#### 2. Initialize the Logger
+- **Singleton Pattern**: Ensures a single logger instance throughout the application
+- **Thread Safety**: Uses locking mechanism to prevent concurrent writes
+- **Multiple Format Support**: Supports both JSON (default) and XML formats
+- **Multiple Log Types**: Supports both operation logs and administrative logs
 
-```cSharp
-using EasySaveLogging;
+##### Public Methods
 
-var logger = Logger.GetInstance();
-logger.SetLogFilePath("C:\\Logs\\log-2025-05-14.json");
-```
----
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| `GetInstance()` | None | Returns the singleton instance of the Logger |
+| `SetLogFilePath(string path)` | path: The file path for the log file | Sets the location of the log file and creates necessary directories |
+| `SetLogFormat(string format)` | format: The format for logs ("JSON" or "XML") | Sets the format for log files (JSON is default if not specified) |
+| `CreateLog(...)` | See detailed parameters below | Records a file transfer operation |
+| `LogAdminAction(...)` | See detailed parameters below | Records an administrative action |
+| `DisplayLogs()` | None | Outputs the contents of the log file to the console |
 
-### Log a file transfer
+###### CreateLog Method Parameters
 
-```cSharp
-logger.CreateLog(
-	backupName: "MyBackup",
-	transferTime: TimeSpan.FromMilliseconds(234),
-	fileSize: 102400,
-	date: DateTime.Now,
-	sourcePath: @"D:\source\file.txt",
-	targetPath: @"E:\backup\file.txt",
-	logType: "INFO" // or "ERROR"
-);
-```
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| backupName | string | Name of the backup job |
+| transferTime | TimeSpan | Duration of the file transfer |
+| fileSize | long | Size of the transferred file in bytes |
+| date | DateTime | Timestamp of the operation |
+| sourcePath | string | Source path of the file |
+| targetPath | string | Destination path of the file |
+| logType | string | Type of log (e.g., "INFO", "ERROR") |
 
----
+###### LogAdminAction Method Parameters
 
-### Log an admin action
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| backupName | string | Name of the backup job (can be empty) |
+| actionType | string | Type of administrative action |
+| message | string | Description of the action |
 
-```cSharp
-logger.LogAdminAction(
-	backupName: "MyBackup",
-	actionType: "START_BACKUP",
-	message: "Backup operation initiated."
-);
-```
+#### LogEntry Class
 
----
+The `LogEntry` class is an internal class used to structure the log data before serialization to JSON.
 
-### Display logs in console
+##### Properties
 
-```cSharp
-logger.DisplayLogs();
-```
-
----
+| Property | Type | Description |
+|----------|------|-------------|
+| Timestamp | DateTime | When the log entry was created |
+| BackupName | string | Name of the backup job |
+| SourcePath | string | Source path of the file |
+| TargetPath | string | Destination path of the file |
+| FileSize | long | Size of the file in bytes |
+| TransferTime | long | Duration of transfer in milliseconds |
+| Message | string | Description or error message |
+| LogType | string | Type of log entry (e.g., "INFO", "ERROR") |
+| ActionType | string | Type of action (e.g., "FILE_TRANSFER") |
 
 ### Log File Format
 
-- Format: JSON array ([{}, {}, ...])
+The logger supports two file formats:
 
-- One file per day (recommended via filename)
+#### JSON Format (Default)
 
-Example entry:
+When using the default JSON format, the log file is stored as a JSON array of log entries. Each entry contains the fields described in the LogEntry class above.
 
-```cSharp
-{
-  "timestamp": "2025-05-14T15:34:22",
-  "backupName": "MyBackup",
-  "sourcePath": "D:\\source\\file.txt",
-  "targetPath": "E:\\backup\\file.txt",
-  "fileSize": 102400,
-  "transferTime": 234,
-  "message": "File transferred",
-  "logType": "INFO",
-  "actionType": "FILE_TRANSFER"
-}
+Example log file content (JSON):
+```json
+[
+  {
+    "timestamp": "2025-05-15T10:30:45.123Z",
+    "backupName": "Daily Backup",
+    "sourcePath": "C:\\Documents",
+    "targetPath": "D:\\Backups\\Documents",
+    "fileSize": 1024,
+    "transferTime": 150,
+    "message": "File transferred",
+    "logType": "INFO",
+    "actionType": "FILE_TRANSFER"
+  },
+  {
+    "timestamp": "2025-05-15T10:35:12.456Z",
+    "backupName": "Daily Backup",
+    "sourcePath": "",
+    "targetPath": "",
+    "fileSize": 0,
+    "transferTime": 0,
+    "message": "Backup completed successfully",
+    "logType": "INFO",
+    "actionType": "BACKUP_COMPLETE"
+  }
+]
 ```
 
----
+#### XML Format
 
-### Class Overview
+When using the XML format, the log file is stored as an XML document with a root `<Logs>` element containing multiple `<LogEntry>` elements.
 
-#### Logger (Singleton)
-
-| Method                        | Description                                             |
-| ----------------------------- | ------------------------------------------------------- |
-| `GetInstance()`               | Returns the singleton instance                          |
-| `SetLogFilePath(string path)` | Sets the path to the log file (creates file if missing) |
-| `CreateLog(...)`              | Logs a file transfer operation                          |
-| `LogAdminAction(...)`         | Logs an administrative action                           |
-| `DisplayLogs()`               | Displays the current JSON log content in console        |
-
-#### LogEntry (Internal)
-
-| Property       | Description                                               |
-| -------------- | --------------------------------------------------------- |
-| `Timestamp`    | Date and time of the log                                  |
-| `BackupName`   | Name of the backup job                                    |
-| `SourcePath`   | File source path                                          |
-| `TargetPath`   | File destination path                                     |
-| `FileSize`     | Size of the file in bytes                                 |
-| `TransferTime` | Duration in milliseconds                                  |
-| `Message`      | Log message (e.g., "File transferred")                    |
-| `LogType`      | Type of log (e.g., "INFO", "ERROR")                       |
-| `ActionType`   | Action category (e.g., "FILE\_TRANSFER", "START\_BACKUP") |
-
----
-
-### Thread safety
-
-All log entries are appended within a lock to ensure thread-safe operations when multiple parts of the application write logs concurrently.
-
----
-
-### Requirements
-
-- .NET 8.0 or compatible runtime
-
-- Works with Windows file system paths (UNC/local/external)
-
----
-
-### Version
-
-- Current Version: 1.0.0
-
-- Changes:
-
-	- Initial implementation of CreateLog and LogAdminAction
-
-	- Structured log entry format
-
-	- Thread-safe file writes
-
-	- JSON formatting with indentation
-
----
-
-### Licence/Usage
-
-This DLL is intended for internal use with the EasySave application. For external use, please reference the EasySave repository and license.
-
----
-
-### Support
-
-If you have questions or issues integrating the DLL, open an issue in the EasySave main repository or contact the development team.
-
----
-
-## FranÁais
-
-### Description
-
-`EasySaveLogging` est une DLL rÈutilisable et versionnÈe Ècrite en C# ciblant .NET Core.  
-Elle est conÁue pour gÈrer des fichiers journaux JSON structurÈs et lisibles pour l'application de sauvegarde **EasySave**, et peut Ítre intÈgrÈe dans d'autres applications C# nÈcessitant une journalisation cohÈrente des actions et ÈvÈnements.
-
-Cette bibliothËque implÈmente un **logger singleton**, assurant une journalisation centralisÈe et thread-safe.
-
----
-
-### FonctionnalitÈs
-
-- ModËle de logger basÈ sur le singleton
-- …crit des fichiers journaux JSON structurÈs
-- Prend en charge deux types de journaux :
-  - **Journaux de transfert de fichiers** (`CreateLog`)
-  - **Journaux administratifs** (`LogAdminAction`)
-- Sortie JSON lisible par l'humain (indentÈ, camelCase)
-- …criture thread-safe
-- CrÈe dynamiquement le fichier journal et le rÈpertoire s'ils sont manquants
-
----
-
-### Configuration et utilisation
-
-#### 1. RÈfÈrencer la DLL dans votre projet
-
-- Ajoutez la DLL compilÈe `EasySaveLogging.dll` ‡ votre projet Visual Studio
-- Ou incluez le projet `EasySaveLogging.csproj` dans votre solution et ajoutez-y une rÈfÈrence
-
-#### 2. Initialiser le Logger
-
-```cSharp
-using EasySaveLogging;
-
-var logger = Logger.GetInstance();
-logger.SetLogFilePath("C:\\Logs\\log-2025-05-14.json");
+Example log file content (XML):
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Logs>
+  <LogEntry>
+    <Timestamp>2025-05-15T10:30:45.123Z</Timestamp>
+    <BackupName>Daily Backup</BackupName>
+    <SourcePath>C:\Documents</SourcePath>
+    <TargetPath>D:\Backups\Documents</TargetPath>
+    <FileSize>1024</FileSize>
+    <TransferTime>150</TransferTime>
+    <Message>File transferred</Message>
+    <LogType>INFO</LogType>
+    <ActionType>FILE_TRANSFER</ActionType>
+  </LogEntry>
+  <LogEntry>
+    <Timestamp>2025-05-15T10:35:12.456Z</Timestamp>
+    <BackupName>Daily Backup</BackupName>
+    <SourcePath></SourcePath>
+    <TargetPath></TargetPath>
+    <FileSize>0</FileSize>
+    <TransferTime>0</TransferTime>
+    <Message>Backup completed successfully</Message>
+    <LogType>INFO</LogType>
+    <ActionType>BACKUP_COMPLETE</ActionType>
+  </LogEntry>
+</Logs>
 ```
----
 
-### Journaliser un transfert de fichier
+### Usage Examples
 
-```cSharp
+#### Initializing the Logger
+
+```csharp
+// Get the logger instance
+var logger = EasySaveLogging.Logger.GetInstance();
+
+// Set the log file path
+logger.SetLogFilePath("C:\\Logs\\EasySave\\backup_log.json");
+
+// Optional: Set the log format (JSON is default if not specified)
+// For JSON format:
+logger.SetLogFormat("JSON");
+// OR for XML format:
+// logger.SetLogFormat("XML");
+```
+
+#### Logging a File Transfer
+
+```csharp
+// Log a successful file transfer
 logger.CreateLog(
-	backupName: "MaSauvegarde",
-	transferTime: TimeSpan.FromMilliseconds(234),
-	fileSize: 102400,
-	date: DateTime.Now,
-	sourcePath: @"D:\source\fichier.txt",
-	targetPath: @"E:\backup\fichier.txt",
-	logType: "INFO" // ou "ERROR"
+    backupName: "Daily Backup",
+    transferTime: TimeSpan.FromMilliseconds(150),
+    fileSize: 1024,
+    date: DateTime.Now,
+    sourcePath: "C:\\Documents\\file.txt",
+    targetPath: "D:\\Backups\\Documents\\file.txt",
+    logType: "INFO"
+);
+
+// Log a failed file transfer
+logger.CreateLog(
+    backupName: "Daily Backup",
+    transferTime: TimeSpan.FromMilliseconds(50),
+    fileSize: 1024,
+    date: DateTime.Now,
+    sourcePath: "C:\\Documents\\error.txt",
+    targetPath: "D:\\Backups\\Documents\\error.txt",
+    logType: "ERROR"
 );
 ```
 
----
+#### Logging Administrative Actions
 
-### Journaliser une action administrative
-
-```cSharp
+```csharp
+// Log the start of a backup job
 logger.LogAdminAction(
-	backupName: "MaSauvegarde",
-	actionType: "START_BACKUP",
-	message: "OpÈration de sauvegarde initiÈe."
+    backupName: "Daily Backup",
+    actionType: "BACKUP_START",
+    message: "Starting daily backup operation"
+);
+
+// Log configuration changes
+logger.LogAdminAction(
+    backupName: null,
+    actionType: "CONFIG_CHANGE",
+    message: "Changed target directory to D:\\NewBackups"
 );
 ```
 
----
+#### Displaying Logs
 
-### Afficher les journaux dans la console
-
-```cSharp
+```csharp
+// Output the logs to console
 logger.DisplayLogs();
 ```
 
+### Thread Safety
+
+The logger implements thread safety through the use of a lock mechanism on the singleton instance. This ensures that multiple threads can safely write to the log file without data corruption.
+
+### Best Practices
+
+1. **Initialize Early**: Set the log file path at application startup
+2. **Regular Monitoring**: Implement a log rotation strategy for long-running applications
+3. **Error Handling**: Implement try-catch blocks around logging operations
+4. **Performance**: Consider logging only essential information during high-throughput operations
+
+### Implementation Notes
+
+- The logger creates the log directory and initializes an empty log structure if the file doesn't exist
+- All log entries are appended to the existing log file
+- JSON is used as the default format if no format is specified
+- When using JSON format, the output is formatted with indentation for better readability
+- When switching formats, any existing log file will be converted to the new format
+
 ---
 
-### Format du fichier journal
+## Version Fran√ßaise
 
-- Format : tableau JSON ([{}, {}, ...])
+### Aper√ßu
 
-- Un fichier par jour (recommandÈ via le nom de fichier)
+La DLL EasySaveLogging fournit une solution robuste de journalisation pour l'application de sauvegarde EasySave. Elle impl√©mente un logger singleton thread-safe qui enregistre les op√©rations de sauvegarde et les actions administratives dans un fichier. Le logger prend en charge deux formats de fichier :
 
-Exemple d'entrÈe :
+- **Format JSON** (format par d√©faut)
+- **Format XML**
 
-```cSharp
-{
-  "timestamp": "2025-05-14T15:34:22",
-  "backupName": "MaSauvegarde",
-  "sourcePath": "D:\\source\\fichier.txt",
-  "targetPath": "E:\\backup\\fichier.txt",
-  "fileSize": 102400,
-  "transferTime": 234,
-  "message": "Fichier transfÈrÈ",
-  "logType": "INFO",
-  "actionType": "FILE_TRANSFER"
-}
+Si aucun format n'est explicitement s√©lectionn√©, le logger utilisera JSON comme format par d√©faut.
+
+### Sp√©cifications Techniques
+
+- **Framework**: .NET 8.0
+- **Langage**: C#
+- **Type de Projet**: Biblioth√®que de Classes
+- **D√©pendance**: System.Text.Json (inclus dans .NET 8.0)
+
+### Composants Principaux
+
+#### Classe Logger
+
+La classe `Logger` est le composant principal de la DLL EasySaveLogging. Elle est impl√©ment√©e comme un singleton thread-safe pour assurer une journalisation coh√©rente √† travers plusieurs threads.
+
+##### Fonctionnalit√©s Cl√©s
+
+- **Patron Singleton**: Garantit une seule instance du logger dans toute l'application
+- **S√©curit√© Thread**: Utilise un m√©canisme de verrouillage pour emp√™cher les √©critures concurrentes
+- **Support de Formats Multiples**: Prend en charge les formats JSON (par d√©faut) et XML
+- **Types de Journaux Multiples**: Prend en charge √† la fois les journaux d'op√©ration et les journaux administratifs
+
+##### M√©thodes Publiques
+
+| M√©thode | Param√®tres | Description |
+|---------|------------|-------------|
+| `GetInstance()` | Aucun | Renvoie l'instance singleton du Logger |
+| `SetLogFilePath(string path)` | path: Le chemin du fichier journal | D√©finit l'emplacement du fichier journal et cr√©e les r√©pertoires n√©cessaires |
+| `SetLogFormat(string format)` | format: Le format pour les journaux ("JSON" ou "XML") | D√©finit le format pour les fichiers journaux (JSON est le d√©faut si non sp√©cifi√©) |
+| `CreateLog(...)` | Voir les param√®tres d√©taill√©s ci-dessous | Enregistre une op√©ration de transfert de fichier |
+| `LogAdminAction(...)` | Voir les param√®tres d√©taill√©s ci-dessous | Enregistre une action administrative |
+| `DisplayLogs()` | Aucun | Affiche le contenu du fichier journal dans la console |
+
+###### Param√®tres de la M√©thode CreateLog
+
+| Param√®tre | Type | Description |
+|-----------|------|-------------|
+| backupName | string | Nom de la t√¢che de sauvegarde |
+| transferTime | TimeSpan | Dur√©e du transfert de fichier |
+| fileSize | long | Taille du fichier transf√©r√© en octets |
+| date | DateTime | Horodatage de l'op√©ration |
+| sourcePath | string | Chemin source du fichier |
+| targetPath | string | Chemin de destination du fichier |
+| logType | string | Type de journal (ex: "INFO", "ERROR") |
+
+###### Param√®tres de la M√©thode LogAdminAction
+
+| Param√®tre | Type | Description |
+|-----------|------|-------------|
+| backupName | string | Nom de la t√¢che de sauvegarde (peut √™tre vide) |
+| actionType | string | Type d'action administrative |
+| message | string | Description de l'action |
+
+#### Classe LogEntry
+
+La classe `LogEntry` est une classe interne utilis√©e pour structurer les donn√©es de journal avant leur s√©rialisation en JSON.
+
+##### Propri√©t√©s
+
+| Propri√©t√© | Type | Description |
+|-----------|------|-------------|
+| Timestamp | DateTime | Quand l'entr√©e de journal a √©t√© cr√©√©e |
+| BackupName | string | Nom de la t√¢che de sauvegarde |
+| SourcePath | string | Chemin source du fichier |
+| TargetPath | string | Chemin de destination du fichier |
+| FileSize | long | Taille du fichier en octets |
+| TransferTime | long | Dur√©e du transfert en millisecondes |
+| Message | string | Description ou message d'erreur |
+| LogType | string | Type d'entr√©e de journal (ex: "INFO", "ERROR") |
+| ActionType | string | Type d'action (ex: "FILE_TRANSFER") |
+
+### Format du Fichier Journal
+
+Le logger prend en charge deux formats de fichier :
+
+#### Format JSON (Par D√©faut)
+
+Lorsque vous utilisez le format JSON par d√©faut, le fichier journal est stock√© sous forme d'un tableau JSON d'entr√©es de journal. Chaque entr√©e contient les champs d√©crits dans la classe LogEntry ci-dessus.
+
+Exemple de contenu de fichier journal (JSON) :
+```json
+[
+  {
+    "timestamp": "2025-05-15T10:30:45.123Z",
+    "backupName": "Sauvegarde Quotidienne",
+    "sourcePath": "C:\\Documents",
+    "targetPath": "D:\\Backups\\Documents",
+    "fileSize": 1024,
+    "transferTime": 150,
+    "message": "Fichier transf√©r√©",
+    "logType": "INFO",
+    "actionType": "FILE_TRANSFER"
+  },
+  {
+    "timestamp": "2025-05-15T10:35:12.456Z",
+    "backupName": "Sauvegarde Quotidienne",
+    "sourcePath": "",
+    "targetPath": "",
+    "fileSize": 0,
+    "transferTime": 0,
+    "message": "Sauvegarde termin√©e avec succ√®s",
+    "logType": "INFO",
+    "actionType": "BACKUP_COMPLETE"
+  }
+]
 ```
 
----
+#### Format XML
 
-### AperÁu des classes
+Lorsque vous utilisez le format XML, le fichier journal est stock√© sous forme d'un document XML avec un √©l√©ment racine `<Logs>` contenant plusieurs √©l√©ments `<LogEntry>`.
 
-#### Logger (Singleton)
+Exemple de contenu de fichier journal (XML) :
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<Logs>
+  <LogEntry>
+    <Timestamp>2025-05-15T10:30:45.123Z</Timestamp>
+    <BackupName>Sauvegarde Quotidienne</BackupName>
+    <SourcePath>C:\Documents</SourcePath>
+    <TargetPath>D:\Backups\Documents</TargetPath>
+    <FileSize>1024</FileSize>
+    <TransferTime>150</TransferTime>
+    <Message>Fichier transf√©r√©</Message>
+    <LogType>INFO</LogType>
+    <ActionType>FILE_TRANSFER</ActionType>
+  </LogEntry>
+  <LogEntry>
+    <Timestamp>2025-05-15T10:35:12.456Z</Timestamp>
+    <BackupName>Sauvegarde Quotidienne</BackupName>
+    <SourcePath></SourcePath>
+    <TargetPath></TargetPath>
+    <FileSize>0</FileSize>
+    <TransferTime>0</TransferTime>
+    <Message>Sauvegarde termin√©e avec succ√®s</Message>
+    <LogType>INFO</LogType>
+    <ActionType>BACKUP_COMPLETE</ActionType>
+  </LogEntry>
+</Logs>
+```
 
-| MÈthode                       | Description                                                     |
-| ----------------------------- | --------------------------------------------------------------- |
-| `GetInstance()`               | Renvoie l'instance singleton                                    |
-| `SetLogFilePath(string path)` | DÈfinit le chemin du fichier journal (crÈe le fichier si absent)|
-| `CreateLog(...)`              | Journalise une opÈration de transfert de fichier                |
-| `LogAdminAction(...)`         | Journalise une action administrative                            |
-| `DisplayLogs()`               | Affiche le contenu actuel du journal JSON dans la console       |
+### Exemples d'Utilisation
 
-#### LogEntry (Interne)
+#### Initialisation du Logger
 
-| PropriÈtÈ      | Description                                                   |
-| -------------- | ------------------------------------------------------------- |
-| `Timestamp`    | Date et heure du journal                                      |
-| `BackupName`   | Nom de la t‚che de sauvegarde                                 |
-| `SourcePath`   | Chemin source du fichier                                      |
-| `TargetPath`   | Chemin de destination du fichier                              |
-| `FileSize`     | Taille du fichier en octets                                   |
-| `TransferTime` | DurÈe en millisecondes                                        |
-| `Message`      | Message du journal (ex. "Fichier transfÈrÈ")                  |
-| `LogType`      | Type de journal (ex. "INFO", "ERROR")                         |
-| `ActionType`   | CatÈgorie d'action (ex. "FILE\_TRANSFER", "START\_BACKUP")    |
+```csharp
+// Obtenir l'instance du logger
+var logger = EasySaveLogging.Logger.GetInstance();
 
----
+// D√©finir le chemin du fichier journal
+logger.SetLogFilePath("C:\\Logs\\EasySave\\backup_log.json");
 
-### SÈcuritÈ des threads
+// Optionnel : D√©finir le format du journal (JSON est le format par d√©faut si non sp√©cifi√©)
+// Pour le format JSON :
+logger.SetLogFormat("JSON");
+// OU pour le format XML :
+// logger.SetLogFormat("XML");
+```
 
-Toutes les entrÈes de journal sont ajoutÈes dans un verrou pour garantir des opÈrations thread-safe lorsque plusieurs parties de l'application Ècrivent des journaux simultanÈment.
+#### Journalisation d'un Transfert de Fichier
 
----
+```csharp
+// Journaliser un transfert de fichier r√©ussi
+logger.CreateLog(
+    backupName: "Sauvegarde Quotidienne",
+    transferTime: TimeSpan.FromMilliseconds(150),
+    fileSize: 1024,
+    date: DateTime.Now,
+    sourcePath: "C:\\Documents\\fichier.txt",
+    targetPath: "D:\\Backups\\Documents\\fichier.txt",
+    logType: "INFO"
+);
 
-### PrÈrequis
+// Journaliser un transfert de fichier √©chou√©
+logger.CreateLog(
+    backupName: "Sauvegarde Quotidienne",
+    transferTime: TimeSpan.FromMilliseconds(50),
+    fileSize: 1024,
+    date: DateTime.Now,
+    sourcePath: "C:\\Documents\\erreur.txt",
+    targetPath: "D:\\Backups\\Documents\\erreur.txt",
+    logType: "ERROR"
+);
+```
 
-- .NET 8.0 ou runtime compatible
+#### Journalisation d'Actions Administratives
 
-- Fonctionne avec les chemins de fichiers Windows (UNC/local/externe)
+```csharp
+// Journaliser le d√©but d'une t√¢che de sauvegarde
+logger.LogAdminAction(
+    backupName: "Sauvegarde Quotidienne",
+    actionType: "BACKUP_START",
+    message: "D√©marrage de l'op√©ration de sauvegarde quotidienne"
+);
 
----
+// Journaliser les changements de configuration
+logger.LogAdminAction(
+    backupName: null,
+    actionType: "CONFIG_CHANGE",
+    message: "Changement du r√©pertoire cible vers D:\\NouvellesSauvegardes"
+);
+```
 
-### Version
+#### Affichage des Journaux
 
-- Version actuelle : 1.0.0
+```csharp
+// Afficher les journaux dans la console
+logger.DisplayLogs();
+```
 
-- Changements :
+### S√©curit√© Thread
 
-	- ImplÈmentation initiale de CreateLog et LogAdminAction
+Le logger impl√©mente la s√©curit√© thread gr√¢ce √† l'utilisation d'un m√©canisme de verrouillage sur l'instance singleton. Cela garantit que plusieurs threads peuvent √©crire en toute s√©curit√© dans le fichier journal sans corruption de donn√©es.
 
-	- Format d'entrÈe de journal structurÈ
+### Bonnes Pratiques
 
-	- …critures de fichiers thread-safe
+1. **Initialisation Pr√©coce**: D√©finir le chemin du fichier journal au d√©marrage de l'application
+2. **Surveillance R√©guli√®re**: Impl√©menter une strat√©gie de rotation des journaux pour les applications √† longue dur√©e d'ex√©cution
+3. **Gestion des Erreurs**: Impl√©menter des blocs try-catch autour des op√©rations de journalisation
+4. **Performance**: Envisager de journaliser uniquement les informations essentielles lors d'op√©rations √† haut d√©bit
 
-	- Formatage JSON avec indentation
+### Notes d'Impl√©mentation
 
----
-
-### Licence/Utilisation
-
-Cette DLL est destinÈe ‡ un usage interne avec l'application EasySave. Pour une utilisation externe, veuillez vous rÈfÈrer au dÈpÙt et ‡ la licence EasySave.
-
----
-
-### Support
-
-Si vous avez des questions ou des problËmes d'intÈgration de la DLL, ouvrez une issue dans le dÈpÙt principal d'EasySave ou contactez l'Èquipe de dÈveloppement.
+- Le logger cr√©e le r√©pertoire du journal et initialise une structure de journal vide si le fichier n'existe pas
+- Toutes les entr√©es de journal sont ajout√©es au fichier journal existant
+- JSON est utilis√© comme format par d√©faut si aucun format n'est sp√©cifi√©
+- Lors de l'utilisation du format JSON, la sortie est format√©e avec indentation pour une meilleure lisibilit√©
+- Lors du changement de format, tout fichier journal existant sera converti au nouveau format
