@@ -18,13 +18,13 @@
 
 ---
 
-## Introduction {#introduction}
+## Introduction
 
 EasySave is a cross-platform backup solution. This guide covers both V1 (the original release) and V1.1 (the incremental update), detailing installation, core workflows, troubleshooting, and new improvements.
 
 ---
 
-## Installation {#installation}
+## Installation
 
 1. **Prerequisites**:
 
@@ -47,7 +47,7 @@ EasySave is a cross-platform backup solution. This guide covers both V1 (the ori
 
 ---
 
-## Getting Started (V1) {#getting-started-v1}
+## Getting Started (V1)
 
 When launching for the first time, the main interactive menu presents:
 
@@ -62,7 +62,7 @@ Use numeric choices to navigate.
 
 ---
 
-## Creating and Managing Backup Jobs (V1) {#jobs-v1}
+## Creating and Managing Backup Jobs (V1)
 
 ### Create a Job
 
@@ -94,7 +94,7 @@ Displays a numbered list of saved jobs with settings (name, source, target, type
 
 ---
 
-## Executing Backups (V1) {#executing-v1}
+## Executing Backups (V1)
 
 1. Select **Execute a backup job**
 2. Choose one or multiple jobs (e.g., `1-3` or `1;2;4`)
@@ -107,7 +107,7 @@ Displays a numbered list of saved jobs with settings (name, source, target, type
 
 ---
 
-## Logs and Troubleshooting (V1) {#logs-v1}
+## Logs and Troubleshooting (V1)
 
 ### Log Types
 
@@ -125,7 +125,7 @@ Logs record job name, paths, file counts, sizes, timestamps, and encryption stat
 
 ---
 
-## Command-Line Usage (V1) {#cli-v1}
+## Command-Line Usage (V1)
 
 Run with dotnet or exe arguments.
 
@@ -180,15 +180,15 @@ Notes:
 
 ---
 
-## What's New in V1.1 {#whats-new-v11}
+## What's New in V1.1
 
-### 8.1 New Features {#new-features-v11}
+### 8.1 New Features
 
 * **Collaboration Mode**: share and synchronize jobs in real-time
 * **WebSocket Notifications**: live alerts on job status
 * **Encrypted Archives**: optional AES-256 encryption for backups
 
-### 8.2 Enhancements and Fixes {#enhancements-v11}
+### 8.2 Enhancements and Fixes
 
 * Updated dependencies for security
 * Resolved pagination bug in job lists
@@ -197,7 +197,7 @@ Notes:
 
 ---
 
-## Getting Started (V1.1) {#getting-started-v11}
+## Getting Started (V1.1)
 
 1. **Update the app**:
 
@@ -222,13 +222,15 @@ Notes:
 
 ---
 
-## Support & Contribution {#support}
+## Support & Contribution
 
 For help or to contribute:
 
 * Open an issue or PR on [GitHub](https://github.com/EzZarGG/MLBB)
 * Join our discussion board
 
+---
+---
 ---
 
 ## Guide de l’utilisateur EasySave V1 & V1.1
@@ -251,13 +253,13 @@ For help or to contribute:
 
 ---
 
-## Introduction {#introduction}
+## Introduction
 
 EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la version initiale V1 et la mise à jour incrémentale V1.1, détaillant l’installation, les flux de travail principaux, le dépannage et les améliorations apportées.
 
 ---
 
-## Installation {#installation}
+## Installation
 
 1. **Prérequis** :
 
@@ -280,7 +282,7 @@ EasySave est une solution de sauvegarde multiplateforme. Ce guide couvre la vers
 
 ---
 
-## Premiers pas (V1) {#premiers-pas-v1}
+## Premiers pas (V1)
 
 Au premier lancement, le menu interactif principal propose :
 
@@ -295,7 +297,7 @@ Naviguez à l’aide des numéros correspondants.
 
 ---
 
-## Création et gestion des travaux de sauvegarde (V1) {#jobs-v1}
+## Création et gestion des travaux de sauvegarde (V1)
 
 ### Créer un travail
 
@@ -327,7 +329,7 @@ Affiche la liste numérotée des travaux enregistrés (nom, source, destination, ty
 
 ---
 
-## Exécution des sauvegardes (V1) {#executing-v1}
+## Exécution des sauvegardes (V1)
 
 1. Sélectionnez **Exécuter un travail de sauvegarde**
 2. Choisissez un ou plusieurs travaux (ex. `1-3` ou `1;2;4`)
@@ -340,7 +342,7 @@ Affiche la liste numérotée des travaux enregistrés (nom, source, destination, ty
 
 ---
 
-## Journaux et dépannage (V1) {#logs-v1}
+## Journaux et dépannage (V1)
 
 ### Types de journaux
 
@@ -358,7 +360,7 @@ Les journaux contiennent : nom du travail, chemins, nombre et taille de fichiers
 
 ---
 
-## Utilisation en ligne de commande (V1) {#cli-v1}
+## Utilisation en ligne de commande (V1)
 
 Lancez l’application avec des arguments dotnet ou exe.
 
@@ -413,15 +415,15 @@ dotnet run -- logs
 
 ---
 
-## Nouveautés de la V1.1 {#whats-new-v11}
+## Nouveautés de la V1.1
 
-### 8.1 Nouvelles fonctionnalités {#new-features-v11}
+### 8.1 Nouvelles fonctionnalités
 
 * **Mode collaboration** : partage et synchronisation des travaux en temps réel
 * **Notifications WebSocket** : alertes en direct sur l’état des travaux
 * **Archives chiffrées** : chiffrement AES-256 optionnel des sauvegardes
 
-### 8.2 Améliorations et corrections {#enhancements-v11}
+### 8.2 Améliorations et corrections
 
 * Mise à jour des dépendances pour la sécurité
 * Correction du bug de pagination dans la liste des travaux
@@ -430,7 +432,7 @@ dotnet run -- logs
 
 ---
 
-## Premiers pas (V1.1) {#getting-started-v11}
+## Premiers pas (V1.1)
 
 1. **Mettez à jour l’application** :
 
@@ -455,7 +457,7 @@ dotnet run -- logs
 
 ---
 
-## Support et contribution {#support}
+## Support et contribution
 
 Pour toute aide ou contribution :
 
