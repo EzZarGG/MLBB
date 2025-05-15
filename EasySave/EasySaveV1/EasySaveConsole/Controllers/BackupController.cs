@@ -98,6 +98,7 @@ namespace EasySaveV1.EasySaveConsole.Controllers
                     _manager.ShowLogs(); // Show logs
                     return;
                 }
+
                 // If the argument is "format" and a format is provided, change the log format
                 else if (args[0].ToLower() == "format" && args.Length >= 2)
                 {
@@ -114,6 +115,7 @@ namespace EasySaveV1.EasySaveConsole.Controllers
                     }
                     return;
                 }
+
                 // If the argument is "help", display the help menu
                 else if (args[0].ToLower() == "help")
                 {

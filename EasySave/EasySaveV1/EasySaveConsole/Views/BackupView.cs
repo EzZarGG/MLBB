@@ -135,7 +135,7 @@ namespace EasySaveV1.EasySaveConsole.Views
             };
             Console.WriteLine(msg);
         }
-
+      
         public LogFormat DisplayLogFormatMenu(string lang, LogFormat currentFormat)
         {
             Console.WriteLine(lang == "fr"

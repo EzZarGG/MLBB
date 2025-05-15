@@ -99,7 +99,6 @@ namespace EasySaveLogging
             var dir = Path.GetDirectoryName(path);
             if (!Directory.Exists(dir))
                 Directory.CreateDirectory(dir);
-
             InitializeLogFile();
         }
 
