@@ -53,7 +53,7 @@ namespace EasySaveV1
         }
 
         // App settings structure
-        private class AppSettings
+        public class AppSettings
         {
             public string LogFormat { get; set; } = "JSON";
         }

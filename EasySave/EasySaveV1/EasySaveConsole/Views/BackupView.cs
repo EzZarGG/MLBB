@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using EasySaveV1.EasySaveConsole.Models;
+using EasySaveLogging;
 
 namespace EasySaveV1.EasySaveConsole.Views
 {
@@ -8,10 +9,18 @@ namespace EasySaveV1.EasySaveConsole.Views
     {
         public string ChooseLanguage()
         {
-            Console.WriteLine("1. Français");
-            Console.WriteLine("2. English");
-            Console.Write("> ");
-            return Console.ReadLine() == "1" ? "fr" : "en";
+            while (true)
+            {
+                Console.WriteLine("1. Français");
+                Console.WriteLine("2. English");
+                Console.Write("> ");
+                var input = Console.ReadLine();
+
+                if (input == "1") return "fr";
+                if (input == "2") return "en";
+
+                Console.WriteLine("Entrée invalide. Veuillez entrer 1 ou 2.");
+            }
         }
 
         public string DisplayMenu(string lang)
@@ -25,7 +34,8 @@ namespace EasySaveV1.EasySaveConsole.Views
                 Console.WriteLine("4. Supprimer une sauvegarde");
                 Console.WriteLine("5. Afficher les logs");
                 Console.WriteLine("6. Exécuter des sauvegardes");
-                Console.WriteLine("7. Quitter");
+                Console.WriteLine("7. Configurer le format des logs");
+                Console.WriteLine("8. Quitter");
             }
             else
             {
@@ -36,7 +46,8 @@ namespace EasySaveV1.EasySaveConsole.Views
                 Console.WriteLine("4. Delete backup");
                 Console.WriteLine("5. Show logs");
                 Console.WriteLine("6. Execute backups");
-                Console.WriteLine("7. Exit");
+                Console.WriteLine("7. Configure log format");
+                Console.WriteLine("8. Exit");
             }
             Console.Write("> ");
             return Console.ReadLine();
@@ -117,9 +128,39 @@ namespace EasySaveV1.EasySaveConsole.Views
                 "exec_success" => lang == "fr"
                     ? "Sauvegardes exécutées avec succès."
                     : "Backups executed successfully.",
+                "format_changed" => lang == "fr"
+                    ? "Format de log modifié avec succès."
+                    : "Log format changed successfully.",
                 _ => ""
             };
             Console.WriteLine(msg);
+        }
+
+        public LogFormat DisplayLogFormatMenu(string lang, LogFormat currentFormat)
+        {
+            Console.WriteLine(lang == "fr"
+                ? "=== Configuration du format des logs ==="
+                : "=== Log Format Configuration ===");
+
+            Console.WriteLine(lang == "fr"
+                ? $"Format actuel: {currentFormat}"
+                : $"Current format: {currentFormat}");
+
+            Console.WriteLine("1. JSON");
+            Console.WriteLine("2. XML");
+
+            while (true)
+            {
+                Console.Write("> ");
+                var choice = Console.ReadLine();
+
+                if (choice == "1") return LogFormat.JSON;
+                if (choice == "2") return LogFormat.XML;
+
+                Console.WriteLine(lang == "fr"
+                    ? "Choix invalide. Entrez 1 ou 2."
+                    : "Invalid choice. Enter 1 or 2.");
+            }
         }
     }
 }
