@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using EasySaveV1.EasySaveConsole.Managers;
 using EasySaveV1.EasySaveConsole.Models;
 using EasySaveV1.EasySaveConsole.Views;
+using EasySaveLogging;
 
-namespace EasySaveV1.EasySaveConsole.Controllers
+namespace EasySaveV1._1.EasySaveConsole.Controllers
 {
     public class BackupController
     {
@@ -97,6 +98,24 @@ namespace EasySaveV1.EasySaveConsole.Controllers
                     _manager.ShowLogs(); // Show logs
                     return;
                 }
+
+                // If the argument is "format" and a format is provided, change the log format
+                else if (args[0].ToLower() == "format" && args.Length >= 2)
+                {
+                    if (args[1].ToUpper() == "JSON" || args[1].ToUpper() == "XML")
+                    {
+                        LogFormat format = args[1].ToUpper() == "JSON" ? LogFormat.JSON : LogFormat.XML;
+                        Config.SetLogFormat(format);
+                        Logger.GetInstance().SetLogFormat(format);
+                        Console.WriteLine($"Log format changed to {format}");
+                    }
+                    else
+                    {
+                        Console.WriteLine("Invalid format. Use 'JSON' or 'XML'.");
+                    }
+                    return;
+                }
+
                 // If the argument is "help", display the help menu
                 else if (args[0].ToLower() == "help")
                 {
@@ -110,7 +129,7 @@ namespace EasySaveV1.EasySaveConsole.Controllers
             while (true)
             {
                 var opt = _view.DisplayMenu(_language); // Display the main menu
-                if (opt == "7") break; // Exit the application if option 7 is selected
+                if (opt == "8") break; // Exit the application if option 8 is selected
                 HandleOption(opt); // Handle the selected menu option
             }
         }
@@ -128,6 +147,7 @@ namespace EasySaveV1.EasySaveConsole.Controllers
             Console.WriteLine("  execute <indices>: Execute backups (e.g., 1-3 or 1;2;4)");
             Console.WriteLine("  <indices>: Execute backups (e.g., 1-3 or 1;2;4)");
             Console.WriteLine("  logs: Display logs");
+            Console.WriteLine("  format <JSON|XML>: Set log format");
         }
 
         private void HandleOption(string option)
@@ -181,6 +201,19 @@ namespace EasySaveV1.EasySaveConsole.Controllers
                             _manager.ExecuteJobsByIndices(indices); // Execute jobs by indices
                         }
                         _view.ShowMessage("exec_success", _language); // Show success message
+                    }
+                    break;
+                case "7":
+                    // Option 7: Configure log format
+                    var currentFormat = Logger.GetInstance().CurrentFormat;
+                    var newFormat = _view.DisplayLogFormatMenu(_language, currentFormat);
+
+                    // Only update if the format has changed
+                    if (newFormat != currentFormat)
+                    {
+                        Config.SetLogFormat(newFormat);
+                        Logger.GetInstance().SetLogFormat(newFormat);
+                        _view.ShowMessage("format_changed", _language);
                     }
                     break;
                 default:
