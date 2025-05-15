@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using EasySaveV1.EasySaveConsole.Models;
-using EasySaveLogging;
 
 namespace EasySaveV1
 {
@@ -17,9 +16,6 @@ namespace EasySaveV1
 
         public static string ConfigFilePath =>
             Path.Combine(AppContext.BaseDirectory, "config.json");
-
-        public static string AppSettingsFilePath =>
-            Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
         public static string GetLogDirectory()
         {
@@ -50,52 +46,6 @@ namespace EasySaveV1
         {
             var json = JsonSerializer.Serialize(jobs, _jsonOpts);
             File.WriteAllText(ConfigFilePath, json);
-        }
-
-        // App settings structure
-        public class AppSettings
-        {
-            public string LogFormat { get; set; } = "JSON";
-        }
-
-        // Load application settings
-        public static AppSettings LoadSettings()
-        {
-            if (!File.Exists(AppSettingsFilePath))
-                return new AppSettings();
-
-            try
-            {
-                var json = File.ReadAllText(AppSettingsFilePath);
-                return JsonSerializer.Deserialize<AppSettings>(json, _jsonOpts)
-                       ?? new AppSettings();
-            }
-            catch
-            {
-                return new AppSettings();
-            }
-        }
-
-        // Save application settings
-        public static void SaveSettings(AppSettings settings)
-        {
-            var json = JsonSerializer.Serialize(settings, _jsonOpts);
-            File.WriteAllText(AppSettingsFilePath, json);
-        }
-
-        // Get the configured log format
-        public static LogFormat GetLogFormat()
-        {
-            var settings = LoadSettings();
-            return settings.LogFormat.ToUpper() == "XML" ? LogFormat.XML : LogFormat.JSON;
-        }
-
-        // Set the log format
-        public static void SetLogFormat(LogFormat format)
-        {
-            var settings = LoadSettings();
-            settings.LogFormat = format.ToString();
-            SaveSettings(settings);
         }
     }
 }
