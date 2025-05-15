@@ -1,0 +1,61 @@
+name: Create Release ZIP
+
+on:
+  workflow_dispatch:    # can be triggered manually
+  push:
+    branches:
+      - main           # also runs on pushes to main
+    tags:
+      - 'v*'           # and on any tag starting with “v”
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Check out the code at main (or the tagged commit)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      # 2) Build a ZIP excluding EasySaveV1
+      - name: Create ZIP archive (excluding EasySaveV1)
+        run: |
+          # List all files except those under EasySaveV1 or .git
+          find . -type f \
+            -not -path "./EasySaveV1/*" \
+            -not -path "./.git/*" \
+            > files_to_zip.txt
+
+          # Decide ZIP name from tag or date
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            ZIP_NAME="MLBB-${{ github.ref_name }}.zip"
+          else
+            ZIP_NAME="MLBB-$(date +'%Y%m%d').zip"
+          fi
+
+          # Actually zip, reading the file list
+          zip -@ "$ZIP_NAME" < files_to_zip.txt
+          rm files_to_zip.txt
+
+          # Expose ZIP_NAME for later steps
+          echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+
+      # 3) Upload the ZIP as a workflow artifact
+      - name: Upload ZIP as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: ${{ env.ZIP_NAME }}
+
+      # 4) If this was triggered by a tag, create a GitHub Release draft
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ${{ env.ZIP_NAME }}
+          draft: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
