@@ -1,10 +1,11 @@
 ﻿using System;
 using System.IO;
-using EasySaveV1.EasySaveConsole.Controllers;
+using EasySaveV1._1.EasySaveConsole.Controllers;
 using EasySaveLogging;
-using EasySaveV1.EasySaveConsole;
+using EasySaveV1._1.EasySaveConsole;
+using EasySaveV1._1;
 
-namespace EasySaveV1
+namespace EasySaveV1._1
 {
     class Program
     {

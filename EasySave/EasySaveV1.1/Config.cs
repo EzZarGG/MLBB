@@ -3,8 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using EasySaveLogging;
+using EasySaveV1._1.EasySaveConsole.Models;
 
-namespace EasySaveV1
+namespace EasySaveV1._1
 {
     public static class Config
     {

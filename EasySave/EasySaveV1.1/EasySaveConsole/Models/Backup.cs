@@ -1,4 +1,4 @@
-﻿namespace EasySaveV1.EasySaveConsole.Models
+﻿namespace EasySaveV1._1.EasySaveConsole.Models
 {
     public class Backup
     {

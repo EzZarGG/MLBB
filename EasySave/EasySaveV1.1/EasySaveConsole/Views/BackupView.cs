@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
 using EasySaveLogging;
+using EasySaveV1._1.EasySaveConsole.Models;
 
-namespace EasySaveV1.EasySaveConsole.Views
+namespace EasySaveV1._1.EasySaveConsole.Views
 {
     public class BackupView
     {

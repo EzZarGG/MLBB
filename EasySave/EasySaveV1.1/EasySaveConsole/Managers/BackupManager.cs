@@ -2,12 +2,11 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using EasySaveV1;
-using EasySaveV1.EasySaveConsole.Models;
+using EasySaveV1._1.EasySaveConsole.Models;
 using EasySaveLogging;
 using System.Text.Json;
 
-namespace EasySaveV1.EasySaveConsole.Managers
+namespace EasySaveV1._1.EasySaveConsole.Managers
 {
     public class BackupManager
     {
