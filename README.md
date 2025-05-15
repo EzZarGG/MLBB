@@ -1,16 +1,18 @@
-# EasySaveV1
+# EasySave
 
 ## English
 
-### Overview
-EasySaveV1 is a backup software application designed to provide efficient and user-friendly backup solutions. This application allows users to create, manage, and execute backup jobs with features such as real-time backup, differential backup, and complete backup.
+### What is EasySave?
+EasySave is a backup software application designed to provide efficient and user-friendly backup solutions. This application allows users to create, manage, and execute backup jobs with features such as real-time backup, differential backup, and complete backup.
 
-### Features
-- **Multiple Backup Types**: Create complete or differential backups
-- **Job Management**: Create, edit, and delete backup jobs
-- **Real-time Monitoring**: Track backup progress and status
-- **Logging System**: Detailed logs of backup operations
-- **User-friendly Interface**: Simple console interface for easy navigation
+### Technologies & Architecture
+- **Language**: C#
+- **Framework**: .NET Core 8.0
+- **Architecture**: Model-View-Controller (MVC)
+- **Logging**: Custom JSON and XML logging system
+
+### Purpose
+The purpose of EasySave is to offer a reliable and straightforward backup solution that enables users to safeguard their important data through various backup methods. It provides both command-line and interactive interfaces to manage backup operations, making it versatile for different use cases.
 
 ### System Requirements
 - Windows operating system
@@ -22,20 +24,40 @@ EasySaveV1 is a backup software application designed to provide efficient and us
 3. Build the solution
 4. Run the application from the build directory
 
+### Version-Specific Details
+
+#### v1.0.0
+- **Multiple Backup Types**: Create complete or differential backups
+- **Job Management**: Create, edit, and delete backup jobs (up to 5 jobs)
+- **Real-time Monitoring**: Track backup progress and status
+- **Logging System**: Detailed JSON logs of backup operations 
+- **User-friendly Interface**: Simple console interface with language options (English/French)
+- **Command-line Support**: Execute operations directly from the command line
+- **State Management**: Real-time state tracking of backup jobs
+
+#### v1.1.0
+- **All features from v1.0.0**
+- **Enhanced Logging Options**: Choose between JSON and XML formats for log files
+- **Improved Configuration**: Added format selection for logging preferences
+
 ### Getting Started
 Refer to the User Guide for detailed instructions on how to use EasySaveV1.
 
+---
+
 ## Français
 
-### Aperçu
-EasySaveV1 est une application de sauvegarde conçue pour offrir des solutions de sauvegarde efficaces et conviviales. Cette application permet aux utilisateurs de créer, gérer et exécuter des travaux de sauvegarde avec des fonctionnalités telles que la sauvegarde en temps réel, la sauvegarde différentielle et la sauvegarde complète.
+### Qu'est-ce qu'EasySave?
+EasySave est une application de sauvegarde conçue pour offrir des solutions de sauvegarde efficaces et conviviales. Cette application permet aux utilisateurs de créer, gérer et exécuter des travaux de sauvegarde avec des fonctionnalités telles que la sauvegarde en temps réel, la sauvegarde différentielle et la sauvegarde complète.
 
-### Fonctionnalités
-- **Types de sauvegarde multiples** : Créez des sauvegardes complètes ou différentielles
-- **Gestion des travaux** : Créez, modifiez et supprimez des travaux de sauvegarde
-- **Suivi en temps réel** : Suivez la progression et l'état des sauvegardes
-- **Système de journalisation** : Journaux détaillés des opérations de sauvegarde
-- **Interface conviviale** : Interface console simple pour une navigation facile
+### Technologies et Architecture
+- **Langage**: C#
+- **Framework**: .NET Core 8.0
+- **Architecture**: Modèle-Vue-Contrôleur (MVC)
+- **Journalisation**: Système de journalisation personnalisé en JSON et XML
+
+### Objectif
+L'objectif d'EasySave est d'offrir une solution de sauvegarde fiable et simple qui permet aux utilisateurs de protéger leurs données importantes grâce à diverses méthodes de sauvegarde. Il fournit des interfaces en ligne de commande et interactives pour gérer les opérations de sauvegarde, ce qui le rend polyvalent pour différents cas d'utilisation.
 
 ### Configuration requise
 - Système d'exploitation Windows
@@ -46,6 +68,22 @@ EasySaveV1 est une application de sauvegarde conçue pour offrir des solutions d
 2. Ouvrez la solution dans Visual Studio
 3. Compilez la solution
 4. Exécutez l'application à partir du répertoire de compilation
+
+### Détails spécifiques aux versions
+
+#### v1.0.0
+- **Types de sauvegarde multiples** : Créez des sauvegardes complètes ou différentielles
+- **Gestion des travaux** : Créez, modifiez et supprimez des travaux de sauvegarde (jusqu'à 5 travaux)
+- **Suivi en temps réel** : Suivez la progression et l'état des sauvegardes
+- **Système de journalisation** : Journaux JSON détaillés des opérations de sauvegarde
+- **Interface conviviale** : Interface console simple avec options de langue (anglais/français)
+- **Support en ligne de commande** : Exécutez des opérations directement depuis la ligne de commande
+- **Gestion d'état** : Suivi en temps réel de l'état des travaux de sauvegarde
+
+#### v1.1.0
+- **Toutes les fonctionnalités de v1.0.0**
+- **Options de journalisation améliorées** : Choisissez entre les formats JSON et XML pour les fichiers journaux
+- **Configuration améliorée** : Ajout de la sélection du format pour les préférences de journalisation
 
 ### Démarrage
 Consultez le Guide d'Utilisateur pour des instructions détaillées sur l'utilisation d'EasySaveV1.
