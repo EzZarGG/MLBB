@@ -75,8 +75,6 @@ logger.LogAdminAction(
 logger.DisplayLogs();
 ```
 
----
-
 ### Log File Format
 
 - Format: JSON array ([{}, {}, ...])
@@ -158,10 +156,6 @@ All log entries are appended within a lock to ensure thread-safe operations when
 	- JSON formatting with indentation
 
 ---
-
-### Licence/Usage
-
-This DLL is intended for internal use with the EasySave application. For external use, please reference the EasySave repository and license.
 
 ---
 
