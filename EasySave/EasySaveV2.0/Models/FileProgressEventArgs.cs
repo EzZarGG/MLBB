@@ -11,7 +11,18 @@ namespace EasySaveV2._0.Models
         public TimeSpan Duration { get; }
         public bool Success { get; }
 
-        public FileProgressEventArgs(string backupName, string sourceFile, string targetFile, long fileSize, TimeSpan duration, bool success)
+        public int FilesRemaining { get; }
+        public long BytesRemaining { get; }
+
+        public FileProgressEventArgs(
+            string backupName,
+            string sourceFile,
+            string targetFile,
+            long fileSize,
+            TimeSpan duration,
+            bool success,
+            int filesRemaining,
+            long bytesRemaining)
         {
             BackupName = backupName;
             SourceFile = sourceFile;
@@ -19,6 +30,9 @@ namespace EasySaveV2._0.Models
             FileSize = fileSize;
             Duration = duration;
             Success = success;
+            FilesRemaining = filesRemaining;
+            BytesRemaining = bytesRemaining;
         }
+
     }
-} 
+}
