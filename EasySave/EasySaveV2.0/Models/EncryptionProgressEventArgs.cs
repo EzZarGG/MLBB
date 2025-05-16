@@ -6,17 +6,25 @@ namespace EasySaveV2._0.Models
     {
         public string BackupName { get; }
         public string FilePath { get; }
-        public TimeSpan Duration { get; }
-        public bool Success { get; }
-        public string Error { get; }
+        public int ProgressPercentage { get; }
+        public bool IsComplete { get; }
+        public bool HasError { get; }
+        public string ErrorMessage { get; }
 
-        public EncryptionProgressEventArgs(string backupName, string filePath, TimeSpan duration, bool success, string error = null)
+        public EncryptionProgressEventArgs(
+            string backupName,
+            string filePath,
+            int progressPercentage,
+            bool isComplete = false,
+            bool hasError = false,
+            string errorMessage = null)
         {
             BackupName = backupName;
             FilePath = filePath;
-            Duration = duration;
-            Success = success;
-            Error = error;
+            ProgressPercentage = progressPercentage;
+            IsComplete = isComplete;
+            HasError = hasError;
+            ErrorMessage = errorMessage;
         }
     }
 } 
