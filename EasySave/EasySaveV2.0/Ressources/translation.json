@@ -1,0 +1,194 @@
+{
+  "fr": {
+    "language": {
+      "french": "Français",
+      "english": "English",
+      "invalidChoice": "Entrée invalide. Veuillez entrer 1 ou 2.",
+      "prompt": "> "
+    },
+    "menu": {
+      "title": "EasySave",
+      "file": "Fichier",
+      "file.exit": "Quitter",
+      "backup": "Sauvegarde",
+      "backup.create": "Créer une sauvegarde",
+      "backup.edit": "Modifier la sauvegarde",
+      "backup.delete": "Supprimer la sauvegarde",
+      "backup.run": "Exécuter la sauvegarde",
+      "settings": "Paramètres",
+      "settings.open": "Ouvrir les paramètres",
+      "view": "Affichage",
+      "view.logs": "Afficher les logs",
+      "help": "Aide",
+      "new": "Nouveau",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "run": "Exécuter",
+      "exit": "Quitter",
+      "newBackup": "Nouvelle sauvegarde",
+      "editBackup": "Modifier la sauvegarde",
+      "deleteBackup": "Supprimer la sauvegarde",
+      "runBackup": "Exécuter la sauvegarde",
+      "generalSettings": "Paramètres généraux",
+      "businessSoftware": "Logiciels métier"
+    },
+    "backup": {
+      "name": "Nom",
+      "source": "Source",
+      "destination": "Destination",
+      "type": "Type",
+      "status": "Statut",
+      "progress": "Progression",
+      "state": {
+        "waiting": "En attente",
+        "running": "En cours",
+        "completed": "Terminé",
+        "error": "Erreur"
+      },
+      "listTitle": "Liste des sauvegardes",
+      "searchConfirm": "Voulez-vous chercher par nom ? (o/n): ",
+      "askName": "Nom de la sauvegarde: ",
+      "askIndices": "Entrez les numéros des sauvegardes à exécuter (ex: 1;2;3 ou 1-3):"
+    },
+    "message": {
+      "maxJobs": "Nombre maximum de jobs atteint.",
+      "notFound": "Sauvegarde introuvable.",
+      "invalid": "Option invalide.",
+      "execSuccess": "Sauvegardes exécutées avec succès.",
+      "formatChanged": "Format de log modifié avec succès.",
+      "confirmDelete": "Êtes-vous sûr de vouloir supprimer cette sauvegarde ?",
+      "confirmDeleteTitle": "Confirmer la suppression",
+      "error": "Erreur: {0}",
+      "success": "Succès: {0}",
+      "warning": "Attention: {0}",
+      "info": "Information: {0}",
+      "confirmExit": "Êtes-vous sûr de vouloir quitter l'application ?",
+      "backupSuccess": "Sauvegarde terminée avec succès",
+      "backupError": "Erreur lors de la sauvegarde",
+      "businessSoftwareRunning": "Un logiciel métier est en cours d'exécution. La sauvegarde a été annulée."
+    },
+    "status": {
+      "ready": "Prêt",
+      "backupInProgress": "Sauvegarde en cours",
+      "backupComplete": "Sauvegarde terminée",
+      "backupError": "Erreur de sauvegarde"
+    },
+    "settings": {
+      "title": "Paramètres",
+      "businessSoftware": "Logiciels métier",
+      "encryptionExtensions": "Extensions à chiffrer",
+      "language": "Langue",
+      "selectLanguage": "Sélectionnez votre langue:",
+      "add": "Ajouter",
+      "remove": "Supprimer",
+      "enterBusinessSoftware": "Entrez le nom du logiciel métier:",
+      "enterExtension": "Entrez l'extension (ex: .txt):",
+      "save": "Enregistrer",
+      "cancel": "Annuler",
+      "logFormat": "Format des logs"
+    },
+    "logFormat": {
+      "title": "Configuration du format des logs",
+      "current": "Format actuel: {0}",
+      "invalidChoice": "Choix invalide. Entrez 1 ou 2.",
+      "json": "JSON",
+      "xml": "XML"
+    }
+  },
+  "en": {
+    "language": {
+      "french": "Français",
+      "english": "English",
+      "invalidChoice": "Invalid input. Please enter 1 or 2.",
+      "prompt": "> "
+    },
+    "menu": {
+      "title": "EasySave",
+      "file": "File",
+      "file.exit": "Exit",
+      "backup": "Backup",
+      "backup.create": "Create Backup",
+      "backup.edit": "Edit Backup",
+      "backup.delete": "Delete Backup",
+      "backup.run": "Run Backup",
+      "settings": "Settings",
+      "settings.open": "Open Settings",
+      "view": "View",
+      "view.logs": "View Logs",
+      "help": "Help",
+      "new": "New",
+      "edit": "Edit",
+      "delete": "Delete",
+      "run": "Run",
+      "exit": "Exit",
+      "newBackup": "New Backup",
+      "editBackup": "Edit Backup",
+      "deleteBackup": "Delete Backup",
+      "runBackup": "Run Backup",
+      "generalSettings": "General Settings",
+      "businessSoftware": "Business Software"
+    },
+    "backup": {
+      "name": "Name",
+      "source": "Source",
+      "destination": "Destination",
+      "type": "Type",
+      "status": "Status",
+      "progress": "Progress",
+      "state": {
+        "waiting": "Waiting",
+        "running": "Running",
+        "completed": "Completed",
+        "error": "Error"
+      },
+      "listTitle": "Backup List",
+      "searchConfirm": "Search by name? (y/n): ",
+      "askName": "Backup name: ",
+      "askIndices": "Enter backup numbers to execute (ex: 1;2;3 or 1-3):"
+    },
+    "message": {
+      "maxJobs": "Maximum number of jobs reached.",
+      "notFound": "Backup not found.",
+      "invalid": "Invalid option.",
+      "execSuccess": "Backups executed successfully.",
+      "formatChanged": "Log format changed successfully.",
+      "confirmDelete": "Are you sure you want to delete this backup?",
+      "confirmDeleteTitle": "Confirm Deletion",
+      "error": "Error: {0}",
+      "success": "Success: {0}",
+      "warning": "Warning: {0}",
+      "info": "Information: {0}",
+      "confirmExit": "Are you sure you want to exit the application?",
+      "backupSuccess": "Backup completed successfully",
+      "backupError": "Error during backup",
+      "businessSoftwareRunning": "A business software is running. The backup has been cancelled."
+    },
+    "status": {
+      "ready": "Ready",
+      "backupInProgress": "Backup in progress",
+      "backupComplete": "Backup complete",
+      "backupError": "Backup error"
+    },
+    "settings": {
+      "title": "Settings",
+      "businessSoftware": "Business Software",
+      "encryptionExtensions": "Encryption Extensions",
+      "language": "Language",
+      "selectLanguage": "Select your language:",
+      "add": "Add",
+      "remove": "Remove",
+      "enterBusinessSoftware": "Enter business software name:",
+      "enterExtension": "Enter extension (ex: .txt):",
+      "save": "Save",
+      "cancel": "Cancel",
+      "logFormat": "Log Format"
+    },
+    "logFormat": {
+      "title": "Log Format Configuration",
+      "current": "Current format: {0}",
+      "invalidChoice": "Invalid choice. Enter 1 or 2.",
+      "json": "JSON",
+      "xml": "XML"
+    }
+  }
+}
