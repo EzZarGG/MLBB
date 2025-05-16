@@ -8,7 +8,6 @@ namespace EasySaveV2._0.Managers
     public class LanguageManager
     {
         private static LanguageManager _instance;
-        private string _currentLanguage;
         private Dictionary<string, Dictionary<string, string>> _translations;
 
         public event EventHandler LanguageChanged;

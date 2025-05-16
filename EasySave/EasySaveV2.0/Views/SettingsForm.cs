@@ -9,7 +9,6 @@ namespace EasySaveV2._0.Views
 {
     public partial class SettingsForm : Form
     {
-        private readonly SettingsController _settingsController;
         private readonly LanguageManager _languageManager;
         private readonly BackupController _backupController;
         private TabControl _tabControl;
@@ -22,18 +21,10 @@ namespace EasySaveV2._0.Views
 
         public int SelectedTab
         {
-            get => _tabControl.SelectedIndex;
-            set => _tabControl.SelectedIndex = value;
-        }
-
-        public SettingsForm(SettingsController settingsController)
-        {
-            _settingsController = settingsController;
             _languageManager = LanguageManager.Instance;
             _backupController = new BackupController();
             InitializeComponent();
             InitializeUI();
-            _languageManager.LanguageChanged += OnLanguageChanged;
         }
 
         private void InitializeUI()
