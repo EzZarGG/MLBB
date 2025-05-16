@@ -41,6 +41,7 @@ namespace EasySaveV2._0.Managers
 
         public string GetTranslation(string key)
         {
+            return string.Empty;
         }
 
         public string GetTranslation(string key, params object[] args)
