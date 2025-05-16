@@ -2,15 +2,20 @@ using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Models;
 using EasySaveV2._0.Views;
 using EasySaveV2._0.Managers;
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.Linq;
 using System.Windows.Forms;
+using EasySaveLogging;
 
 namespace EasySaveV2._0
 {
     public partial class MainForm : Form
     {
-        private BackupController _backupController;
-        private SettingsController _settingsController;
-        private LanguageManager _languageManager;
+        private readonly BackupController _backupController;
+        private readonly SettingsController _settingsController;
+        private readonly LanguageManager _languageManager;
         private ListView _backupListView;
         private StatusStrip _statusStrip;
         private ToolStripStatusLabel _statusLabel;
@@ -27,87 +32,129 @@ namespace EasySaveV2._0
             _languageManager = LanguageManager.Instance;
             InitializeTimer();
             InitializeUI();
+
             _languageManager.LanguageChanged += OnLanguageChanged;
             _languageManager.TranslationsReloaded += OnTranslationsReloaded;
+
+            RefreshBackupList();
         }
 
         private void InitializeTimer()
         {
             _updateTimer = new System.Windows.Forms.Timer();
-            _updateTimer.Interval = 1000; // Update every second
-            _updateTimer.Tick += (s, e) => UpdateBackupStates();
+            _updateTimer.Interval = 1000;
+            _updateTimer.Tick += (sender, e) => UpdateBackupStates();
             _updateTimer.Start();
         }
 
         private void InitializeUI()
         {
-            this.Text = "EasySave";
-            this.Size = new System.Drawing.Size(800, 600);
-            this.StartPosition = FormStartPosition.CenterScreen;
+            this.Size = new Size(1024, 768);
+            this.Text = _languageManager.GetTranslation("menu.title");
+            this.Icon = SystemIcons.Application;
 
-            // Menu Strip
             _menuStrip = new MenuStrip();
+            this.MainMenuStrip = _menuStrip;
+            _menuStrip.Dock = DockStyle.Top;
+
+            // File menu
             var fileMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file"));
-            fileMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.newBackup"), null, (s, e) => AddJob());
-            fileMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.exit"), null, (s, e) => this.Close());
-            _menuStrip.Items.Add(fileMenu);
+            var exitItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file.exit"));
+            exitItem.Click += (sender, e) => Application.Exit();
+            fileMenu.DropDownItems.Add(exitItem);
 
+            // Backup menu
             var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup"));
-            backupMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.editBackup"), null, (s, e) => UpdateJob());
-            backupMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.deleteBackup"), null, (s, e) => RemoveJob());
-            backupMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.runBackup"), null, (s, e) => ExecuteJob());
-            _menuStrip.Items.Add(backupMenu);
+            var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create"));
+            createBackupItem.Click += (sender, e) => AddJob();
+            var editBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.edit"));
+            editBackupItem.Click += (sender, e) => UpdateJob();
+            var deleteBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.delete"));
+            deleteBackupItem.Click += (sender, e) => RemoveJob();
+            var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run"));
+            runBackupItem.Click += (sender, e) => ExecuteJob();
+            backupMenu.DropDownItems.AddRange(new ToolStripItem[] { createBackupItem, editBackupItem, deleteBackupItem, runBackupItem });
 
+            // Settings menu
             var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings"));
-            settingsMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.settings.open"), null, (s, e) => OpenSettings());
-            _menuStrip.Items.Add(settingsMenu);
+            var openSettingsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings.open"));
+            openSettingsItem.Click += (sender, e) => OpenSettings();
+            settingsMenu.DropDownItems.Add(openSettingsItem);
 
+            // View menu
             var viewMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view"));
-            viewMenu.DropDownItems.Add(_languageManager.GetTranslation("menu.view.logs"), null, (s, e) => ViewLogs());
-            _menuStrip.Items.Add(viewMenu);
+            var viewLogsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs"));
+            viewLogsItem.Click += (sender, e) => ViewLogs();
+            viewMenu.DropDownItems.Add(viewLogsItem);
 
-            // Tool Strip
+            // Help menu
+            var helpMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.help"));
+
+            _menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, backupMenu, settingsMenu, viewMenu, helpMenu });
+
+            // Toolbar
             _toolStrip = new ToolStrip();
-            _toolStrip.Items.Add(new ToolStripButton(_languageManager.GetTranslation("menu.new"), null, (s, e) => AddJob()));
-            _toolStrip.Items.Add(new ToolStripButton(_languageManager.GetTranslation("menu.edit"), null, (s, e) => UpdateJob()));
-            _toolStrip.Items.Add(new ToolStripButton(_languageManager.GetTranslation("menu.delete"), null, (s, e) => RemoveJob()));
-            _toolStrip.Items.Add(new ToolStripButton(_languageManager.GetTranslation("menu.run"), null, (s, e) => ExecuteJob()));
+            _toolStrip.Dock = DockStyle.Top;
+            var newButton = new ToolStripButton(_languageManager.GetTranslation("menu.new"));
+            newButton.Click += (sender, e) => AddJob();
+            var editButton = new ToolStripButton(_languageManager.GetTranslation("menu.edit"));
+            editButton.Click += (sender, e) => UpdateJob();
+            var deleteButton = new ToolStripButton(_languageManager.GetTranslation("menu.delete"));
+            deleteButton.Click += (sender, e) => RemoveJob();
+            var runButton = new ToolStripButton(_languageManager.GetTranslation("menu.run"));
+            runButton.Click += (sender, e) => ExecuteJob();
+            var settingsButton = new ToolStripButton(_languageManager.GetTranslation("menu.settings"));
+            settingsButton.Click += (sender, e) => OpenSettings();
+            _toolStrip.Items.AddRange(new ToolStripItem[] { newButton, editButton, deleteButton, runButton, new ToolStripSeparator(), settingsButton });
 
-            // List View
-            _backupListView = new ListView
-            {
-                Dock = DockStyle.Fill,
-                View = View.Details,
-                FullRowSelect = true,
-                GridLines = true
-            };
+            // ListView
+            _backupListView = new ListView();
+            _backupListView.Dock = DockStyle.Fill;
+            _backupListView.View = View.Details;
+            _backupListView.FullRowSelect = true;
+            _backupListView.GridLines = true;
+            _backupListView.MultiSelect = false;
             _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
             _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
             _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
             _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
             _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
+            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 150);
 
-            // Status Strip
+            // Status strip
             _statusStrip = new StatusStrip();
+            _statusStrip.Dock = DockStyle.Bottom;
             _statusLabel = new ToolStripStatusLabel(_languageManager.GetTranslation("status.ready"));
-            _progressBar = new ProgressBar { Width = 200 };
+            _statusLabel.Spring = true;
+            _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
+            _progressBar = new ProgressBar();
+            _progressBar.Dock = DockStyle.Bottom;
+            _progressBar.Height = 20;
+            _progressBar.Visible = false;
             _statusStrip.Items.Add(_statusLabel);
-            _statusStrip.Items.Add(new ToolStripStatusLabel(""));
-            _statusStrip.Items.Add(new ToolStripControlHost(_progressBar));
 
-            // Add controls to form
-            this.Controls.Add(_menuStrip);
-            this.Controls.Add(_toolStrip);
+            // Add controls
+            this.Controls.Add(_progressBar);
             this.Controls.Add(_backupListView);
             this.Controls.Add(_statusStrip);
+            this.Controls.Add(_toolStrip);
+            this.Controls.Add(_menuStrip);
 
-            // Refresh backup list
-            RefreshBackupList();
+            // Context menu
+            var contextMenu = new ContextMenuStrip();
+            var editContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.edit"));
+            editContextItem.Click += (sender, e) => UpdateJob();
+            var deleteContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.delete"));
+            deleteContextItem.Click += (sender, e) => RemoveJob();
+            var runContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.run"));
+            runContextItem.Click += (sender, e) => ExecuteJob();
+            contextMenu.Items.AddRange(new ToolStripItem[] { editContextItem, deleteContextItem, runContextItem });
+            _backupListView.ContextMenuStrip = contextMenu;
         }
 
         private void OnLanguageChanged(object sender, EventArgs e)
         {
-            // Update UI text based on current language
+            // Update all UI texts
             this.Text = _languageManager.GetTranslation("menu.title");
             _menuStrip.Items[0].Text = _languageManager.GetTranslation("menu.file");
             _menuStrip.Items[1].Text = _languageManager.GetTranslation("menu.backup");
@@ -131,22 +178,42 @@ namespace EasySaveV2._0
                     var state = _backupController.GetBackupState(backup.Name);
                     if (state != null)
                     {
-                        item.SubItems[4].Text = state.Status;
+                        item.SubItems[4].Text = GetStatusText(state.Status);
                     }
                 }
+            }
+        }
+
+        private string GetStatusText(string status)
+        {
+            switch (status?.ToLower() ?? "pending")
+            {
+                case "active":
+                    return _languageManager.GetTranslation("backup.state.running");
+                case "inactive":
+                    return _languageManager.GetTranslation("backup.state.completed");
+                case "error":
+                    return _languageManager.GetTranslation("backup.state.error");
+                case "pending":
+                default:
+                    return _languageManager.GetTranslation("backup.state.waiting");
             }
         }
 
         private void RefreshBackupList()
         {
             _backupListView.Items.Clear();
-            foreach (var backup in _backupController.GetBackups())
+            foreach (Backup backup in _backupController.GetBackups())
             {
                 var item = new ListViewItem(backup.Name);
                 item.SubItems.Add(backup.SourcePath);
                 item.SubItems.Add(backup.TargetPath);
                 item.SubItems.Add(backup.Type);
-                item.SubItems.Add("Pending");
+                var state = _backupController.GetBackupState(backup.Name);
+                string status = state != null ? GetStatusText(state.Status) : GetStatusText("pending");
+                item.SubItems.Add(status);
+                item.SubItems.Add("0%");
+                item.Tag = backup;
                 _backupListView.Items.Add(item);
             }
         }
@@ -167,17 +234,18 @@ namespace EasySaveV2._0
         private void UpdateJob()
         {
             if (_backupListView.SelectedItems.Count == 0) return;
-
-            var selectedBackup = _backupController.GetBackup(_backupListView.SelectedItems[0].Text);
-            if (selectedBackup == null) return;
-
-            using (var form = new BackupForm(selectedBackup))
+            var selectedItem = _backupListView.SelectedItems[0];
+            var backup = selectedItem.Tag as Backup;
+            if (backup != null)
             {
-                if (form.ShowDialog() == DialogResult.OK)
+                using (var form = new BackupForm(backup))
                 {
-                    var backup = form.Backup;
-                    _backupController.EditBackup(backup.Name, backup.SourcePath, backup.TargetPath, backup.Type);
-                    RefreshBackupList();
+                    if (form.ShowDialog() == DialogResult.OK)
+                    {
+                        var updated = form.Backup;
+                        _backupController.EditBackup(updated.Name, updated.SourcePath, updated.TargetPath, updated.Type);
+                        RefreshBackupList();
+                    }
                 }
             }
         }
@@ -185,37 +253,70 @@ namespace EasySaveV2._0
         private void RemoveJob()
         {
             if (_backupListView.SelectedItems.Count == 0) return;
-
-            var selectedBackup = _backupListView.SelectedItems[0].Text;
-            if (MessageBox.Show(
-                _languageManager.GetTranslation("message.confirmDelete"),
-                _languageManager.GetTranslation("message.confirmDeleteTitle"),
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question) == DialogResult.Yes)
+            var selectedItem = _backupListView.SelectedItems[0];
+            var backup = selectedItem.Tag as Backup;
+            if (backup != null)
             {
-                _backupController.DeleteBackup(selectedBackup);
-                RefreshBackupList();
+                var result = MessageBox.Show(
+                    _languageManager.GetTranslation("message.confirmDelete"),
+                    _languageManager.GetTranslation("message.confirmDeleteTitle"),
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                );
+                if (result == DialogResult.Yes)
+                {
+                    _backupController.DeleteBackup(backup.Name);
+                    RefreshBackupList();
+                }
             }
         }
 
         private async void ExecuteJob()
         {
             if (_backupListView.SelectedItems.Count == 0) return;
-
-            var selectedBackup = _backupListView.SelectedItems[0].Text;
-            _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
-            _progressBar.Value = 0;
-
-            try
+            if (_settingsController.IsBusinessSoftwareRunning())
             {
-                await _backupController.StartBackup(selectedBackup);
-                _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
-                _progressBar.Value = 100;
+                MessageBox.Show(
+                    _languageManager.GetTranslation("message.businessSoftwareRunning"),
+                    _languageManager.GetTranslation("menu.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+                return;
             }
-            catch (Exception ex)
+            var selectedItem = _backupListView.SelectedItems[0];
+            var backup = selectedItem.Tag as Backup;
+            if (backup != null)
             {
-                _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
-                MessageBox.Show(ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                try
+                {
+                    _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
+                    _progressBar.Visible = true;
+                    await _backupController.StartBackup(backup.Name);
+                    _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
+                    _progressBar.Visible = false;
+                    MessageBox.Show(
+                        _languageManager.GetTranslation("message.backupSuccess"),
+                        _languageManager.GetTranslation("menu.title"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information
+                    );
+                }
+                catch (Exception ex)
+                {
+                    _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
+                    _progressBar.Visible = false;
+                    MessageBox.Show(
+                        _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
+                        _languageManager.GetTranslation("menu.title"),
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
+                }
+                finally
+                {
+                    RefreshBackupList();
+                }
             }
         }
 
@@ -234,16 +335,17 @@ namespace EasySaveV2._0
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            if (MessageBox.Show(
+            var result = MessageBox.Show(
                 _languageManager.GetTranslation("message.confirmExit"),
-                "Confirm Exit",
+                _languageManager.GetTranslation("menu.title"),
                 MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question) == DialogResult.No)
+                MessageBoxIcon.Question
+            );
+            if (result == DialogResult.No)
             {
                 e.Cancel = true;
                 return;
             }
-
             _updateTimer.Stop();
             base.OnFormClosing(e);
         }
