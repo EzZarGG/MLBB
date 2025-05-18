@@ -5,20 +5,35 @@ namespace EasySaveV2._0.Models
     public class FileProgressEventArgs : EventArgs
     {
         public string BackupName { get; }
-        public string SourceFile { get; }
-        public string TargetFile { get; }
+        public string SourcePath { get; }
+        public string TargetPath { get; }
         public long FileSize { get; }
-        public TimeSpan Duration { get; }
-        public bool Success { get; }
+        public int ProgressPercentage { get; }
+        public long BytesTransferred { get; }
+        public long TotalBytes { get; }
+        public int FilesProcessed { get; }
+        public int TotalFiles { get; }
 
-        public FileProgressEventArgs(string backupName, string sourceFile, string targetFile, long fileSize, TimeSpan duration, bool success)
+        public FileProgressEventArgs(
+            string backupName,
+            string sourcePath,
+            string targetPath,
+            long fileSize,
+            int progressPercentage,
+            long bytesTransferred,
+            long totalBytes,
+            int filesProcessed,
+            int totalFiles)
         {
             BackupName = backupName;
-            SourceFile = sourceFile;
-            TargetFile = targetFile;
+            SourcePath = sourcePath;
+            TargetPath = targetPath;
             FileSize = fileSize;
-            Duration = duration;
-            Success = success;
+            ProgressPercentage = progressPercentage;
+            BytesTransferred = bytesTransferred;
+            TotalBytes = totalBytes;
+            FilesProcessed = filesProcessed;
+            TotalFiles = totalFiles;
         }
     }
 } 
