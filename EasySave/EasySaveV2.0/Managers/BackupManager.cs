@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using CryptoLibrary;
 using System.Threading.Tasks;
 
 namespace EasySaveV2._0.Managers
@@ -16,6 +17,8 @@ namespace EasySaveV2._0.Managers
         private readonly string _stateFile;
         private readonly Dictionary<string, StateModel> _jobStates;
         private readonly JsonSerializerOptions _jsonOptions;
+        private readonly byte[] _encryptionKey;
+        private readonly bool _encryptEnabled;
 
         public BackupManager()
         {
@@ -29,6 +32,8 @@ namespace EasySaveV2._0.Managers
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             LoadOrInitializeStates();
+            _encryptionKey = Config.GetEncryptionKey();
+            _encryptEnabled = _encryptionKey != null;
         }
 
         public IReadOnlyList<Backup> Jobs => _backups;
@@ -205,6 +210,19 @@ namespace EasySaveV2._0.Managers
                     {
                         File.Copy(src, dst, true);
                         sw.Stop();
+                        if (_encryptEnabled)
+                        {
+                            var cryptDst = dst + ".crypt";
+                            int cipherMs = CryptoManager.EncryptFile(dst, cryptDst, _encryptionKey);
+                            if (cipherMs < 0)
+                                _logger.LogAdminAction(job.Name, "ERROR", $"Erreur chiffrement {dst}");
+                            else
+                            {
+                                _logger.LogAdminAction(job.Name, "INFO",
+                                    $"Fichier chiffré en {cipherMs} ms ? {cryptDst}");
+                                File.Delete(dst);  // supprime la version en clair
+                            }
+                        }
                         _logger.CreateLog(
                             job.Name,
                             sw.Elapsed,

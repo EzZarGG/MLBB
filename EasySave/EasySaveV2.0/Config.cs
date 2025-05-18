@@ -15,6 +15,9 @@ namespace EasySaveV2._0
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
+        public static string ConfigFilePath => Path.Combine(AppContext.BaseDirectory, "config.json");
+        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+
         public static string ConfigFilePath =>
             Path.Combine(AppContext.BaseDirectory, "config.json");
 
@@ -97,5 +100,43 @@ namespace EasySaveV2._0
             settings.LogFormat = format.ToString();
             SaveSettings(settings);
         }
+        public class AppSettings
+        {
+            public string LogFormat { get; set; } = "JSON";
+            public string EncryptionKey { get; set; }
+        }
+
+        public static AppSettings LoadSettings()
+        {
+            if (!File.Exists(AppSettingsFilePath))
+                return new AppSettings();
+            try
+            {
+                var json = File.ReadAllText(AppSettingsFilePath);
+                var settings = JsonSerializer.Deserialize<AppSettings>(json, _jsonOpts);
+                return settings ?? new AppSettings();
+            }
+            catch
+            {
+                return new AppSettings();
+            }
+        }
+        /// <summary>
+        /// Retourne la clé de chiffrement (UTF8) ou null si non configurée.
+        /// </summary>
+        public static byte[] GetEncryptionKey()
+        {
+            var settings = LoadSettings();
+            var key = settings.EncryptionKey;
+
+            if (string.IsNullOrWhiteSpace(key))
+                return null;
+
+            var bytes = System.Text.Encoding.UTF8.GetBytes(key);
+            if (bytes.Length < 8)
+                throw new InvalidOperationException("La clé doit faire au moins 8 octets.");
+            return bytes;
+        }
+
     }
 } 
