@@ -130,12 +130,15 @@ namespace EasySaveV2._0.Controllers
         private void OnFileProgress(object sender, FileProgressEventArgs e)
         {
             _logController.LogFileOperation(
-                e.BackupName,
-                e.SourcePath,
-                e.TargetPath,
-                e.FileSize
+                backupName: e.BackupName,
+                sourcePath: e.SourcePath,
+                destinationPath: e.TargetPath,
+                fileSize: e.FileSize,
+                transferTime: e.TransferTime,
+                encryptionTime: e.EncryptionTime
             );
         }
+
 
         private void OnEncryptionProgress(object sender, EncryptionProgressEventArgs e)
         {

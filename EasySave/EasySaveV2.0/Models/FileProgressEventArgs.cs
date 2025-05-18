@@ -13,6 +13,9 @@ namespace EasySaveV2._0.Models
         public long TotalBytes { get; }
         public int FilesProcessed { get; }
         public int TotalFiles { get; }
+        public TimeSpan TransferTime { get; }
+        public long EncryptionTime { get; }
+
 
         public FileProgressEventArgs(
             string backupName,
@@ -23,7 +26,9 @@ namespace EasySaveV2._0.Models
             long bytesTransferred,
             long totalBytes,
             int filesProcessed,
-            int totalFiles)
+            int totalFiles,
+            TimeSpan transferTime,
+            long encryptionTime)
         {
             BackupName = backupName;
             SourcePath = sourcePath;
@@ -34,6 +39,8 @@ namespace EasySaveV2._0.Models
             TotalBytes = totalBytes;
             FilesProcessed = filesProcessed;
             TotalFiles = totalFiles;
+            TransferTime = transferTime;
+            EncryptionTime = encryptionTime;
         }
     }
 } 

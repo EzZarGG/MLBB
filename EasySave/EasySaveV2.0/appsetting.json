@@ -1,4 +1,5 @@
 {
   "LogFormat": "JSON",
-  "EncryptionKey": "MaSuperClef1234"
+  "EncryptionKey": "MaSuperClef1234",
+  "EncryptionExtensions": [ ".txt", ".pdf", ".docx" ]
 }
