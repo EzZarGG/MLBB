@@ -4,6 +4,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
+
+
 namespace EasySaveV2._0.Controllers
 {
     public class SettingsController
@@ -11,6 +13,7 @@ namespace EasySaveV2._0.Controllers
         private readonly string _settingsFile;
         private readonly JsonSerializerOptions _jsonOptions;
         private Settings _settings;
+        public Config.AppSettings Load() => Config.LoadSettings();
 
         public SettingsController()
         {
@@ -73,10 +76,8 @@ namespace EasySaveV2._0.Controllers
             SaveSettings();
         }
 
-        public List<string> GetEncryptionExtensions()
-        {
-            return _settings.EncryptionExtensions;
-        }
+        public IEnumerable<string> GetEncryptionExtensions() =>
+            Load().EncryptionExtensions;
 
         public void SetEncryptionExtensions(List<string> extensions)
         {
@@ -120,6 +121,32 @@ namespace EasySaveV2._0.Controllers
             public LogFormat LogFormat { get; set; } = LogFormat.JSON;
             public List<string> BusinessSoftware { get; set; } = new List<string>();
             public List<string> EncryptionExtensions { get; set; } = new List<string>();
+        }
+        public void SaveEncryptionKey(string key)
+        {
+            var s = Config.LoadSettings();
+            s.EncryptionKey = key;
+            Config.SaveSettings(s);
+        }
+
+        public void SaveExtensions(IEnumerable<string> exts)
+        {
+            var s = Config.LoadSettings();
+            s.EncryptionExtensions = exts.ToList();
+            Config.SaveSettings(s);
+        }
+        public void SetEncryptionKey(string key)
+        {
+            var s = Load();
+            s.EncryptionKey = key;
+            Config.SaveSettings(s);
+        }
+
+        public void SetEncryptionExtensions(IEnumerable<string> exts)
+        {
+            var s = Load();
+            s.EncryptionExtensions = exts.ToList();
+            Config.SaveSettings(s);
         }
     }
 } 

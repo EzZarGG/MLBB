@@ -20,6 +20,9 @@ namespace EasySaveV2._0.Managers
         private readonly byte[] _encryptionKey;
         private readonly bool _encryptEnabled;
         private readonly HashSet<string> _encryptExtensions;
+        public event EventHandler<FileProgressEventArgs> FileProgress;
+        public event EventHandler<EncryptionProgressEventArgs> EncryptionProgress;
+
 
         public BackupManager()
         {
@@ -240,6 +243,19 @@ namespace EasySaveV2._0.Managers
                             File.Delete(dst);
                         }
 
+                        FileProgress?.Invoke(this, new FileProgressEventArgs(
+                                job.Name,
+                                src,
+                                dst,
+                                fileSize,
+                                progressPercentage: (int)((totalBytes - _jobStates[job.Name].BytesRemaining) * 100 / totalBytes),
+                                bytesTransferred: totalBytes - _jobStates[job.Name].BytesRemaining,
+                                totalBytes: totalBytes,
+                                filesProcessed: totalFiles - _jobStates[job.Name].FilesRemaining,
+                                totalFiles: totalFiles,
+                                transferTime: sw.Elapsed,
+                                encryptionTime: encryptionTime
+                            ));
                         // Write a log entry including transfer and encryption times
                         _logger.CreateLog(
                             backupName: job.Name,
