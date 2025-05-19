@@ -13,9 +13,10 @@ namespace EasySaveV2._0.Models
         public long TotalBytes { get; }
         public int FilesProcessed { get; }
         public int TotalFiles { get; }
-        public TimeSpan TransferTime { get; }
-        public long EncryptionTime { get; }
-
+        public int FilesRemaining { get; }
+        public long BytesRemaining { get; }
+        public TimeSpan Duration { get; }
+        public bool Success { get; }
 
         public FileProgressEventArgs(
             string backupName,
@@ -27,8 +28,8 @@ namespace EasySaveV2._0.Models
             long totalBytes,
             int filesProcessed,
             int totalFiles,
-            TimeSpan transferTime,
-            long encryptionTime)
+            TimeSpan duration,
+            bool success)
         {
             BackupName = backupName;
             SourcePath = sourcePath;
@@ -39,8 +40,27 @@ namespace EasySaveV2._0.Models
             TotalBytes = totalBytes;
             FilesProcessed = filesProcessed;
             TotalFiles = totalFiles;
-            TransferTime = transferTime;
-            EncryptionTime = encryptionTime;
+            FilesRemaining = totalFiles - filesProcessed;
+            BytesRemaining = totalBytes - bytesTransferred;
+            Duration = duration;
+            Success = success;
+        }
+
+        // Constructor overload for simpler progress updates
+        public FileProgressEventArgs(
+            string backupName,
+            string sourcePath,
+            string targetPath,
+            long fileSize,
+            int progressPercentage,
+            long bytesTransferred,
+            long totalBytes,
+            int filesProcessed,
+            int totalFiles)
+            : this(backupName, sourcePath, targetPath, fileSize, progressPercentage, 
+                  bytesTransferred, totalBytes, filesProcessed, totalFiles, 
+                  TimeSpan.Zero, true)
+        {
         }
     }
-} 
+}

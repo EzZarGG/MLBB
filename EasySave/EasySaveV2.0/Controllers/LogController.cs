@@ -1,7 +1,9 @@
-using System;
 using EasySaveLogging;
-using EasySaveV2._0;
+using System.Diagnostics;
 using EasySaveV2._0.Managers;
+using System;
+using System.IO;
+using System.Windows.Forms;
 
 namespace EasySaveV2._0.Controllers
 {
@@ -9,6 +11,8 @@ namespace EasySaveV2._0.Controllers
     {
         private readonly Logger _logger;
         private readonly LanguageManager _languageManager;
+        private const string LogDirectory = "Logs";
+        private const string DefaultLogFileName = "log.json";
 
         public LogController()
         {
@@ -19,8 +23,12 @@ namespace EasySaveV2._0.Controllers
 
         private void InitializeLogger()
         {
-            // Configure the logger output path and format based on app settings
-            _logger.SetLogFilePath(Path.Combine(Config.GetLogDirectory(), DateTime.Today.ToString("yyyy-MM-dd") + ".json"));
+            string logPath = Path.Combine(Config.GetLogDirectory(), DefaultLogFileName);
+
+            if (!Directory.Exists(Config.GetLogDirectory()))
+                Directory.CreateDirectory(Config.GetLogDirectory());
+
+            _logger.SetLogFilePath(logPath);
             _logger.SetLogFormat(Config.GetLogFormat());
         }
 
@@ -31,74 +39,70 @@ namespace EasySaveV2._0.Controllers
 
         public void LogBackupStart(string backupName)
         {
-            LogAdminAction(backupName, "EXECUTE_START", $"Started executing backup job: {backupName}");
+            _logger.LogAdminAction(backupName, "EXECUTE_START", $"Started executing backup job: {backupName}");
         }
 
         public void LogBackupComplete(string backupName)
         {
-            LogAdminAction(backupName, "EXECUTE_COMPLETE", $"Completed executing backup job: {backupName}");
+            _logger.LogAdminAction(backupName, "EXECUTE_COMPLETE", $"Completed executing backup job: {backupName}");
         }
 
         public void LogBackupError(string backupName, string error)
         {
-            LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
+            _logger.LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
         }
 
-        /// <summary>
-        /// Logs a file transfer, including optional encryption time.
-        /// </summary>
-        /// <param name="backupName">Name of the backup job</param>
-        /// <param name="sourcePath">Original file path</param>
-        /// <param name="destinationPath">Destination file path</param>
-        /// <param name="fileSize">Size of the file in bytes</param>
-        /// <param name="transferTime">Time taken to transfer the file</param>
-        /// <param name="encryptionTime">
-        /// Time taken to encrypt the file (ms):
-        /// 0 = no encryption, >0 = time in ms, <0 = error code
-        /// </param>
-        public void LogFileOperation(
-            string backupName,
-            string sourcePath,
-            string destinationPath,
-            long fileSize,
-            TimeSpan transferTime,
-            long encryptionTime)
+        public void LogFileOperation(string backupName, string sourcePath, string destinationPath, long fileSize)
         {
             _logger.CreateLog(
-                backupName: backupName,
-                transferTime: transferTime,
-                fileSize: fileSize,
-                date: DateTime.Now,
-                sourcePath: sourcePath,
-                targetPath: destinationPath,
-                logType: "INFO",
-                encryptionTime: encryptionTime
+                backupName,
+                TimeSpan.Zero, // Transfer time will be calculated by the backup process
+                fileSize,
+                DateTime.Now,
+                sourcePath,
+                destinationPath,
+                "INFO"
             );
         }
 
         public void LogBusinessSoftwareDetected(string softwareName)
         {
-            LogAdminAction("System", "BUSINESS_SOFTWARE", $"Business software detected: {softwareName}");
+            _logger.LogAdminAction("System", "BUSINESS_SOFTWARE", $"Business software detected: {softwareName}");
         }
 
         public void LogEncryptionStart(string backupName)
         {
-            LogAdminAction(backupName, "ENCRYPTION_START", $"Started encryption for backup: {backupName}");
+            _logger.LogAdminAction(backupName, "ENCRYPTION_START", $"Started encryption for backup: {backupName}");
         }
 
         public void LogEncryptionComplete(string backupName)
         {
-            LogAdminAction(backupName, "ENCRYPTION_COMPLETE", $"Completed encryption for backup: {backupName}");
+            _logger.LogAdminAction(backupName, "ENCRYPTION_COMPLETE", $"Completed encryption for backup: {backupName}");
         }
 
         public void LogEncryptionError(string backupName, string error)
         {
-            LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Encryption error: {error}");
+            _logger.LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Encryption error: {error}");
         }
 
         public void DisplayLogs()
         {
-            _logger.DisplayLogs();
+            try
+            {
+                string logPath = Path.Combine(Config.GetLogDirectory(), Path.ChangeExtension(DefaultLogFileName, _logger.CurrentFormat == LogFormat.JSON ? ".json" : ".xml"));
+                if (File.Exists(logPath))
+                {
+                    Process.Start("notepad.exe", logPath);
+                }
+                else
+                {
+                    MessageBox.Show(_languageManager.GetTranslation("NoLogsFound"), "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"{_languageManager.GetTranslation("ErrorOpeningLogs")}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         public void SetLogFormat(LogFormat format)

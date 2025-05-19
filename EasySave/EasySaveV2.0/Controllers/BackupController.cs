@@ -3,158 +3,289 @@ using EasySaveV2._0.Managers;
 using EasySaveV2._0.Models;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Threading.Tasks;
 
 namespace EasySaveV2._0.Controllers
 {
     public class BackupController
     {
-        private readonly List<Backup> _backups;
+        private readonly BackupManager _backupManager;
         private readonly SettingsController _settingsController;
         private readonly LogController _logController;
         private readonly LanguageManager _languageManager;
-        private readonly BackupManager _backupManager;
 
         public BackupController()
         {
-            _backups = new List<Backup>();
+            _backupManager = new BackupManager();
             _settingsController = new SettingsController();
             _logController = new LogController();
             _languageManager = LanguageManager.Instance;
-            _backupManager = new BackupManager();
-            LoadBackups();
-        }
-
-        private void LoadBackups()
-        {
-            _backups.Clear();
-            _backups.AddRange(_backupManager.Jobs);
         }
 
         public void CreateBackup(string name, string sourcePath, string destinationPath, string type)
         {
-            var backup = new Backup
+            try
             {
-                Name = name,
-                SourcePath = sourcePath,
-                TargetPath = destinationPath,
-                Type = type,
-                FileLength = 0
-            };
+                var backup = new Backup
+                {
+                    Name = name,
+                    SourcePath = sourcePath,
+                    TargetPath = destinationPath,
+                    Type = type,
+                    FileLength = 0
+                };
 
-            if (_backupManager.AddJob(backup))
-            {
+                if (!_backupManager.AddJob(backup))
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupExists"));
+                }
+
                 _logController.LogBackupStart(name);
-                LoadBackups();
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error creating backup: {ex.Message}");
+                throw;
             }
         }
 
         public void EditBackup(string name, string sourcePath, string destinationPath, string type)
         {
-            var backup = new Backup
+            try
             {
-                Name = name,
-                SourcePath = sourcePath,
-                TargetPath = destinationPath,
-                Type = type,
-                FileLength = 0
-            };
+                var existingBackup = _backupManager.GetJob(name);
+                if (existingBackup == null)
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
 
-            if (_backupManager.UpdateJob(name, backup))
-            {
+                var updatedBackup = new Backup
+                {
+                    Name = name,
+                    SourcePath = sourcePath,
+                    TargetPath = destinationPath,
+                    Type = type,
+                    FileLength = existingBackup.FileLength
+                };
+
+                if (!_backupManager.UpdateJob(name, updatedBackup))
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
                 _logController.LogBackupStart(name);
-                LoadBackups();
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error editing backup: {ex.Message}");
+                throw;
             }
         }
 
         public void DeleteBackup(string name)
         {
-            if (_backupManager.RemoveJob(name))
+            try
             {
+                if (!_backupManager.RemoveJob(name))
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
                 _logController.LogBackupComplete(name);
-                LoadBackups();
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error deleting backup: {ex.Message}");
+                throw;
             }
         }
 
         public async Task StartBackup(string name)
         {
-            var backup = _backupManager.GetJob(name);
-            if (backup == null) return;
+            try
+            {
+                if (_settingsController.IsBusinessSoftwareRunning())
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
+                }
 
-            _logController.LogBackupStart(name);
-            await Task.Run(() => _backupManager.ExecuteJobsByIndices(new[] { _backups.FindIndex(b => b.Name == name) + 1 }));
-            _logController.LogBackupComplete(name);
+                _logController.LogBackupStart(name);
+                await _backupManager.ExecuteJob(name);
+                _logController.LogBackupComplete(name);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error starting backup: {ex.Message}");
+                throw;
+            }
         }
 
         public void PauseBackup(string name)
         {
-            _logController.LogAdminAction(name, "PAUSE", "Backup paused");
+            try
+            {
+                var state = _backupManager.GetJobState(name);
+                if (state != null && state.Status == "Active")
+                {
+                    _logController.LogAdminAction(name, "PAUSE", "Backup paused");
+                    // TODO: Implement actual pause functionality
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error pausing backup: {ex.Message}");
+                throw;
+            }
         }
 
         public void ResumeBackup(string name)
         {
-            _logController.LogAdminAction(name, "RESUME", "Backup resumed");
+            try
+            {
+                var state = _backupManager.GetJobState(name);
+                if (state != null && state.Status == "Paused")
+                {
+                    _logController.LogAdminAction(name, "RESUME", "Backup resumed");
+                    // TODO: Implement actual resume functionality
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error resuming backup: {ex.Message}");
+                throw;
+            }
         }
 
         public void StopBackup(string name)
         {
-            _logController.LogAdminAction(name, "STOP", "Backup stopped");
+            try
+            {
+                var state = _backupManager.GetJobState(name);
+                if (state != null && (state.Status == "Active" || state.Status == "Paused"))
+                {
+                    _logController.LogAdminAction(name, "STOP", "Backup stopped");
+                    // TODO: Implement actual stop functionality
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error stopping backup: {ex.Message}");
+                throw;
+            }
         }
 
         public List<Backup> GetBackups()
         {
-            return _backups;
+            try
+            {
+                return new List<Backup>(_backupManager.Jobs);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error getting backups: {ex.Message}");
+                throw;
+            }
         }
 
         public Backup GetBackup(string name)
         {
-            return _backupManager.GetJob(name);
-        }
-
-        public void DisplayLogs()
-        {
-            _logController.DisplayLogs();
-        }
-
-        public void SetLogFormat(LogFormat format)
-        {
-            _logController.SetLogFormat(format);
-        }
-
-        public LogFormat GetCurrentLogFormat()
-        {
-            return _logController.GetCurrentLogFormat();
-        }
-
-        private void OnFileProgress(object sender, FileProgressEventArgs e)
-        {
-            _logController.LogFileOperation(
-                backupName: e.BackupName,
-                sourcePath: e.SourcePath,
-                destinationPath: e.TargetPath,
-                fileSize: e.FileSize,
-                transferTime: e.TransferTime,
-                encryptionTime: e.EncryptionTime
-            );
-        }
-
-
-        private void OnEncryptionProgress(object sender, EncryptionProgressEventArgs e)
-        {
-            if (e.IsComplete)
+            try
             {
-                _logController.LogEncryptionComplete(e.BackupName);
+                return _backupManager.GetJob(name);
             }
-            else if (e.HasError)
+            catch (Exception ex)
             {
-                _logController.LogEncryptionError(e.BackupName, e.ErrorMessage);
+                _logController.LogAdminAction(name, "ERROR", $"Error getting backup: {ex.Message}");
+                throw;
             }
         }
 
         public StateModel GetBackupState(string name)
         {
-            return _backupManager.GetJobState(name);
+            try
+            {
+                return _backupManager.GetJobState(name);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error getting backup state: {ex.Message}");
+                throw;
+            }
+        }
+
+        public void DisplayLogs()
+        {
+            try
+            {
+                _logController.DisplayLogs();
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error displaying logs: {ex.Message}");
+                throw;
+            }
+        }
+
+        public void SetLogFormat(LogFormat format)
+        {
+            try
+            {
+                _logController.SetLogFormat(format);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error setting log format: {ex.Message}");
+                throw;
+            }
+        }
+
+        public LogFormat GetCurrentLogFormat()
+        {
+            try
+            {
+                return _logController.GetCurrentLogFormat();
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error getting log format: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void OnFileProgress(object sender, FileProgressEventArgs e)
+        {
+            try
+            {
+                _logController.LogFileOperation(
+                    e.BackupName,
+                    e.SourcePath,
+                    e.TargetPath,
+                    e.FileSize
+                );
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error logging file progress: {ex.Message}");
+            }
+        }
+
+        private void OnEncryptionProgress(object sender, EncryptionProgressEventArgs e)
+        {
+            try
+            {
+                if (e.IsComplete)
+                {
+                    _logController.LogEncryptionComplete(e.BackupName);
+                }
+                else if (e.HasError)
+                {
+                    _logController.LogEncryptionError(e.BackupName, e.ErrorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error logging encryption progress: {ex.Message}");
+            }
         }
     }
-} 
+}

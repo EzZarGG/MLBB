@@ -1,9 +1,11 @@
 using EasySaveV2._0.Models;
+using EasySaveV2._0.Controllers;
+using EasySaveV2._0.Managers;
 using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.IO;
-using EasySaveV2._0.Managers;
+using System.Linq;
 
 namespace EasySaveV2._0.Views
 {
@@ -11,6 +13,10 @@ namespace EasySaveV2._0.Views
     {
         private readonly Backup _backup;
         private readonly bool _isEditMode;
+        private readonly BackupController _backupController;
+        private readonly LanguageManager _languageManager;
+
+        // UI Controls
         private TextBox _nameTextBox;
         private TextBox _sourceTextBox;
         private TextBox _targetTextBox;
@@ -19,35 +25,34 @@ namespace EasySaveV2._0.Views
         private Button _targetBrowseButton;
         private Button _saveButton;
         private Button _cancelButton;
-        private readonly LanguageManager _languageManager = LanguageManager.Instance;
-
-        public Backup Backup { get; private set; }
 
         public BackupForm(Backup backup = null)
         {
             InitializeComponent();
-            _backup = backup;
+            _backup = backup ?? new Backup();
             _isEditMode = backup != null;
+            _backupController = new BackupController();
+            _languageManager = LanguageManager.Instance;
 
             InitializeUI();
-
-            // Subscribe to language changes
-            _languageManager.LanguageChanged += (s, e) => UpdateFormTexts();
-
-            // Set initial texts
-            UpdateFormTexts();
+            SetupEventHandlers();
 
             if (_isEditMode)
+            {
                 LoadBackupToUI();
+            }
+            else
+            {
+                _typeComboBox.SelectedIndex = 0;
+            }
+
+            UpdateFormTexts();
         }
 
         private void InitializeUI()
         {
-            // Title and Tag for the form
-            var formKey = _isEditMode ? "menu.editBackup" : "menu.newBackup";
-            this.Text = _languageManager.GetTranslation(formKey);
-            this.Tag = formKey;
-
+            // Form properties
+            this.Text = _languageManager.GetTranslation(_isEditMode ? "backup.edit.title" : "backup.create.title");
             this.Size = new System.Drawing.Size(500, 300);
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -63,7 +68,7 @@ namespace EasySaveV2._0.Views
                 Padding = new Padding(10)
             };
 
-            // — Name
+            // Name field
             layout.Controls.Add(new Label
             {
                 Tag = "backup.name",
@@ -76,7 +81,7 @@ namespace EasySaveV2._0.Views
             };
             layout.Controls.Add(_nameTextBox, 1, 0);
 
-            // — Source + Browse
+            // Source field with browse button
             layout.Controls.Add(new Label
             {
                 Tag = "backup.source",
@@ -89,17 +94,16 @@ namespace EasySaveV2._0.Views
             };
             _sourceBrowseButton = new Button
             {
-                Tag = "button.browse",
+                Tag = "backup.browse",
                 Width = 80
             };
-            _sourceBrowseButton.Click += OnSourceBrowseClick;
             layout.Controls.Add(_sourceTextBox, 1, 1);
             layout.Controls.Add(_sourceBrowseButton, 2, 1);
 
-            // — Target + Browse
+            // Target field with browse button
             layout.Controls.Add(new Label
             {
-                Tag = "backup.destination",
+                Tag = "backup.target",
                 Anchor = AnchorStyles.Right
             }, 0, 2);
             _targetTextBox = new TextBox
@@ -109,14 +113,13 @@ namespace EasySaveV2._0.Views
             };
             _targetBrowseButton = new Button
             {
-                Tag = "button.browse",
+                Tag = "backup.browse",
                 Width = 80
             };
-            _targetBrowseButton.Click += OnTargetBrowseClick;
             layout.Controls.Add(_targetTextBox, 1, 2);
             layout.Controls.Add(_targetBrowseButton, 2, 2);
 
-            // — Backup type
+            // Type combo box
             layout.Controls.Add(new Label
             {
                 Tag = "backup.type",
@@ -126,12 +129,12 @@ namespace EasySaveV2._0.Views
             {
                 Width = 300,
                 Anchor = AnchorStyles.Left,
-                DropDownStyle = ComboBoxStyle.DropDownList,
-                Tag = "backup.type"
+                DropDownStyle = ComboBoxStyle.DropDownList
             };
+            PopulateTypeCombo();
             layout.Controls.Add(_typeComboBox, 1, 3);
 
-            // — Save / Cancel buttons
+            // Button panel
             var buttonPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Bottom,
@@ -139,18 +142,17 @@ namespace EasySaveV2._0.Views
                 Height = 40,
                 Padding = new Padding(5)
             };
+
             _saveButton = new Button
             {
-                Tag = "settings.save",
+                Tag = "button.save",
                 Width = 80
             };
-            _saveButton.Click += OnSaveClick;
             _cancelButton = new Button
             {
-                Tag = "settings.cancel",
+                Tag = "button.cancel",
                 Width = 80
             };
-            _cancelButton.Click += OnCancelClick;
 
             buttonPanel.Controls.Add(_cancelButton);
             buttonPanel.Controls.Add(_saveButton);
@@ -159,33 +161,44 @@ namespace EasySaveV2._0.Views
             this.Controls.Add(buttonPanel);
         }
 
-        /// <summary>
-        /// Updates all texts (form title, labels, buttons, combo items) when language changes.
-        /// </summary>
+        private void SetupEventHandlers()
+        {
+            _languageManager.LanguageChanged += OnLanguageChanged;
+            _sourceBrowseButton.Click += OnSourceBrowseClick;
+            _targetBrowseButton.Click += OnTargetBrowseClick;
+            _saveButton.Click += OnSaveClick;
+            _cancelButton.Click += OnCancelClick;
+        }
+
+        private void OnLanguageChanged(object sender, string language)
+        {
+            UpdateFormTexts();
+        }
+
         private void UpdateFormTexts()
         {
-            // 1) Form title
-            if (this.Tag is string formKey)
-                this.Text = _languageManager.GetTranslation(formKey);
+            // Update form title
+            this.Text = _languageManager.GetTranslation(_isEditMode ? "backup.edit.title" : "backup.create.title");
 
-            // 2) Update tagged controls recursively
+            // Update all controls with tags
             UpdateControlTexts(this.Controls);
 
-            // 3) Update items in the type combo
+            // Update combo box items
             PopulateTypeCombo();
         }
 
-        /// <summary>
-        /// Recursively updates Control.Text for any control with a Tag.
-        /// </summary>
         private void UpdateControlTexts(Control.ControlCollection controls)
         {
-            foreach (Control c in controls)
+            foreach (Control control in controls)
             {
-                if (c.Tag is string key)
-                    c.Text = _languageManager.GetTranslation(key);
-                if (c.HasChildren)
-                    UpdateControlTexts(c.Controls);
+                if (control.Tag is string key)
+                {
+                    control.Text = _languageManager.GetTranslation(key);
+                }
+                if (control.HasChildren)
+                {
+                    UpdateControlTexts(control.Controls);
+                }
             }
         }
 
@@ -194,6 +207,7 @@ namespace EasySaveV2._0.Views
             _typeComboBox.Items.Clear();
             _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.full"));
             _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.differential"));
+
             if (_isEditMode && _backup != null)
             {
                 var key = _backup.Type.Equals("Full", StringComparison.OrdinalIgnoreCase)
@@ -207,7 +221,7 @@ namespace EasySaveV2._0.Views
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = _languageManager.GetTranslation("backup.source");
+                dialog.Description = _languageManager.GetTranslation("backup.selectSource");
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     _sourceTextBox.Text = dialog.SelectedPath;
@@ -219,7 +233,7 @@ namespace EasySaveV2._0.Views
         {
             using (var dialog = new FolderBrowserDialog())
             {
-                dialog.Description = _languageManager.GetTranslation("backup.destination");
+                dialog.Description = _languageManager.GetTranslation("backup.selectTarget");
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     _targetTextBox.Text = dialog.SelectedPath;
@@ -229,11 +243,33 @@ namespace EasySaveV2._0.Views
 
         private void OnSaveClick(object sender, EventArgs e)
         {
-            if (ValidateInput())
+            if (!ValidateInput())
+                return;
+
+            try
             {
                 UpdateBackupFromUI();
+
+                if (_isEditMode)
+                {
+                    _backupController.EditBackup(_backup.Name, _backup.SourcePath, _backup.TargetPath, _backup.Type);
+                }
+                else
+                {
+                    _backupController.CreateBackup(_backup.Name, _backup.SourcePath, _backup.TargetPath, _backup.Type);
+                }
+
                 this.DialogResult = DialogResult.OK;
                 this.Close();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    _languageManager.GetTranslation("message.error", ex.Message),
+                    _languageManager.GetTranslation("menu.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
@@ -247,67 +283,76 @@ namespace EasySaveV2._0.Views
         {
             if (string.IsNullOrWhiteSpace(_nameTextBox.Text))
             {
-                MessageBox.Show(
-                    _languageManager.GetTranslation("backup.askName"),
-                    _languageManager.GetTranslation("message.invalid"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowError("message.enterName");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(_sourceTextBox.Text))
             {
-                MessageBox.Show(
-                    _languageManager.GetTranslation("backup.source"),
-                    _languageManager.GetTranslation("message.invalid"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowError("message.selectSource");
                 return false;
             }
 
             if (string.IsNullOrWhiteSpace(_targetTextBox.Text))
             {
-                MessageBox.Show(
-                    _languageManager.GetTranslation("backup.destination"),
-                    _languageManager.GetTranslation("message.invalid"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowError("message.selectTarget");
                 return false;
             }
 
             if (_typeComboBox.SelectedItem == null)
             {
-                MessageBox.Show(
-                    _languageManager.GetTranslation("backup.type"),
-                    _languageManager.GetTranslation("message.invalid"),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowError("message.selectType");
                 return false;
             }
 
             if (!Directory.Exists(_sourceTextBox.Text))
             {
-                MessageBox.Show(
-                    _languageManager.GetTranslation("message.error").Replace("{0}", _languageManager.GetTranslation("backup.source")),
-                    _languageManager.GetTranslation("message.error").Replace("{0}", ""),
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                ShowError("message.sourceNotExist");
+                return false;
+            }
+
+            if (!Directory.Exists(_targetTextBox.Text))
+            {
+                try
+                {
+                    Directory.CreateDirectory(_targetTextBox.Text);
+                }
+                catch
+                {
+                    ShowError("message.cannotCreateTarget");
+                    return false;
+                }
+            }
+
+            // Check for duplicate names
+            var backups = _backupController.GetBackups();
+            if (backups.Any(b => b.Name == _nameTextBox.Text && (!_isEditMode || b.Name != _backup.Name)))
+            {
+                ShowError("message.backupExists");
                 return false;
             }
 
             return true;
         }
 
+        private void ShowError(string messageKey)
+        {
+            MessageBox.Show(
+                _languageManager.GetTranslation(messageKey),
+                _languageManager.GetTranslation("menu.title"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error
+            );
+        }
+
         private void UpdateBackupFromUI()
         {
-            Backup = new Backup
-            {
-                Name = _nameTextBox.Text,
-                SourcePath = _sourceTextBox.Text,
-                TargetPath = _targetTextBox.Text,
-                Type = _typeComboBox.SelectedItem.ToString(),
-                FileLength = 0
-            };
+            _backup.Name = _nameTextBox.Text;
+            _backup.SourcePath = _sourceTextBox.Text;
+            _backup.TargetPath = _targetTextBox.Text;
+            _backup.Type = _typeComboBox.SelectedItem.ToString() == _languageManager.GetTranslation("backup.type.full")
+                ? "Full"
+                : "Differential";
         }
 
         private void LoadBackupToUI()
@@ -317,7 +362,6 @@ namespace EasySaveV2._0.Views
                 _nameTextBox.Text = _backup.Name;
                 _sourceTextBox.Text = _backup.SourcePath;
                 _targetTextBox.Text = _backup.TargetPath;
-                // Map internal type to translated item
                 var key = _backup.Type.Equals("Full", StringComparison.OrdinalIgnoreCase)
                     ? "backup.type.full"
                     : "backup.type.differential";
@@ -325,9 +369,10 @@ namespace EasySaveV2._0.Views
             }
         }
 
-        private void BackupForm_Load(object sender, EventArgs e)
+        protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            // No additional logic
+            base.OnFormClosing(e);
+            _languageManager.LanguageChanged -= OnLanguageChanged;
         }
     }
 }

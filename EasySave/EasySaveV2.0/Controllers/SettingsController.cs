@@ -3,8 +3,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
-
-
+using System.Linq;
+using System.Diagnostics;
 
 namespace EasySaveV2._0.Controllers
 {
@@ -13,7 +13,6 @@ namespace EasySaveV2._0.Controllers
         private readonly string _settingsFile;
         private readonly JsonSerializerOptions _jsonOptions;
         private Settings _settings;
-        public Config.AppSettings Load() => Config.LoadSettings();
 
         public SettingsController()
         {
@@ -50,8 +49,15 @@ namespace EasySaveV2._0.Controllers
 
         private void SaveSettings()
         {
-            var json = JsonSerializer.Serialize(_settings, _jsonOptions);
-            File.WriteAllText(_settingsFile, json);
+            try
+            {
+                var json = JsonSerializer.Serialize(_settings, _jsonOptions);
+                File.WriteAllText(_settingsFile, json);
+            }
+            catch (Exception)
+            {
+                // Log error if needed
+            }
         }
 
         public LogFormat GetCurrentLogFormat()
@@ -70,14 +76,68 @@ namespace EasySaveV2._0.Controllers
             return _settings.BusinessSoftware;
         }
 
+        public void AddBusinessSoftware(string softwareName)
+        {
+            var software = GetBusinessSoftware();
+            if (!software.Contains(softwareName))
+            {
+                software.Add(softwareName);
+                _settings.BusinessSoftware = software;
+                SaveSettings();
+            }
+        }
+
+        public void RemoveBusinessSoftware(string softwareName)
+        {
+            var software = GetBusinessSoftware();
+            if (software.Remove(softwareName))
+            {
+                _settings.BusinessSoftware = software;
+                SaveSettings();
+            }
+        }
+
         public void SetBusinessSoftware(List<string> software)
         {
             _settings.BusinessSoftware = software;
             SaveSettings();
         }
 
-        public IEnumerable<string> GetEncryptionExtensions() =>
-            Load().EncryptionExtensions;
+        public List<string> GetEncryptionExtensions()
+        {
+            return _settings.EncryptionExtensions;
+        }
+
+        public void AddEncryptionExtension(string extension)
+        {
+            if (!string.IsNullOrWhiteSpace(extension))
+            {
+                extension = extension.Trim().ToLower();
+                if (!extension.StartsWith("."))
+                    extension = "." + extension;
+
+                if (!_settings.EncryptionExtensions.Contains(extension))
+                {
+                    _settings.EncryptionExtensions.Add(extension);
+                    SaveSettings();
+                }
+            }
+        }
+
+        public void RemoveEncryptionExtension(string extension)
+        {
+            if (!string.IsNullOrWhiteSpace(extension))
+            {
+                extension = extension.Trim().ToLower();
+                if (!extension.StartsWith("."))
+                    extension = "." + extension;
+
+                if (_settings.EncryptionExtensions.Remove(extension))
+                {
+                    SaveSettings();
+                }
+            }
+        }
 
         public void SetEncryptionExtensions(List<string> extensions)
         {
@@ -97,11 +157,25 @@ namespace EasySaveV2._0.Controllers
             return false;
         }
 
+        public string GetRunningBusinessSoftware()
+        {
+            var businessSoftware = GetBusinessSoftware();
+            var processes = Process.GetProcesses();
+
+            foreach (var software in businessSoftware)
+            {
+                if (processes.Any(p => p.ProcessName.Equals(software, StringComparison.OrdinalIgnoreCase)))
+                    return software;
+            }
+
+            return string.Empty;
+        }
+
         private bool IsProcessRunning(string processName)
         {
             try
             {
-                var processes = System.Diagnostics.Process.GetProcessesByName(processName);
+                var processes = Process.GetProcessesByName(processName);
                 return processes.Length > 0;
             }
             catch
@@ -122,31 +196,5 @@ namespace EasySaveV2._0.Controllers
             public List<string> BusinessSoftware { get; set; } = new List<string>();
             public List<string> EncryptionExtensions { get; set; } = new List<string>();
         }
-        public void SaveEncryptionKey(string key)
-        {
-            var s = Config.LoadSettings();
-            s.EncryptionKey = key;
-            Config.SaveSettings(s);
-        }
-
-        public void SaveExtensions(IEnumerable<string> exts)
-        {
-            var s = Config.LoadSettings();
-            s.EncryptionExtensions = exts.ToList();
-            Config.SaveSettings(s);
-        }
-        public void SetEncryptionKey(string key)
-        {
-            var s = Load();
-            s.EncryptionKey = key;
-            Config.SaveSettings(s);
-        }
-
-        public void SetEncryptionExtensions(IEnumerable<string> exts)
-        {
-            var s = Load();
-            s.EncryptionExtensions = exts.ToList();
-            Config.SaveSettings(s);
-        }
     }
-} 
+}

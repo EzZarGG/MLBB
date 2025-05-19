@@ -1,63 +1,61 @@
+using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Models;
-using EasySaveLogging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
-using CryptoLibrary;
 using System.Threading.Tasks;
+using System.Diagnostics;
 
 namespace EasySaveV2._0.Managers
 {
     public class BackupManager
     {
         private readonly List<Backup> _backups;
-        private readonly Logger _logger;
+        private readonly LogController _logController;
         private readonly string _stateFile;
         private readonly Dictionary<string, StateModel> _jobStates;
         private readonly JsonSerializerOptions _jsonOptions;
-        private readonly byte[] _encryptionKey;
-        private readonly bool _encryptEnabled;
-        private readonly HashSet<string> _encryptExtensions;
-        public event EventHandler<FileProgressEventArgs> FileProgress;
-        public event EventHandler<EncryptionProgressEventArgs> EncryptionProgress;
-
+        private readonly string _backupFilePath;
+        private const int MAX_BACKUPS = 5;
 
         public BackupManager()
         {
+            _backupFilePath = Path.Combine(AppContext.BaseDirectory, "backups.json");
+            _stateFile = Path.Combine(AppContext.BaseDirectory, "states.json");
             _backups = new List<Backup>();
-            _logger = Logger.GetInstance();
-            _stateFile = Config.GetStateFilePath();
             _jobStates = new Dictionary<string, StateModel>();
             _jsonOptions = new JsonSerializerOptions
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
+            _logController = new LogController();
             LoadOrInitializeStates();
-            _encryptionKey = Config.GetEncryptionKey();
-            _encryptEnabled = _encryptionKey != null;
-            _encryptExtensions = Config.GetEncryptionExtensions();
+            LoadBackups();
         }
 
         public IReadOnlyList<Backup> Jobs => _backups;
 
         private void LoadOrInitializeStates()
         {
-            _backups.Clear();
-            _backups.AddRange(Config.LoadJobs());
-
-            // Initialize states for all existing jobs
-            foreach (var job in _backups)
+            try
             {
-                _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
-            }
+                _logController.LogAdminAction("System", "INIT", "Loading or initializing states...");
+                
+                // Clear existing states and load backups
+                _backups.Clear();
+                _backups.AddRange(Config.LoadJobs());
 
-            // Try to load existing state file if it exists
-            if (File.Exists(_stateFile))
-            {
-                try
+                // Initialize states for all existing jobs
+                foreach (var job in _backups)
+                {
+                    _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
+                }
+
+                // Try to load existing state file if it exists
+                if (File.Exists(_stateFile))
                 {
                     var json = File.ReadAllText(_stateFile);
                     var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
@@ -73,83 +71,181 @@ namespace EasySaveV2._0.Managers
                         }
                     }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogAdminAction("System", "ERROR", $"Failed to load state file: {ex.Message}");
-                }
-            }
 
-            SaveStates(_jobStates.Values.ToList());
+                // Save the current states to ensure consistency
+                SaveStates(_jobStates.Values.ToList());
+                _logController.LogAdminAction("System", "INIT", "States loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error loading states: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void LoadBackups()
+        {
+            try
+            {
+                _logController.LogAdminAction("System", "INIT", "Loading backups...");
+                if (File.Exists(_backupFilePath))
+                {
+                    var json = File.ReadAllText(_backupFilePath);
+                    var loaded = JsonSerializer.Deserialize<List<Backup>>(json, _jsonOptions);
+                    if (loaded != null)
+                    {
+                        _backups.AddRange(loaded);
+                    }
+                }
+                _logController.LogAdminAction("System", "INIT", "Backups loaded successfully");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error loading backups: {ex.Message}");
+                throw;
+            }
         }
 
         private void SaveStates(List<StateModel> states)
         {
-            var json = JsonSerializer.Serialize(states, _jsonOptions);
-            File.WriteAllText(_stateFile, json);
+            try
+            {
+                var json = JsonSerializer.Serialize(states, _jsonOptions);
+                File.WriteAllText(_stateFile, json);
+                _logController.LogAdminAction("System", "SAVE", "States saved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error saving states: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void SaveBackups()
+        {
+            try
+            {
+                var json = JsonSerializer.Serialize(_backups, _jsonOptions);
+                File.WriteAllText(_backupFilePath, json);
+                Config.SaveJobs(_backups);
+                _logController.LogAdminAction("System", "SAVE", "Backups saved successfully");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction("System", "ERROR", $"Error saving backups: {ex.Message}");
+                throw;
+            }
         }
 
         private void UpdateJobState(string jobName, Action<StateModel> updateAction)
         {
-            if (!_jobStates.ContainsKey(jobName))
+            try
             {
-                _jobStates[jobName] = StateModel.CreateInitialState(jobName);
-            }
+                if (!_jobStates.ContainsKey(jobName))
+                {
+                    _jobStates[jobName] = StateModel.CreateInitialState(jobName);
+                }
 
-            updateAction(_jobStates[jobName]);
-            _jobStates[jobName].LastActionTime = DateTime.Now;
-            SaveStates(_jobStates.Values.ToList());
+                updateAction(_jobStates[jobName]);
+                _jobStates[jobName].LastActionTime = DateTime.Now;
+                SaveStates(_jobStates.Values.ToList());
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(jobName, "ERROR", $"Error updating job state: {ex.Message}");
+                throw;
+            }
         }
 
         public bool AddJob(Backup job)
         {
-            if (_backups.Count >= 5) return false;
-            _backups.Add(job);
-            Config.SaveJobs(_backups);
+            try
+            {
+                if (_backups.Count >= MAX_BACKUPS)
+                {
+                    _logController.LogAdminAction(job.Name, "ERROR", "Maximum number of backup jobs reached");
+                    return false;
+                }
 
-            _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
-            SaveStates(_jobStates.Values.ToList());
+                if (_backups.Any(b => b.Name == job.Name))
+                {
+                    _logController.LogAdminAction(job.Name, "ERROR", "A backup with this name already exists");
+                    return false;
+                }
 
-            _logger.LogAdminAction(job.Name, "CREATE", $"Backup job created: {job.Name}");
-            return true;
+                _backups.Add(job);
+                _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
+                SaveBackups();
+                SaveStates(_jobStates.Values.ToList());
+                _logController.LogAdminAction(job.Name, "CREATE", $"Backup job created: {job.Name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(job.Name, "ERROR", $"Error adding backup job: {ex.Message}");
+                return false;
+            }
         }
 
         public bool RemoveJob(string name)
         {
-            var job = _backups.FirstOrDefault(b => b.Name == name);
-            if (job == null) return false;
-
-            _backups.Remove(job);
-            Config.SaveJobs(_backups);
-
-            if (_jobStates.ContainsKey(name))
+            try
             {
-                _jobStates.Remove(name);
-                SaveStates(_jobStates.Values.ToList());
-            }
+                var backup = _backups.FirstOrDefault(b => b.Name == name);
+                if (backup == null)
+                {
+                    _logController.LogAdminAction(name, "ERROR", "Backup not found");
+                    return false;
+                }
 
-            _logger.LogAdminAction(name, "DELETE", $"Backup job deleted: {name}");
-            return true;
+                _backups.Remove(backup);
+                if (_jobStates.ContainsKey(name))
+                {
+                    _jobStates.Remove(name);
+                }
+                SaveBackups();
+                SaveStates(_jobStates.Values.ToList());
+                _logController.LogAdminAction(name, "DELETE", $"Backup job deleted: {name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error removing backup job: {ex.Message}");
+                return false;
+            }
         }
 
         public bool UpdateJob(string name, Backup updated)
         {
-            var idx = _backups.FindIndex(b => b.Name == name);
-            if (idx < 0) return false;
-
-            _backups[idx] = updated;
-            Config.SaveJobs(_backups);
-
-            if (name != updated.Name && _jobStates.ContainsKey(name))
+            try
             {
-                var state = _jobStates[name];
-                _jobStates.Remove(name);
-                state.Name = updated.Name;
-                _jobStates[updated.Name] = state;
-                SaveStates(_jobStates.Values.ToList());
-            }
+                var index = _backups.FindIndex(b => b.Name == name);
+                if (index == -1)
+                {
+                    _logController.LogAdminAction(name, "ERROR", "Backup not found");
+                    return false;
+                }
 
-            _logger.LogAdminAction(updated.Name, "UPDATE", $"Backup job updated: {name} to {updated.Name}");
-            return true;
+                _backups[index] = updated;
+                Config.SaveJobs(_backups);
+
+                if (name != updated.Name && _jobStates.ContainsKey(name))
+                {
+                    var state = _jobStates[name];
+                    _jobStates.Remove(name);
+                    state.Name = updated.Name;
+                    _jobStates[updated.Name] = state;
+                    SaveStates(_jobStates.Values.ToList());
+                }
+
+                _logController.LogAdminAction(updated.Name, "UPDATE", $"Backup job updated: {name} to {updated.Name}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logController.LogAdminAction(name, "ERROR", $"Error updating backup job: {ex.Message}");
+                return false;
+            }
         }
 
         public Backup GetJob(string name)
@@ -159,201 +255,129 @@ namespace EasySaveV2._0.Managers
 
         public StateModel GetJobState(string name)
         {
-            return _jobStates.ContainsKey(name) ? _jobStates[name] : null;
+            return _jobStates.TryGetValue(name, out var state) ? state : null;
         }
 
-        public void ExecuteJobsByIndices(IEnumerable<int> indices)
+        public async Task ExecuteJob(string name)
         {
-            foreach (var i in indices)
+            var backup = GetJob(name);
+            if (backup == null)
             {
-                if (i >= 1 && i <= _backups.Count)
-                {
-                    RunBackup(_backups[i - 1]);
-                }
+                throw new InvalidOperationException($"Backup '{name}' not found.");
             }
-        }
 
-        private void RunBackup(Backup job)
-        {
-            // Log the start of execution
-            _logger.LogAdminAction(job.Name, "EXECUTE_START", $"Started executing backup job: {job.Name}");
+            _logController.LogAdminAction(name, "EXECUTE_START", $"Starting backup: {name}");
 
             try
             {
-                // Gather all files under the source directory
-                var allFiles = Directory.EnumerateFiles(job.SourcePath, "*", SearchOption.AllDirectories).ToList();
-                long totalBytes = allFiles.Sum(f => new FileInfo(f).Length);
-                int totalFiles = allFiles.Count;
+                var files = await Task.Run(() => Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories));
+                var totalBytes = files.Sum(f => new FileInfo(f).Length);
+                var totalFiles = files.Length;
 
-                // Initialize state to “Active”
-                UpdateJobState(job.Name, state => {
+                UpdateJobState(name, state =>
+                {
                     state.Status = "Active";
                     state.TotalFilesCount = totalFiles;
                     state.TotalFilesSize = totalBytes;
                     state.FilesRemaining = totalFiles;
                     state.BytesRemaining = totalBytes;
-                    state.CurrentSourceFile = job.SourcePath;
-                    state.CurrentTargetFile = job.TargetPath;
+                    state.CurrentSourceFile = backup.SourcePath;
+                    state.CurrentTargetFile = backup.TargetPath;
                 });
 
-                // Process each file one by one
-                foreach (var src in allFiles)
+                foreach (var sourceFile in files)
                 {
-                    var rel = Path.GetRelativePath(job.SourcePath, src);
-                    var dst = Path.Combine(job.TargetPath, rel);
-                    long fileSize = new FileInfo(src).Length;
+                    var relativePath = Path.GetRelativePath(backup.SourcePath, sourceFile);
+                    var targetFile = Path.Combine(backup.TargetPath, relativePath);
+                    var sourceInfo = new FileInfo(sourceFile);
+                    var shouldCopy = true;
 
-                    // Ensure the target folder exists
-                    Directory.CreateDirectory(Path.GetDirectoryName(dst));
-
-                    // Update state before copying
-                    UpdateJobState(job.Name, state => {
-                        state.CurrentSourceFile = src;
-                        state.CurrentTargetFile = dst;
-                    });
-
-                    var sw = System.Diagnostics.Stopwatch.StartNew();
-                    long encryptionTime = 0;
-
-                    try
+                    if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase) && File.Exists(targetFile))
                     {
-                        // Copy the file
-                        File.Copy(src, dst, overwrite: true);
-                        sw.Stop();
-
-                        // If encryption is enabled and the file’s extension matches
-                        var ext = Path.GetExtension(src).ToLower();
-                        if (_encryptEnabled && _encryptExtensions.Contains(ext))
+                        var targetInfo = new FileInfo(targetFile);
+                        if (sourceInfo.LastWriteTime <= targetInfo.LastWriteTime)
                         {
-                            var cryptDst = dst + ".crypt";
-                            encryptionTime = CryptoManager.EncryptFile(dst, cryptDst, _encryptionKey);
+                            shouldCopy = false;
+                        }
+                    }
 
-                            if (encryptionTime < 0)
-                            {
-                                _logger.LogAdminAction(job.Name, "ERROR",
-                                    $"Erreur de chiffrement {dst} (code {encryptionTime})");
-                            }
-                            else
-                            {
-                                _logger.LogAdminAction(job.Name, "INFO",
-                                    $"Fichier chiffré en {encryptionTime} ms ? {cryptDst}");
-                            }
-
-                            // Remove the unencrypted copy
-                            File.Delete(dst);
+                    if (shouldCopy)
+                    {
+                        var dir = Path.GetDirectoryName(targetFile);
+                        if (!Directory.Exists(dir))
+                        {
+                            Directory.CreateDirectory(dir);
                         }
 
-                        FileProgress?.Invoke(this, new FileProgressEventArgs(
-                                job.Name,
-                                src,
-                                dst,
-                                fileSize,
-                                progressPercentage: (int)((totalBytes - _jobStates[job.Name].BytesRemaining) * 100 / totalBytes),
-                                bytesTransferred: totalBytes - _jobStates[job.Name].BytesRemaining,
-                                totalBytes: totalBytes,
-                                filesProcessed: totalFiles - _jobStates[job.Name].FilesRemaining,
-                                totalFiles: totalFiles,
-                                transferTime: sw.Elapsed,
-                                encryptionTime: encryptionTime
-                            ));
-                        // Write a log entry including transfer and encryption times
-                        _logger.CreateLog(
-                            backupName: job.Name,
-                            transferTime: sw.Elapsed,
-                            fileSize: fileSize,
-                            date: DateTime.Now,
-                            sourcePath: src,
-                            targetPath: dst,
-                            logType: "INFO",
-                            encryptionTime: encryptionTime
-                        );
+                        var stopwatch = Stopwatch.StartNew();
+                        try
+                        {
+                            await Task.Run(() => File.Copy(sourceFile, targetFile, true));
+                            stopwatch.Stop();
 
-                        // Update state after successful copy
-                        UpdateJobState(job.Name, state => {
-                            state.FilesRemaining -= 1;
-                            state.BytesRemaining -= fileSize;
-                        });
-                    }
-                    catch (Exception exFile)
-                    {
-                        sw.Stop();
+                            _logController.CreateLog(
+                                name,
+                                stopwatch.Elapsed,
+                                sourceInfo.Length,
+                                DateTime.Now,
+                                sourceFile,
+                                targetFile,
+                                "INFO"
+                            );
 
-                        // Log the failed file transfer (negative transfer time) and no encryption
-                        _logger.CreateLog(
-                            backupName: job.Name,
-                            transferTime: sw.Elapsed.Negate(),
-                            fileSize: 0,
-                            date: DateTime.Now,
-                            sourcePath: src,
-                            targetPath: dst,
-                            logType: "ERROR",
-                            encryptionTime: 0
-                        );
-
-                        _logger.LogAdminAction(job.Name, "ERROR",
-                            $"Error processing file {src}: {exFile.Message}");
+                            UpdateJobState(name, state =>
+                            {
+                                state.FilesRemaining--;
+                                state.BytesRemaining -= sourceInfo.Length;
+                                state.CurrentSourceFile = sourceFile;
+                                state.CurrentTargetFile = targetFile;
+                            });
+                        }
+                        catch (Exception ex)
+                        {
+                            stopwatch.Stop();
+                            _logController.CreateLog(
+                                name,
+                                stopwatch.Elapsed.Negate(),
+                                0,
+                                DateTime.Now,
+                                sourceFile,
+                                targetFile,
+                                "ERROR"
+                            );
+                            _logController.LogAdminAction(name, "ERROR", $"Error copying file {sourceFile}: {ex.Message}");
+                        }
                     }
                 }
 
-                // Mark job as completed
-                UpdateJobState(job.Name, state => {
-                    state.Status = "Inactive";
+                UpdateJobState(name, state =>
+                {
+                    state.Status = "Completed";
                     state.FilesRemaining = 0;
                     state.BytesRemaining = 0;
                     state.CurrentSourceFile = "";
                     state.CurrentTargetFile = "";
                 });
 
-                _logger.LogAdminAction(job.Name, "EXECUTE_COMPLETE",
-                    $"Completed executing backup job: {job.Name}");
+                _logController.LogAdminAction(name, "EXECUTE_COMPLETE", $"Backup completed: {name}");
             }
             catch (Exception ex)
             {
-                // Critical failure: log and set job inactive
-                _logger.LogAdminAction(job.Name, "ERROR",
-                    $"Critical error during backup: {ex.Message}");
-
-                UpdateJobState(job.Name, state => {
-                    state.Status = "Inactive";
+                UpdateJobState(name, state =>
+                {
+                    state.Status = "Error";
                     state.CurrentSourceFile = "";
                     state.CurrentTargetFile = "";
                 });
+
+                _logController.LogAdminAction(name, "ERROR", $"Backup failed: {ex.Message}");
+                throw;
             }
         }
 
-
-        public void ShowLogs()
+        public void DisplayLogs()
         {
-            _logger.DisplayLogs();
-        }
-
-        private void SaveJobs()
-        {
-            Config.SaveJobs(_backups);
-        }
-
-        private void LoadStates()
-        {
-            if (File.Exists(_stateFile))
-            {
-                try
-                {
-                    var json = File.ReadAllText(_stateFile);
-                    var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
-
-                    if (loadedStates != null)
-                    {
-                        foreach (var state in loadedStates)
-                        {
-                            _jobStates[state.Name] = state;
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogAdminAction("System", "ERROR", $"Failed to load state file: {ex.Message}");
-                }
-            }
+            _logController.DisplayLogs();
         }
     }
-} 
+}
