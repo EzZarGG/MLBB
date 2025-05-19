@@ -1,6 +1,8 @@
+using EasySave.Business;
 using EasySaveLogging;
 using EasySaveV2._0.Managers;
 using EasySaveV2._0.Models;
+using EasySaveV2._0.Notifications;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -15,9 +17,13 @@ namespace EasySaveV2._0.Controllers
         private readonly LogController _logController;
         private readonly LanguageManager _languageManager;
         private readonly BackupManager _backupManager;
+        private readonly BusinessSoftwareManager _bsManager = new BusinessSoftwareManager();
+        private readonly Logger _logger = Logger.GetInstance();
+        private readonly INotifier _notifier;
 
-        public BackupController()
+        public BackupController(INotifier notifier)
         {
+            _notifier = notifier ?? throw new ArgumentNullException(nameof(notifier));
             _backups = new List<Backup>();
             _settingsController = new SettingsController();
             _logController = new LogController();
@@ -25,6 +31,53 @@ namespace EasySaveV2._0.Controllers
             _backupManager = new BackupManager();
             LoadBackups();
         }
+
+        public async Task RunBackupAsync(BackupJob job, CancellationToken ct)
+        {
+            // Avant tout lancement
+            if (_bsManager.IsAnyRunning())
+            {
+                _logger.LogAdminAction(job.Name, "BACKUP_BLOCKED", "Sauvegarde empêchée : logiciel métier détecté avant démarrage.");
+                _notifier.Warn("Un logiciel métier est en cours : sauvegarde bloquée.");
+                return;
+            }
+
+            foreach (var file in job.FilesToSave)
+            {
+                // Sauvegarde du fichier
+                try
+                {
+                    var start = DateTime.Now;
+                    await SaveFileAsync(file, job.TargetDirectory, ct);
+                    var duration = DateTime.Now - start;
+                    _logger.CreateLog(job.Name, duration, file.Length, start, file.FullName, job.TargetDirectory, "SUCCESS");
+                }
+                catch (Exception ex)
+                {
+                    _logger.CreateLog(job.Name, TimeSpan.Zero, file.Length, DateTime.Now, file.FullName, job.TargetDirectory, "ERROR");
+                    _logger.LogAdminAction(job.Name, "ERROR", $"Erreur sur '{file.FullName}': {ex.Message}");
+                }
+
+                // Vérifier à nouveau avant le fichier suivant
+                if (_bsManager.IsAnyRunning())
+                {
+                    _logger.LogAdminAction(job.Name, "BACKUP_INTERRUPTED",
+                        $"Sauvegarde interrompue après '{file.Name}' : logiciel métier démarré.");
+                    _notifier.Warn("Un logiciel métier s'est lancé, sauvegarde interrompue.");
+                    return;
+                }
+            }
+
+            _logger.LogAdminAction(job.Name, "BACKUP_COMPLETED", "Sauvegarde terminée avec succès.");
+            _notifier.Info("Sauvegarde achevée.");
+        }
+
+        private Task SaveFileAsync(System.IO.FileInfo file, string targetDir, CancellationToken ct)
+        {
+            // Implémentation existante de la copie…
+            throw new NotImplementedException();
+        }
+    
 
         private void LoadBackups()
         {

@@ -258,6 +258,14 @@ namespace EasySaveV2._0.Managers
                 });
             }
         }
+        public List<FileInfo> CollectFiles(Backup backup)
+        {
+            var files = new List<FileInfo>();
+            // Exemple : tous les fichiers du dossier source (y compris sous-dossiers)
+            foreach (var path in Directory.EnumerateFiles(backup.SourcePath, "*", SearchOption.AllDirectories))
+                files.Add(new FileInfo(path));
+            return files;
+        }
 
         public void ShowLogs()
         {

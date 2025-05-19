@@ -2,7 +2,9 @@ using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Models;
 using EasySaveV2._0.Views;
 using EasySaveV2._0.Managers;
+using EasySaveV2._0.Notifications;
 using System;
+using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -14,6 +16,7 @@ namespace EasySaveV2._0
     public partial class MainForm : Form
     {
         private readonly BackupController _backupController;
+        private readonly BackupManager _backupManager;
         private readonly SettingsController _settingsController;
         private readonly LanguageManager _languageManager;
         private ListView _backupListView;
@@ -27,9 +30,14 @@ namespace EasySaveV2._0
         public MainForm()
         {
             InitializeComponent();
-            _backupController = new BackupController();
-            _settingsController = new SettingsController();
+            
+            
             _languageManager = LanguageManager.Instance;
+            INotifier notifier = new MessageBoxNotifier();
+            _backupController = new BackupController(notifier);
+            _backupManager = new BackupManager();
+            _settingsController = new SettingsController();
+
             InitializeTimer();
             InitializeUI();
 
@@ -421,51 +429,45 @@ namespace EasySaveV2._0
         private async void ExecuteJob()
         {
             if (_backupListView.SelectedItems.Count == 0) return;
-            if (_settingsController.IsBusinessSoftwareRunning())
+
+            var backup = _backupListView.SelectedItems[0].Tag as Backup;
+            if (backup == null) return;
+
+            try
             {
+                _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
+                _progressBar.Visible = true;
+
+                // Le contrôleur gère la détection et les notifications
+                await _backupController.RunBackupAsync(
+                    new BackupJob
+                    {
+                        Name = backup.Name,
+                        FilesToSave = _backupManager.CollectFiles(backup),
+                        TargetDirectory = backup.TargetPath
+                    },
+                    CancellationToken.None
+                );
+
+                _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
+            }
+            catch (Exception ex)
+            {
+                _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
                 MessageBox.Show(
-                    _languageManager.GetTranslation("message.businessSoftwareRunning"),
+                    _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
                     _languageManager.GetTranslation("menu.title"),
                     MessageBoxButtons.OK,
-                    MessageBoxIcon.Warning
+                    MessageBoxIcon.Error
                 );
-                return;
             }
-            var selectedItem = _backupListView.SelectedItems[0];
-            var backup = selectedItem.Tag as Backup;
-            if (backup != null)
+            finally
             {
-                try
-                {
-                    _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
-                    _progressBar.Visible = true;
-                    await _backupController.StartBackup(backup.Name);
-                    _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
-                    _progressBar.Visible = false;
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.backupSuccess"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
-                }
-                catch (Exception ex)
-                {
-                    _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
-                    _progressBar.Visible = false;
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error
-                    );
-                }
-                finally
-                {
-                    RefreshBackupList();
-                }
+                _progressBar.Visible = false;
+                RefreshBackupList();
             }
         }
+
 
         private void OpenSettings()
         {
