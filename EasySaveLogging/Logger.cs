@@ -61,8 +61,34 @@ namespace EasySaveLogging
         // XML serializer for log entries
         private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntryCollection));
 
+        private static readonly string DEBUG_LOG_FILE = Path.Combine(AppContext.BaseDirectory, "debug.log");
+
+        private static void DebugLog(string message)
+        {
+            try
+            {
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var logMessage = $"[{timestamp}] {message}{Environment.NewLine}";
+                File.AppendAllText(DEBUG_LOG_FILE, logMessage);
+            }
+            catch
+            {
+                // Ignore debug logging errors
+            }
+        }
+
         // Private constructor to enforce singleton pattern
-        private Logger() { }
+        private Logger() 
+        { 
+            // Initialize with default path
+            var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+            if (!Directory.Exists(logDir))
+            {
+                Directory.CreateDirectory(logDir);
+            }
+            _logFilePath = Path.Combine(logDir, "log.json");
+            DebugLog($"Logger constructor - Initialized with path: {_logFilePath}");
+        }
 
         // Gets the singleton instance of the Logger.
         public static Logger GetInstance() => _instance.Value;
@@ -70,90 +96,175 @@ namespace EasySaveLogging
         // Gets the current log format.
         public LogFormat CurrentFormat => _logFormat;
 
-        // Sets the format for writing logs.
-        public void SetLogFormat(LogFormat format)
-        {
-            if (_logFormat != format)
-            {
-                _logFormat = format;
-
-                // Convert existing logs if file exists
-                if (File.Exists(_logFilePath))
-                {
-                    ConvertLogFileFormat();
-                }
-                else
-                {
-                    // Create a new empty log file with the selected format
-                    InitializeLogFile();
-                }
-
-                // Log the format change
-                LogAdminAction("System", "FORMAT_CHANGE", $"Log format changed to {format}");
-            }
-        }
-
         // Sets the file path for the log file. Creates directory and file if they do not exist.
         public void SetLogFilePath(string path)
         {
-            _logFilePath = path;
+            DebugLog($"SetLogFilePath - Setting path to: {path}");
+            
+            // Ensure the directory exists with correct case
             var dir = Path.GetDirectoryName(path);
             if (!Directory.Exists(dir))
+            {
+                DebugLog($"SetLogFilePath - Creating directory: {dir}");
                 Directory.CreateDirectory(dir);
+            }
+            
+            // If the path has changed, we need to convert the file
+            if (_logFilePath != null && _logFilePath != path && File.Exists(_logFilePath))
+            {
+                DebugLog($"SetLogFilePath - Converting from {_logFilePath} to {path}");
+                ConvertLogFileFormat();
+            }
+            
+            // Update the file path
+            _logFilePath = path;
+            DebugLog($"SetLogFilePath - Updated file path to: {_logFilePath}");
+            
+            // Initialize the file if it doesn't exist
             InitializeLogFile();
+        }
+
+        // Sets the format for writing logs.
+        public void SetLogFormat(LogFormat format)
+        {
+            DebugLog($"SetLogFormat - Changing format from {_logFormat} to {format}");
+            
+            if (_logFormat != format)
+            {
+                // Store the old path
+                string oldPath = _logFilePath;
+                
+                // Update the format
+                _logFormat = format;
+                
+                // If we have a file path, update it with the new extension
+                if (!string.IsNullOrEmpty(oldPath))
+                {
+                    string newPath = Path.ChangeExtension(oldPath, format == LogFormat.JSON ? ".json" : ".xml");
+                    DebugLog($"SetLogFormat - Updating path from {oldPath} to {newPath}");
+                    
+                    // Convert the file if it exists
+                    if (File.Exists(oldPath))
+                    {
+                        DebugLog("SetLogFormat - Converting existing log file");
+                        ConvertLogFileFormat();
+                    }
+                    else
+                    {
+                        _logFilePath = newPath;
+                        DebugLog("SetLogFormat - Initializing new log file");
+                        InitializeLogFile();
+                    }
+                }
+                
+                // Log the format change
+                LogAdminAction("System", "FORMAT_CHANGE", $"Log format changed to {format}");
+            }
+            else
+            {
+                DebugLog("SetLogFormat - Format unchanged");
+            }
         }
 
         // Initializes the log file with an empty structure based on the current format.
         private void InitializeLogFile()
         {
-            if (File.Exists(_logFilePath))
-                return;
-
-            if (_logFormat == LogFormat.JSON)
+            if (string.IsNullOrEmpty(_logFilePath))
             {
-                File.WriteAllText(_logFilePath, "[]"); // Initialize with empty JSON array
+                DebugLog("InitializeLogFile - No file path set, initializing default path");
+                var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+                if (!Directory.Exists(logDir))
+                {
+                    Directory.CreateDirectory(logDir);
+                }
+                _logFilePath = Path.Combine(logDir, "log.json");
             }
-            else // XML format
+
+            if (File.Exists(_logFilePath))
             {
-                using var writer = new StreamWriter(_logFilePath);
-                _xmlSerializer.Serialize(writer, new LogEntryCollection());
+                DebugLog($"InitializeLogFile - File already exists: {_logFilePath}");
+                return;
+            }
+
+            try
+            {
+                DebugLog($"InitializeLogFile - Creating new file: {_logFilePath}");
+                if (_logFormat == LogFormat.JSON)
+                {
+                    File.WriteAllText(_logFilePath, "[]"); // Initialize with empty JSON array
+                    DebugLog("InitializeLogFile - Created empty JSON file");
+                }
+                else // XML format
+                {
+                    var collection = new LogEntryCollection();
+                    using (var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8))
+                    {
+                        _xmlSerializer.Serialize(writer, collection);
+                        DebugLog("InitializeLogFile - Created empty XML file");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"InitializeLogFile - Error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                throw new InvalidOperationException($"Failed to initialize log file: {ex.Message}", ex);
             }
         }
 
         // Converts the log file from one format to another.
         private void ConvertLogFileFormat()
         {
-            // Read all entries from the current file
-            var entries = ReadAllEntries();
-
-            // Change file extension based on format
-            string newFilePath = Path.ChangeExtension(_logFilePath, _logFormat == LogFormat.JSON ? ".json" : ".xml");
-
-            // Save in the new format
-            if (_logFormat == LogFormat.JSON)
+            try
             {
-                File.WriteAllText(newFilePath, JsonSerializer.Serialize(entries, _jsonOpts));
-            }
-            else // XML format
-            {
-                var collection = new LogEntryCollection { Entries = entries };
-                _xmlSerializer.Serialize(writer, collection);
-            }
-
-            // If the new file path is different, update the file path
-            if (newFilePath != _logFilePath)
-            {
-                try
+                DebugLog("ConvertLogFileFormat - Starting conversion");
+                
+                // Lire les entrées existantes
+                var entries = ReadAllEntries();
+                DebugLog($"ConvertLogFileFormat - Read {entries.Count} entries");
+                
+                // Déterminer le nouveau chemin de fichier
+                string newFilePath = Path.ChangeExtension(_logFilePath, _logFormat == LogFormat.JSON ? ".json" : ".xml");
+                DebugLog($"ConvertLogFileFormat - New file path: {newFilePath}");
+                
+                // Sauvegarder dans le nouveau format
+                if (_logFormat == LogFormat.JSON)
                 {
+                    var json = JsonSerializer.Serialize(entries, _jsonOpts);
+                    File.WriteAllText(newFilePath, json);
+                    DebugLog("ConvertLogFileFormat - Saved in JSON format");
+                }
+                else // XML format
+                {
+                    var collection = new LogEntryCollection { Entries = entries };
+                    using (var writer = new StreamWriter(newFilePath, false, System.Text.Encoding.UTF8))
+                    {
+                        _xmlSerializer.Serialize(writer, collection);
+                        DebugLog("ConvertLogFileFormat - Saved in XML format");
+                    }
+                }
+                
+                // Supprimer l'ancien fichier si le chemin a changé
+                if (newFilePath != _logFilePath && File.Exists(_logFilePath))
+                {
+                    try
+                    {
                         File.Delete(_logFilePath);
+                        DebugLog("ConvertLogFileFormat - Deleted old file");
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLog($"ConvertLogFileFormat - Error deleting old file: {ex.Message}");
+                    }
                 }
-                catch
-                {
-                    // Silently ignore deletion errors
-                }
-
-                // Update the file path
+                
+                // Mettre à jour le chemin du fichier
                 _logFilePath = newFilePath;
+                DebugLog("ConvertLogFileFormat - Conversion complete");
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"ConvertLogFileFormat - Error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                throw new InvalidOperationException($"Failed to convert log file format: {ex.Message}", ex);
             }
         }
 
@@ -210,9 +321,40 @@ namespace EasySaveLogging
         {
             lock (_instance)
             {
-                var entries = ReadAllEntries();
-                entries.Add(entry);
-                SaveEntries(entries);
+                try
+                {
+                    DebugLog($"AddLogEntry - Current format: {_logFormat}, File path: {_logFilePath}");
+                    
+                    // Read existing entries
+                    var entries = ReadAllEntries();
+                    DebugLog($"AddLogEntry - Read {entries.Count} existing entries");
+                    
+                    // Add new entry
+                    entries.Add(entry);
+                    DebugLog("AddLogEntry - Added new entry");
+                    
+                    // Save all entries in the current format
+                    if (_logFormat == LogFormat.JSON)
+                    {
+                        var json = JsonSerializer.Serialize(entries, _jsonOpts);
+                        File.WriteAllText(_logFilePath, json);
+                        DebugLog("AddLogEntry - Saved in JSON format");
+                    }
+                    else // XML format
+                    {
+                        var collection = new LogEntryCollection { Entries = entries };
+                        using (var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8))
+                        {
+                            _xmlSerializer.Serialize(writer, collection);
+                            DebugLog("AddLogEntry - Saved in XML format");
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    DebugLog($"AddLogEntry - Error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+                    throw new InvalidOperationException($"Failed to add log entry: {ex.Message}", ex);
+                }
             }
         }
 
@@ -220,29 +362,41 @@ namespace EasySaveLogging
         private List<LogEntry> ReadAllEntries()
         {
             if (!File.Exists(_logFilePath))
+            {
+                DebugLog("ReadAllEntries - File does not exist");
                 return new List<LogEntry>();
+            }
 
             try
             {
+                DebugLog($"ReadAllEntries - Reading from {_logFilePath}");
                 if (_logFormat == LogFormat.JSON)
                 {
                     var json = File.ReadAllText(_logFilePath);
-                    return JsonSerializer.Deserialize<List<LogEntry>>(json, _jsonOpts)
-                           ?? new List<LogEntry>();
+                    var entries = JsonSerializer.Deserialize<List<LogEntry>>(json, _jsonOpts) ?? new List<LogEntry>();
+                    DebugLog($"ReadAllEntries - Read {entries.Count} entries from JSON");
+                    return entries;
                 }
                 else // XML format
                 {
-                    using var reader = new StreamReader(_logFilePath);
-                    if (reader.BaseStream.Length == 0)
-                        return new List<LogEntry>();
+                    using (var reader = new StreamReader(_logFilePath, System.Text.Encoding.UTF8))
+                    {
+                        if (reader.BaseStream.Length == 0)
+                        {
+                            DebugLog("ReadAllEntries - XML file is empty");
+                            return new List<LogEntry>();
+                        }
 
-                    var collection = (LogEntryCollection)_xmlSerializer.Deserialize(reader);
-                    return collection?.Entries ?? new List<LogEntry>();
+                        var collection = _xmlSerializer.Deserialize(reader) as LogEntryCollection;
+                        var entries = collection?.Entries ?? new List<LogEntry>();
+                        DebugLog($"ReadAllEntries - Read {entries.Count} entries from XML");
+                        return entries;
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
-                // If there's an error reading the file, return an empty list
+                DebugLog($"ReadAllEntries - Error: {ex.Message}\nStackTrace: {ex.StackTrace}");
                 return new List<LogEntry>();
             }
         }

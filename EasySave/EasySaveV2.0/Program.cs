@@ -15,22 +15,55 @@ namespace EasySaveV2._0
         [STAThread]
         static void Main()
         {
-            var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
-            if (!Directory.Exists(logDir))
-                Directory.CreateDirectory(logDir);
-            Logger.GetInstance().SetLogFilePath(Path.Combine(logDir, "application.log"));
-
-            Application.SetHighDpiMode(HighDpiMode.SystemAware);
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-
-            // Configure unhandled exception handling
-            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-            Application.ThreadException += Application_ThreadException;
-            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-
             try
             {
+                // Get configured log format
+                var logFormat = Config.GetLogFormat();
+                DebugLog($"Main - Initial log format from config: {logFormat}");
+                
+                // Ensure log directory exists with correct case
+                var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+                if (!Directory.Exists(logDir))
+                {
+                    DebugLog("Main - Creating log directory");
+                    Directory.CreateDirectory(logDir);
+                }
+
+                // Initialize logger with correct format
+                var logger = Logger.GetInstance();
+                DebugLog($"Main - Setting initial format to: {logFormat}");
+                logger.SetLogFormat(logFormat);
+                
+                // Set log file path with correct name and extension
+                string logFileName = "log" + (logFormat == LogFormat.JSON ? ".json" : ".xml");
+                string logPath = Path.Combine(logDir, logFileName);
+                DebugLog($"Main - Setting log path to: {logPath}");
+                logger.SetLogFilePath(logPath);
+
+                // Delete any old application.json file if it exists
+                string oldLogPath = Path.Combine(logDir, "application.json");
+                if (File.Exists(oldLogPath))
+                {
+                    DebugLog($"Main - Deleting old log file: {oldLogPath}");
+                    try
+                    {
+                        File.Delete(oldLogPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        DebugLog($"Main - Error deleting old log file: {ex.Message}");
+                    }
+                }
+
+                Application.SetHighDpiMode(HighDpiMode.SystemAware);
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+
+                // Configure unhandled exception handling
+                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+                Application.ThreadException += Application_ThreadException;
+                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+
                 // Ensure required directories exist
                 EnsureDirectoriesExist();
 
@@ -113,6 +146,20 @@ namespace EasySaveV2._0
 
             // Exit the application
             Application.Exit();
+        }
+
+        private static void DebugLog(string message)
+        {
+            try
+            {
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var logMessage = $"[{timestamp}] {message}{Environment.NewLine}";
+                File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "debug.log"), logMessage);
+            }
+            catch
+            {
+                // Ignore debug logging errors
+            }
         }
     }
 }
