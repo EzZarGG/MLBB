@@ -35,9 +35,11 @@ namespace EasySaveV2._0.Views
             _settingsController = settingsController;
 
             InitializeComponent();
+            _languageManager.ReloadTranslations();
             InitializeUI();
             SetupEventHandlers();
             LoadSettings();
+            UpdateFormTexts();
         }
 
         private void SetupEventHandlers()
@@ -275,6 +277,25 @@ namespace EasySaveV2._0.Views
         {
             DialogResult = DialogResult.Cancel;
             Close();
+        }
+
+        private void UpdateControlTexts(Control.ControlCollection controls)
+        {
+            foreach (Control control in controls)
+            {
+                if (control.Tag is string key)
+                    control.Text = _languageManager.GetTranslation(key);
+                if (control.HasChildren)
+                    UpdateControlTexts(control.Controls);
+            }
+        }
+
+        private void UpdateFormTexts()
+        {
+            // Update form title
+            this.Text = _languageManager.GetTranslation("settings.title");
+            // Update all controls with tags
+            UpdateControlTexts(this.Controls);
         }
     }
 

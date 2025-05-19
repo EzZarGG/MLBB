@@ -36,6 +36,7 @@ namespace EasySaveV2._0.Views
             _languageManager = LanguageManager.Instance;
 
             InitializeComponent();
+            _languageManager.ReloadTranslations();
             InitializeUI();
             SetupEventHandlers();
 
@@ -189,6 +190,10 @@ namespace EasySaveV2._0.Views
 
             // Update combo box items
             PopulateTypeCombo();
+
+            // Reselect the correct type if editing
+            if (_isEditMode)
+                LoadBackupToUI();
         }
 
         private void UpdateControlTexts(Control.ControlCollection controls)
@@ -206,15 +211,25 @@ namespace EasySaveV2._0.Views
             }
         }
 
+        private class ComboItem
+        {
+            public string Key { get; }
+            public string Display { get; }
+            public ComboItem(string key, string display)
+            {
+                Key = key;
+                Display = display;
+            }
+            public override string ToString() => Display;
+        }
+
         private void PopulateTypeCombo()
         {
             _typeComboBox.Items.Clear();
-            _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.complete"));
-            _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.differential"));
+            _typeComboBox.Items.Add(new ComboItem("Full", _languageManager.GetTranslation("backup.type.full")));
+            _typeComboBox.Items.Add(new ComboItem("Differential", _languageManager.GetTranslation("backup.type.differential")));
             if (_typeComboBox.SelectedIndex == -1 && _typeComboBox.Items.Count > 0)
-            {
                 _typeComboBox.SelectedIndex = 0;
-            }
         }
 
         private void OnSourceBrowseClick(object? sender, EventArgs e)
@@ -317,7 +332,7 @@ namespace EasySaveV2._0.Views
             _backup.Name = _nameTextBox.Text;
             _backup.SourcePath = _sourceTextBox.Text;
             _backup.TargetPath = _targetTextBox.Text;
-            _backup.Type = _typeComboBox.SelectedIndex == 0 ? "Full" : "Differential";
+            _backup.Type = (_typeComboBox.SelectedItem as ComboItem)?.Key ?? "Full";
         }
 
         private void LoadBackupToUI()
@@ -325,7 +340,14 @@ namespace EasySaveV2._0.Views
             _nameTextBox.Text = _backup.Name;
             _sourceTextBox.Text = _backup.SourcePath;
             _targetTextBox.Text = _backup.TargetPath;
-            _typeComboBox.SelectedIndex = _backup.Type.Equals("Full", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            foreach (ComboItem item in _typeComboBox.Items)
+            {
+                if (item.Key.Equals(_backup.Type, StringComparison.OrdinalIgnoreCase))
+                {
+                    _typeComboBox.SelectedItem = item;
+                    break;
+                }
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

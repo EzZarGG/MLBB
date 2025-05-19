@@ -46,6 +46,7 @@ namespace EasySaveV2._0
 
                 // Initialize UI components
                 InitializeComponent();
+                _languageManager.ReloadTranslations();
 
                 // Initialize UI elements in correct order
                 InitializeUI();
@@ -226,7 +227,7 @@ namespace EasySaveV2._0
                 _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
-                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.target"), 200);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
@@ -345,7 +346,7 @@ namespace EasySaveV2._0
                 _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.name"), Tag = "backup.name", Width = 150 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.source"), Tag = "backup.source", Width = 200 });
-                _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.destination"), Tag = "backup.destination", Width = 200 });
+                _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.target"), Tag = "backup.target", Width = 200 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.type"), Tag = "backup.type", Width = 100 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.status"), Tag = "backup.status", Width = 100 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.progress"), Tag = "backup.progress", Width = 150 });
@@ -522,38 +523,32 @@ namespace EasySaveV2._0
                     _logger?.LogAdminAction("System", "ERROR", "BackupListView is null");
                     return;
                 }
-
                 if (_backupController == null)
                 {
                     _logger?.LogAdminAction("System", "ERROR", "BackupController is null");
                     return;
                 }
-
                 if (_languageManager == null)
                 {
                     _logger?.LogAdminAction("System", "ERROR", "LanguageManager is null");
                     return;
                 }
-
                 _logger.LogAdminAction("System", "UI", "Refreshing backup list");
                 _backupListView.Items.Clear();
-
                 // Nettoyage : évite les doublons de colonnes
                 if (_backupListView.Columns.Count > 0) _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
-                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.target"), 200);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
-
                 var backups = _backupController.GetBackups();
                 if (backups != null && backups.Any())
                 {
                     foreach (Backup backup in backups)
                     {
                         if (backup == null) continue;
-
                         var item = new ListViewItem(backup.Name);
                         item.SubItems.Add(backup.SourcePath);
                         item.SubItems.Add(backup.TargetPath);
@@ -561,9 +556,9 @@ namespace EasySaveV2._0
                         var state = _backupController.GetBackupState(backup.Name);
                         string status = state != null ? GetStatusText(state.Status) : GetStatusText("pending");
                         item.SubItems.Add(status);
-                        item.SubItems.Add("0%");
+                        string progress = (state != null && state.Status?.ToLower() == "completed") ? "100%" : "0%";
+                        item.SubItems.Add(progress);
                         item.Tag = backup;
-
                         _backupListView.Items.Add(item);
                     }
                 }
@@ -869,6 +864,17 @@ namespace EasySaveV2._0
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );
+            }
+        }
+
+        private void UpdateControlTexts(Control.ControlCollection controls)
+        {
+            foreach (Control control in controls)
+            {
+                if (control.Tag is string key)
+                    control.Text = _languageManager.GetTranslation(key);
+                if (control.HasChildren)
+                    UpdateControlTexts(control.Controls);
             }
         }
     }

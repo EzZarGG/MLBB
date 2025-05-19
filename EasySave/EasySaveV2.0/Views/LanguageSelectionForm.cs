@@ -120,13 +120,9 @@ namespace EasySaveV2._0.Views
             foreach (Control control in controls)
             {
                 if (control.Tag is string key)
-                {
                     control.Text = _languageManager.GetTranslation(key);
-                }
                 if (control.HasChildren)
-                {
                     UpdateControlTexts(control.Controls);
-                }
             }
         }
 
