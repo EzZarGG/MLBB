@@ -28,10 +28,17 @@ namespace EasySaveV2._0.Views
         /// </summary>
         private void InitializeComponent()
         {
-            this.components = new System.ComponentModel.Container();
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(500, 300);
-            this.Text = "Backup";
+            SuspendLayout();
+            // 
+            // BackupForm
+            // 
+            AutoScaleDimensions = new SizeF(7F, 15F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(500, 300);
+            Name = "BackupForm";
+            Text = "Backup";
+            Load += BackupForm_Load;
+            ResumeLayout(false);
         }
 
         #endregion
