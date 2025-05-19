@@ -71,7 +71,6 @@ namespace EasySaveLogging
         public LogFormat CurrentFormat => _logFormat;
 
         // Sets the format for writing logs.
-        // <param name="format">The log format to use</param>
         public void SetLogFormat(LogFormat format)
         {
             if (_logFormat != format)
@@ -137,7 +136,6 @@ namespace EasySaveLogging
             }
             else // XML format
             {
-                using var writer = new StreamWriter(newFilePath);
                 var collection = new LogEntryCollection { Entries = entries };
                 _xmlSerializer.Serialize(writer, collection);
             }
@@ -145,10 +143,8 @@ namespace EasySaveLogging
             // If the new file path is different, update the file path
             if (newFilePath != _logFilePath)
             {
-                // Try to delete the old file
                 try
                 {
-                    if (File.Exists(_logFilePath))
                         File.Delete(_logFilePath);
                 }
                 catch
@@ -248,24 +244,6 @@ namespace EasySaveLogging
             {
                 // If there's an error reading the file, return an empty list
                 return new List<LogEntry>();
-            }
-        }
-
-        // Saves all entries to the log file.
-        private void SaveEntries(List<LogEntry> entries)
-        {
-            if (string.IsNullOrWhiteSpace(_logFilePath))
-                throw new InvalidOperationException("Logger: Log file path is not set. Call SetLogFilePath() before logging.");
-
-            if (_logFormat == LogFormat.JSON)
-            {
-                File.WriteAllText(_logFilePath, JsonSerializer.Serialize(entries, _jsonOpts));
-            }
-            else // XML format
-            {
-                using var writer = new StreamWriter(_logFilePath);
-                var collection = new LogEntryCollection { Entries = entries };
-                _xmlSerializer.Serialize(writer, collection);
             }
         }
 
