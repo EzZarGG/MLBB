@@ -36,6 +36,7 @@ namespace EasySaveV2._0
             _languageManager.LanguageChanged += OnLanguageChanged;
             _languageManager.TranslationsReloaded += OnTranslationsReloaded;
 
+            UpdateAllTexts();
             RefreshBackupList();
         }
 
@@ -58,68 +59,164 @@ namespace EasySaveV2._0
             _menuStrip.Dock = DockStyle.Top;
 
             // File menu
-            var fileMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file"));
-            var exitItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file.exit"));
-            exitItem.Click += (sender, e) => Application.Exit();
+            var fileMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file"))
+            {
+                Tag = "menu.file"
+            };
+            var exitItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file.exit"))
+            {
+                Tag = "menu.file.exit"
+            };
+            exitItem.Click += (s, e) => Application.Exit();
             fileMenu.DropDownItems.Add(exitItem);
 
             // Backup menu
-            var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup"));
-            var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create"));
-            createBackupItem.Click += (sender, e) => AddJob();
-            var editBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.edit"));
-            editBackupItem.Click += (sender, e) => UpdateJob();
-            var deleteBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.delete"));
-            deleteBackupItem.Click += (sender, e) => RemoveJob();
-            var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run"));
-            runBackupItem.Click += (sender, e) => ExecuteJob();
-            backupMenu.DropDownItems.AddRange(new ToolStripItem[] { createBackupItem, editBackupItem, deleteBackupItem, runBackupItem });
+            var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup"))
+            {
+                Tag = "menu.backup"
+            };
+            var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create"))
+            {
+                Tag = "menu.backup.create"
+            };
+            createBackupItem.Click += (s, e) => AddJob();
+            var editBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.edit"))
+            {
+                Tag = "menu.backup.edit"
+            };
+            editBackupItem.Click += (s, e) => UpdateJob();
+            var deleteBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.delete"))
+            {
+                Tag = "menu.backup.delete"
+            };
+            deleteBackupItem.Click += (s, e) => RemoveJob();
+            var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run"))
+            {
+                Tag = "menu.backup.run"
+            };
+            runBackupItem.Click += (s, e) => ExecuteJob();
 
+            backupMenu.DropDownItems.AddRange(new[]
+            {
+        createBackupItem,
+        editBackupItem,
+        deleteBackupItem,
+        runBackupItem
+    });
             // Settings menu
-            var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings"));
-            var openSettingsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings.open"));
-            openSettingsItem.Click += (sender, e) => OpenSettings();
+            var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings"))
+            {
+                Tag = "menu.settings"
+            };
+            var openSettingsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings.open"))
+            {
+                Tag = "menu.settings.open"
+            };
+            openSettingsItem.Click += (s, e) => OpenSettings();
             settingsMenu.DropDownItems.Add(openSettingsItem);
 
             // View menu
-            var viewMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view"));
-            var viewLogsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs"));
-            viewLogsItem.Click += (sender, e) => ViewLogs();
+            var viewMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view"))
+            {
+                Tag = "menu.view"
+            };
+            var viewLogsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs"))
+            {
+                Tag = "menu.view.logs"
+            };
+            viewLogsItem.Click += (s, e) => ViewLogs();
             viewMenu.DropDownItems.Add(viewLogsItem);
-
             // Help menu
-            var helpMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.help"));
+            var helpMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.help"))
+            {
+                Tag = "menu.help"
+            };
 
-            _menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, backupMenu, settingsMenu, viewMenu, helpMenu });
-
+            _menuStrip.Items.AddRange(new ToolStripItem[]
+            {
+        fileMenu,
+        backupMenu,
+        settingsMenu,
+        viewMenu,
+        helpMenu
+            });
             // Toolbar
-            _toolStrip = new ToolStrip();
-            _toolStrip.Dock = DockStyle.Top;
-            var newButton = new ToolStripButton(_languageManager.GetTranslation("menu.new"));
-            newButton.Click += (sender, e) => AddJob();
-            var editButton = new ToolStripButton(_languageManager.GetTranslation("menu.edit"));
-            editButton.Click += (sender, e) => UpdateJob();
-            var deleteButton = new ToolStripButton(_languageManager.GetTranslation("menu.delete"));
-            deleteButton.Click += (sender, e) => RemoveJob();
-            var runButton = new ToolStripButton(_languageManager.GetTranslation("menu.run"));
-            runButton.Click += (sender, e) => ExecuteJob();
-            var settingsButton = new ToolStripButton(_languageManager.GetTranslation("menu.settings"));
-            settingsButton.Click += (sender, e) => OpenSettings();
-            _toolStrip.Items.AddRange(new ToolStripItem[] { newButton, editButton, deleteButton, runButton, new ToolStripSeparator(), settingsButton });
+            _toolStrip = new ToolStrip { Dock = DockStyle.Top };
+            var newButton = new ToolStripButton(_languageManager.GetTranslation("menu.new"))
+            {
+                Tag = "menu.new"
+            }; newButton.Click += (s, e) => AddJob();
+            var editButton = new ToolStripButton(_languageManager.GetTranslation("menu.edit"))
+            {
+                Tag = "menu.edit"
+            }; editButton.Click += (s, e) => UpdateJob();
+            var deleteButton = new ToolStripButton(_languageManager.GetTranslation("menu.delete"))
+            {
+                Tag = "menu.delete"
+            }; deleteButton.Click += (s, e) => RemoveJob();
+            var runButton = new ToolStripButton(_languageManager.GetTranslation("menu.run"))
+            {
+                Tag = "menu.run"
+            }; runButton.Click += (s, e) => ExecuteJob();
+            var settingsButton = new ToolStripButton(_languageManager.GetTranslation("menu.settings"))
+            {
+                Tag = "menu.settings"
+            }; settingsButton.Click += (s, e) => OpenSettings();
 
+            _toolStrip.Items.AddRange(new ToolStripItem[]
+            {
+        newButton,
+        editButton,
+        deleteButton,
+        runButton,
+        new ToolStripSeparator(),
+        settingsButton
+            });
             // ListView
-            _backupListView = new ListView();
-            _backupListView.Dock = DockStyle.Fill;
-            _backupListView.View = View.Details;
-            _backupListView.FullRowSelect = true;
-            _backupListView.GridLines = true;
-            _backupListView.MultiSelect = false;
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
-            _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 150);
+            _backupListView = new ListView
+            {
+                Dock = DockStyle.Fill,
+                View = View.Details,
+                FullRowSelect = true,
+                GridLines = true,
+                MultiSelect = false
+            };
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.name"),
+                Tag = "backup.name",
+                Width = 150
+            });
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.source"),
+                Tag = "backup.source",
+                Width = 200
+            });
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.destination"),
+                Tag = "backup.destination",
+                Width = 200
+            });
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.type"),
+                Tag = "backup.type",
+                Width = 100
+            });
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.status"),
+                Tag = "backup.status",
+                Width = 100
+            });
+            _backupListView.Columns.Add(new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("backup.progress"),
+                Tag = "backup.progress",
+                Width = 150
+            });
 
             // Status strip
             _statusStrip = new StatusStrip();
@@ -142,26 +239,37 @@ namespace EasySaveV2._0
 
             // Context menu
             var contextMenu = new ContextMenuStrip();
-            var editContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.edit"));
-            editContextItem.Click += (sender, e) => UpdateJob();
-            var deleteContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.delete"));
-            deleteContextItem.Click += (sender, e) => RemoveJob();
-            var runContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.run"));
-            runContextItem.Click += (sender, e) => ExecuteJob();
-            contextMenu.Items.AddRange(new ToolStripItem[] { editContextItem, deleteContextItem, runContextItem });
+            var editContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.edit"))
+            {
+                Tag = "menu.edit"
+            };
+            editContextItem.Click += (s, e) => UpdateJob();
+            var deleteContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.delete"))
+            {
+                Tag = "menu.delete"
+            };
+            deleteContextItem.Click += (s, e) => RemoveJob();
+            var runContextItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.run"))
+            {
+                Tag = "menu.run"
+            };
+            runContextItem.Click += (s, e) => ExecuteJob();
+            contextMenu.Items.AddRange(new ToolStripItem[]
+            {
+        editContextItem,
+        deleteContextItem,
+        runContextItem
+            });
             _backupListView.ContextMenuStrip = contextMenu;
         }
 
         private void OnLanguageChanged(object sender, EventArgs e)
         {
-            // Update all UI texts
-            this.Text = _languageManager.GetTranslation("menu.title");
-            _menuStrip.Items[0].Text = _languageManager.GetTranslation("menu.file");
-            _menuStrip.Items[1].Text = _languageManager.GetTranslation("menu.backup");
-            _menuStrip.Items[2].Text = _languageManager.GetTranslation("menu.settings");
-            _menuStrip.Items[3].Text = _languageManager.GetTranslation("menu.view");
+            // On se contente d'appeler la mise à jour récursive + le rafraîchissement de liste
+            UpdateAllTexts();
             RefreshBackupList();
         }
+
 
         private void OnTranslationsReloaded(object sender, EventArgs e)
         {
@@ -183,6 +291,45 @@ namespace EasySaveV2._0
                 }
             }
         }
+        private void UpdateAllTexts()
+        {
+            // 1) Menus (récursif sur tous les sous-menus)
+            UpdateMenuItems(_menuStrip.Items);
+
+            // 2) Toolbar
+            foreach (ToolStripItem btn in _toolStrip.Items)
+            {
+                if (btn.Tag is string key)
+                    btn.Text = _languageManager.GetTranslation(key);
+            }
+
+            // 3) Colonnes ListView
+            foreach (ColumnHeader col in _backupListView.Columns)
+            {
+                if (col.Tag is string key)
+                    col.Text = _languageManager.GetTranslation(key);
+            }
+
+            // 4) Titre de la fenêtre (optionnel)
+            if (this.Tag is string formKey)
+                this.Text = _languageManager.GetTranslation(formKey);
+
+            // 5) … éventuels autres contrôles taggés
+        }
+
+
+        private void UpdateMenuItems(ToolStripItemCollection items)
+        {
+            foreach (ToolStripItem item in items)
+            {
+                if (item.Tag is string key)
+                    item.Text = _languageManager.GetTranslation(key);
+
+                if (item is ToolStripMenuItem mi && mi.DropDownItems.Count > 0)
+                    UpdateMenuItems(mi.DropDownItems);
+            }
+        }
+
 
         private string GetStatusText(string status)
         {

@@ -29,6 +29,8 @@ namespace EasySaveV2._0.Views
         {
             _languageManager = LanguageManager.Instance;
             _settingsController = new SettingsController();
+
+            _languageManager.LanguageChanged += OnLanguageChanged;
             InitializeComponent();
             InitializeUI();
         }
@@ -127,6 +129,13 @@ namespace EasySaveV2._0.Views
             this.Controls.Add(layout);
             this.Controls.Add(buttonPanel);
         }
+        private void OnLanguageChanged(object sender, EventArgs e)
+        {
+            this.Controls.Clear();
+            InitializeUI();
+            this.Refresh();
+        }
+
 
         private void AddBusinessSoftware()
         {

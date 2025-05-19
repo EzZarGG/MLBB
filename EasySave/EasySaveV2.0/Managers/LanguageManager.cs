@@ -215,5 +215,6 @@ namespace EasySaveV2._0.Managers
         {
             return _translations.ContainsKey(language) && _translations[language].ContainsKey(key);
         }
+
     }
 }

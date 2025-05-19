@@ -19,6 +19,14 @@ namespace EasySaveV2._0.Views
 
         private void InitializeComponent()
         {
+            SuspendLayout();
+            // 
+            // LanguageSelectionForm
+            // 
+            ClientSize = new Size(284, 261);
+            Name = "LanguageSelectionForm";
+            Load += LanguageSelectionForm_Load;
+            ResumeLayout(false);
         }
 
         private void InitializeUI()
@@ -85,6 +93,11 @@ namespace EasySaveV2._0.Views
 
         private void OnCancelButtonClick(object sender, EventArgs e)
         {
+        }
+
+        private void LanguageSelectionForm_Load(object sender, EventArgs e)
+        {
+
         }
     }
 } 
