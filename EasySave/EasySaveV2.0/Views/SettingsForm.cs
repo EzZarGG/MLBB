@@ -1,14 +1,19 @@
 using System;
 using System.Windows.Forms;
+using System.Drawing;
+using System.Collections.Generic;
 using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Managers;
+using EasySaveV2._0.Models;
 
 namespace EasySaveV2._0.Views
 {
     public partial class SettingsForm : Form
     {
-        private readonly SettingsController _settingsController;
         private readonly LanguageManager _languageManager;
+        private readonly SettingsController _settingsController;
+        private ComboBox _languageComboBox;
+        private ComboBox _logFormatComboBox;
 
         public SettingsForm()
         {
@@ -16,21 +21,73 @@ namespace EasySaveV2._0.Views
             _settingsController = new SettingsController();
             _languageManager = LanguageManager.Instance;
 
-            // Initialize tabs
-            tabControl.TabPages.Add(businessSoftwareTab);
-            tabControl.TabPages.Add(encryptionTab);
+            InitializeUI();
+            SetupEventHandlers();
+            LoadSettings();
+            UpdateTranslations();
+        }
 
-            // Add controls to tabs
-            businessSoftwareTab.Controls.Add(businessSoftwareList);
-            businessSoftwareTab.Controls.Add(addBusinessSoftwareButton);
-            businessSoftwareTab.Controls.Add(removeBusinessSoftwareButton);
+        private void InitializeUI()
+        {
+            // Add language and log format controls to business software tab
+            var languagePanel = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                ColumnCount = 2,
+                RowCount = 2,
+                Height = 80,
+                Padding = new Padding(10)
+            };
 
-            encryptionTab.Controls.Add(encryptionList);
-            encryptionTab.Controls.Add(addEncryptionButton);
-            encryptionTab.Controls.Add(removeEncryptionButton);
+            // Language selection
+            languagePanel.Controls.Add(new Label 
+            { 
+                Text = _languageManager.GetTranslation("settings.language"),
+                Anchor = AnchorStyles.Right,
+                AutoSize = true
+            }, 0, 0);
 
-            // Subscribe to language changes
+            _languageComboBox = new ComboBox
+            {
+                Width = 200,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _languageComboBox.Items.AddRange(new object[] { "Français", "English" });
+            _languageComboBox.SelectedItem = _languageManager.CurrentLanguage == "fr" ? "Français" : "English";
+            languagePanel.Controls.Add(_languageComboBox, 1, 0);
+
+            // Log format selection
+            languagePanel.Controls.Add(new Label 
+            { 
+                Text = _languageManager.GetTranslation("settings.logFormat"),
+                Anchor = AnchorStyles.Right,
+                AutoSize = true
+            }, 0, 1);
+
+            _logFormatComboBox = new ComboBox
+            {
+                Width = 200,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            _logFormatComboBox.Items.AddRange(new object[] { "JSON", "XML" });
+            _logFormatComboBox.SelectedItem = _settingsController.GetCurrentLogFormat().ToString();
+            languagePanel.Controls.Add(_logFormatComboBox, 1, 1);
+
+            businessSoftwareTab.Controls.Add(languagePanel);
+        }
+
+        private void SetupEventHandlers()
+        {
             _languageManager.LanguageChanged += OnLanguageChanged;
+            _languageComboBox.SelectedIndexChanged += OnLanguageComboBoxChanged;
+            _logFormatComboBox.SelectedIndexChanged += OnLogFormatComboBoxChanged;
+            addBusinessSoftwareButton.Click += OnAddBusinessSoftwareClick;
+            removeBusinessSoftwareButton.Click += OnRemoveBusinessSoftwareClick;
+            addEncryptionButton.Click += OnAddEncryptionClick;
+            removeEncryptionButton.Click += OnRemoveEncryptionClick;
+            saveButton.Click += OnSaveClick;
+            cancelButton.Click += OnCancelClick;
+            this.Load += OnLoad;
         }
 
         private void OnLoad(object sender, EventArgs e)
@@ -45,17 +102,31 @@ namespace EasySaveV2._0.Views
             UpdateTranslations();
         }
 
+        private void OnLanguageComboBoxChanged(object sender, EventArgs e)
+        {
+            var language = _languageComboBox.SelectedItem.ToString() == "Français" ? "fr" : "en";
+            _languageManager.SetLanguage(language);
+        }
+
+        private void OnLogFormatComboBoxChanged(object sender, EventArgs e)
+        {
+            var logFormat = (LogFormat)Enum.Parse(typeof(LogFormat), _logFormatComboBox.SelectedItem.ToString());
+            _settingsController.SetLogFormat(logFormat);
+        }
+
         private void UpdateTranslations()
         {
-            Text = _languageManager.GetTranslation("Settings");
-            businessSoftwareTab.Text = _languageManager.GetTranslation("Business Software");
-            encryptionTab.Text = _languageManager.GetTranslation("Encryption");
-            addBusinessSoftwareButton.Text = _languageManager.GetTranslation("Add Software");
-            removeBusinessSoftwareButton.Text = _languageManager.GetTranslation("Remove Software");
-            addEncryptionButton.Text = _languageManager.GetTranslation("Add Extension");
-            removeEncryptionButton.Text = _languageManager.GetTranslation("Remove Extension");
-            saveButton.Text = _languageManager.GetTranslation("Save");
-            cancelButton.Text = _languageManager.GetTranslation("Cancel");
+            Text = _languageManager.GetTranslation("settings.title");
+            businessSoftwareTab.Text = _languageManager.GetTranslation("settings.tab.businessSoftware");
+            encryptionTab.Text = _languageManager.GetTranslation("settings.tab.encryption");
+            businessSoftwareColumn.Text = _languageManager.GetTranslation("settings.businessSoftware.name");
+            encryptionColumn.Text = _languageManager.GetTranslation("settings.encryption.extension");
+            addBusinessSoftwareButton.Text = _languageManager.GetTranslation("settings.businessSoftware.add");
+            removeBusinessSoftwareButton.Text = _languageManager.GetTranslation("settings.businessSoftware.remove");
+            addEncryptionButton.Text = _languageManager.GetTranslation("settings.encryption.add");
+            removeEncryptionButton.Text = _languageManager.GetTranslation("settings.encryption.remove");
+            saveButton.Text = _languageManager.GetTranslation("button.save");
+            cancelButton.Text = _languageManager.GetTranslation("button.cancel");
         }
 
         private void LoadBusinessSoftware()
@@ -78,7 +149,7 @@ namespace EasySaveV2._0.Views
 
         private void OnAddBusinessSoftwareClick(object sender, EventArgs e)
         {
-            using (var dialog = new InputDialog(_languageManager.GetTranslation("Enter Software Name")))
+            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.businessSoftware.enter")))
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
@@ -104,13 +175,17 @@ namespace EasySaveV2._0.Views
 
         private void OnAddEncryptionClick(object sender, EventArgs e)
         {
-            using (var dialog = new InputDialog(_languageManager.GetTranslation("Enter File Extension")))
+            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.encryption.enter")))
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
                     var extension = dialog.InputText.Trim();
                     if (!string.IsNullOrEmpty(extension))
                     {
+                        if (!extension.StartsWith("."))
+                        {
+                            extension = "." + extension;
+                        }
                         _settingsController.AddEncryptionExtension(extension);
                         LoadEncryptionExtensions();
                     }
@@ -207,4 +282,4 @@ namespace EasySaveV2._0.Views
             Text = "Input";
         }
     }
-} 
+}

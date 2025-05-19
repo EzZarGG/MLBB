@@ -23,71 +23,73 @@ namespace EasySaveV2._0.Controllers
 
         private void InitializeLogger()
         {
-            string logPath = Path.Combine(LogDirectory, DefaultLogFileName);
+            string logPath = Path.Combine(Config.GetLogDirectory(), DefaultLogFileName);
 
-            if (!Directory.Exists(LogDirectory))
-                Directory.CreateDirectory(LogDirectory);
+            if (!Directory.Exists(Config.GetLogDirectory()))
+                Directory.CreateDirectory(Config.GetLogDirectory());
 
             _logger.SetLogFilePath(logPath);
+            _logger.SetLogFormat(Config.GetLogFormat());
+        }
+
+        public void LogAdminAction(string backupName, string action, string message)
+        {
+            _logger.LogAdminAction(backupName, action, message);
         }
 
         public void LogBackupStart(string backupName)
         {
-            _logger.LogAdminAction(backupName, "BACKUP_START", "Backup started");
+            _logger.LogAdminAction(backupName, "EXECUTE_START", $"Started executing backup job: {backupName}");
         }
 
         public void LogBackupComplete(string backupName)
         {
-            _logger.LogAdminAction(backupName, "BACKUP_COMPLETE", "Backup completed successfully");
+            _logger.LogAdminAction(backupName, "EXECUTE_COMPLETE", $"Completed executing backup job: {backupName}");
         }
 
         public void LogBackupError(string backupName, string error)
         {
-            _logger.LogAdminAction(backupName, "BACKUP_ERROR", $"Error during backup: {error}");
+            _logger.LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
         }
 
         public void LogFileOperation(string backupName, string sourcePath, string destinationPath, long fileSize)
         {
             _logger.CreateLog(
-                backupName: backupName,
-                transferTime: TimeSpan.Zero, // à remplacer par un temps réel si disponible
-                fileSize: fileSize,
-                date: DateTime.Now,
-                sourcePath: sourcePath,
-                targetPath: destinationPath,
-                logType: "INFO"
+                backupName,
+                TimeSpan.Zero, // Transfer time will be calculated by the backup process
+                fileSize,
+                DateTime.Now,
+                sourcePath,
+                destinationPath,
+                "INFO"
             );
         }
 
         public void LogBusinessSoftwareDetected(string softwareName)
         {
-            _logger.LogAdminAction("System", "BUSINESS_SOFTWARE_DETECTED", $"Business software detected: {softwareName}");
+            _logger.LogAdminAction("System", "BUSINESS_SOFTWARE", $"Business software detected: {softwareName}");
         }
 
         public void LogEncryptionStart(string backupName)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_START", "Encryption started");
+            _logger.LogAdminAction(backupName, "ENCRYPTION_START", $"Started encryption for backup: {backupName}");
         }
 
         public void LogEncryptionComplete(string backupName)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_COMPLETE", "Encryption completed");
+            _logger.LogAdminAction(backupName, "ENCRYPTION_COMPLETE", $"Completed encryption for backup: {backupName}");
         }
 
         public void LogEncryptionError(string backupName, string error)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Error during encryption: {error}");
-        }
-        public void LogAdminAction(string backupName, string actionType, string message)
-        {
-            _logger.LogAdminAction(backupName, actionType, message);
+            _logger.LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Encryption error: {error}");
         }
 
         public void DisplayLogs()
         {
             try
             {
-                string logPath = Path.Combine(LogDirectory, Path.ChangeExtension(DefaultLogFileName, _logger.CurrentFormat == LogFormat.JSON ? ".json" : ".xml"));
+                string logPath = Path.Combine(Config.GetLogDirectory(), Path.ChangeExtension(DefaultLogFileName, _logger.CurrentFormat == LogFormat.JSON ? ".json" : ".xml"));
                 if (File.Exists(logPath))
                 {
                     Process.Start("notepad.exe", logPath);
@@ -104,8 +106,9 @@ namespace EasySaveV2._0.Controllers
         }
 
         public void SetLogFormat(LogFormat format)
-        { 
+        {
             _logger.SetLogFormat(format);
+            Config.SetLogFormat(format);
         }
 
         public LogFormat GetCurrentLogFormat()

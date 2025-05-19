@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 using System.Text.Json;
 using EasySaveLogging;
 using EasySaveV2._0.Models;
@@ -15,11 +16,9 @@ namespace EasySaveV2._0
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
 
-        public static string ConfigFilePath =>
-            Path.Combine(AppContext.BaseDirectory, "config.json");
+        public static string ConfigFilePath => Path.Combine(AppContext.BaseDirectory, "config.json");
+        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
-        public static string AppSettingsFilePath =>
-            Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
         public static string GetLogDirectory()
         {
@@ -56,6 +55,9 @@ namespace EasySaveV2._0
         public class AppSettings
         {
             public string LogFormat { get; set; } = "JSON"; // Default to JSON
+            public string EncryptionKey { get; set; }
+
+            public List<string> EncryptionExtensions { get; set; } = new();
         }
 
         // Load application settings
@@ -97,5 +99,33 @@ namespace EasySaveV2._0
             settings.LogFormat = format.ToString();
             SaveSettings(settings);
         }
+
+
+        /// <summary>
+        /// Retourne la clé de chiffrement (UTF8) ou null si non configurée.
+        /// </summary>
+        public static byte[] GetEncryptionKey()
+        {
+            var key = LoadSettings().EncryptionKey;
+            if (string.IsNullOrWhiteSpace(key))
+                return null;
+
+            var b = Encoding.UTF8.GetBytes(key);
+            if (b.Length < 8)
+                throw new InvalidOperationException("La clé doit faire au moins 8 octets.");
+            return b;
+        }
+
+        /// <summary>
+        /// Liste des extensions (avec '.') à chiffrer.
+        /// </summary>
+        public static HashSet<string> GetEncryptionExtensions()
+        {
+            return LoadSettings()
+                       .EncryptionExtensions
+                       .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
+                       .ToHashSet();
+        }
     }
-} 
+
+}
