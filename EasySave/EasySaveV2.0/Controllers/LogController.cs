@@ -23,13 +23,14 @@ namespace EasySaveV2._0.Controllers
 
         private void InitializeLogger()
         {
-            string logPath = Path.Combine(Config.GetLogDirectory(), DefaultLogFileName);
-
+            // Lire le format depuis les settings
+            var format = Config.GetLogFormat();
+            string logFileName = format == LogFormat.JSON ? "log.json" : "log.xml";
+            string logPath = Path.Combine(Config.GetLogDirectory(), logFileName);
             if (!Directory.Exists(Config.GetLogDirectory()))
                 Directory.CreateDirectory(Config.GetLogDirectory());
-
             _logger.SetLogFilePath(logPath);
-            _logger.SetLogFormat(Config.GetLogFormat());
+            _logger.SetLogFormat(format);
         }
 
         public void LogAdminAction(string backupName, string action, string message)
@@ -90,15 +91,20 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                string logPath = Path.Combine(Config.GetLogDirectory(), Path.ChangeExtension(DefaultLogFileName, _logger.CurrentFormat == LogFormat.JSON ? ".json" : ".xml"));
-                if (File.Exists(logPath))
+                // Lire le format depuis les settings
+                var settingsController = new SettingsController();
+                var format = settingsController.GetCurrentLogFormat();
+                string logFileName = format == LogFormat.JSON ? "log.json" : "log.xml";
+                string logPath = Path.Combine(Config.GetLogDirectory(), logFileName);
+                // Créer le fichier s'il n'existe pas
+                if (!File.Exists(logPath))
                 {
-                    Process.Start("notepad.exe", logPath);
+                    if (format == LogFormat.JSON)
+                        File.WriteAllText(logPath, "[]");
+                    else
+                        File.WriteAllText(logPath, "<?xml version=\"1.0\" encoding=\"utf-8\"?><Logs></Logs>");
                 }
-                else
-                {
-                    MessageBox.Show(_languageManager.GetTranslation("message.noLogsFound"), "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                }
+                Process.Start("notepad.exe", logPath);
             }
             catch (Exception ex)
             {
@@ -108,6 +114,10 @@ namespace EasySaveV2._0.Controllers
 
         public void SetLogFormat(LogFormat format)
         {
+            // Met à jour le chemin du fichier de log selon le format
+            string logFileName = format == LogFormat.JSON ? "log.json" : "log.xml";
+            string logPath = Path.Combine(Config.GetLogDirectory(), logFileName);
+            _logger.SetLogFilePath(logPath);
             _logger.SetLogFormat(format);
             Config.SetLogFormat(format);
         }

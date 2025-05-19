@@ -56,6 +56,8 @@ namespace EasySaveV2._0.Views
         {
             LoadBusinessSoftware();
             LoadEncryptionExtensions();
+            var currentFormat = _settingsController.GetCurrentLogFormat();
+            _logFormatComboBox.SelectedItem = currentFormat;
         }
 
         private void InitializeUI()
@@ -269,6 +271,10 @@ namespace EasySaveV2._0.Views
 
         private void OnSaveClick(object? sender, EventArgs e)
         {
+            if (_logFormatComboBox.SelectedItem is LogFormat selectedFormat)
+            {
+                _settingsController.SetLogFormat(selectedFormat);
+            }
             DialogResult = DialogResult.OK;
             Close();
         }
