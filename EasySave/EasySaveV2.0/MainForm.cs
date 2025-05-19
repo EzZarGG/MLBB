@@ -247,12 +247,6 @@ namespace EasySaveV2._0
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing menu strip...");
 
-                // File menu
-                var fileMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file")) { Tag = "menu.file" };
-                var exitItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file.exit")) { Tag = "menu.file.exit" };
-                exitItem.Click += (s, e) => Application.Exit();
-                fileMenu.DropDownItems.Add(exitItem);
-
                 // Backup menu
                 var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup")) { Tag = "menu.backup" };
                 var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create")) { Tag = "menu.backup.create" };
@@ -263,31 +257,23 @@ namespace EasySaveV2._0
                 deleteBackupItem.Click += (s, e) => RemoveJob();
                 var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run")) { Tag = "menu.backup.run" };
                 runBackupItem.Click += (s, e) => ExecuteJob();
-
                 backupMenu.DropDownItems.AddRange(new[] { createBackupItem, editBackupItem, deleteBackupItem, runBackupItem });
 
-                // Settings menu
+                // Settings menu (ouvre directement le SettingsForm)
                 var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings")) { Tag = "menu.settings" };
-                var openSettingsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings.open")) { Tag = "menu.settings.open" };
-                openSettingsItem.Click += (s, e) => OpenSettings();
-                settingsMenu.DropDownItems.Add(openSettingsItem);
+                settingsMenu.Click += (s, e) => OpenSettings();
 
-                // Language menu
+                // Language menu (ouvre directement le LanguageSelectionForm)
                 var languageMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.language")) { Tag = "menu.language" };
-                var changeLanguageItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.language.change")) { Tag = "menu.language.change" };
-                changeLanguageItem.Click += (s, e) => ShowLanguageSelection();
-                languageMenu.DropDownItems.Add(changeLanguageItem);
+                languageMenu.Click += (s, e) => ShowLanguageSelection();
 
-                // View menu
-                var viewMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view")) { Tag = "menu.view" };
-                var viewLogsItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs")) { Tag = "menu.view.logs" };
-                viewLogsItem.Click += (s, e) => ViewLogs();
-                viewMenu.DropDownItems.Add(viewLogsItem);
+                // Logs menu (remplace View)
+                var logsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs")) { Tag = "menu.view.logs" };
+                logsMenu.Click += (s, e) => ViewLogs();
 
-                // Help menu
-                var helpMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.help")) { Tag = "menu.help" };
-
-                _menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, backupMenu, settingsMenu, languageMenu, viewMenu, helpMenu });
+                // Nettoyage du menu
+                _menuStrip.Items.Clear();
+                _menuStrip.Items.AddRange(new ToolStripItem[] { backupMenu, settingsMenu, languageMenu, logsMenu });
                 _logger.LogAdminAction("System", "INIT", "Menu strip initialized successfully");
             }
             catch (Exception ex)
@@ -303,29 +289,8 @@ namespace EasySaveV2._0
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing tool strip...");
 
-                var newButton = new ToolStripButton(_languageManager.GetTranslation("menu.new")) { Tag = "menu.new" };
-                newButton.Click += (s, e) => AddJob();
-
-                var editButton = new ToolStripButton(_languageManager.GetTranslation("menu.edit")) { Tag = "menu.edit" };
-                editButton.Click += (s, e) => UpdateJob();
-
-                var deleteButton = new ToolStripButton(_languageManager.GetTranslation("menu.delete")) { Tag = "menu.delete" };
-                deleteButton.Click += (s, e) => RemoveJob();
-
-                var runButton = new ToolStripButton(_languageManager.GetTranslation("menu.run")) { Tag = "menu.run" };
-                runButton.Click += (s, e) => ExecuteJob();
-
-                var settingsButton = new ToolStripButton(_languageManager.GetTranslation("menu.settings")) { Tag = "menu.settings" };
-                settingsButton.Click += (s, e) => OpenSettings();
-
-                var languageButton = new ToolStripButton(_languageManager.GetTranslation("menu.language")) { Tag = "menu.language" };
-                languageButton.Click += (s, e) => ShowLanguageSelection();
-
-                _toolStrip.Items.AddRange(new ToolStripItem[] {
-                    newButton, editButton, deleteButton, runButton,
-                    new ToolStripSeparator(),
-                    settingsButton, languageButton
-                });
+                // Nettoyage de la barre d'outils (ToolStrip)
+                _toolStrip.Items.Clear();
 
                 _logger.LogAdminAction("System", "INIT", "Tool strip initialized successfully");
             }
