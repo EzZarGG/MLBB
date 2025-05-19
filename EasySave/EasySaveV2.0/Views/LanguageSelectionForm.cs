@@ -85,6 +85,8 @@ namespace EasySaveV2._0.Views
             buttonPanel.Controls.Add(_cancelButton);
             buttonPanel.Controls.Add(_okButton);
 
+            // Nettoyage : n'ajoute pas deux fois les contrôles
+            this.Controls.Clear();
             this.Controls.Add(layout);
             this.Controls.Add(buttonPanel);
         }

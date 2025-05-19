@@ -42,6 +42,7 @@ namespace EasySaveV2._0
                 _languageManager = LanguageManager.Instance;
                 _settingsController = new SettingsController();
                 _backupController = new BackupController();
+                _backupController.FileProgressChanged += OnFileProgressChanged;
 
                 // Initialize UI components
                 InitializeComponent();
@@ -221,7 +222,7 @@ namespace EasySaveV2._0
                     throw new InvalidOperationException("BackupListView is null");
                 }
 
-                // Initialize ListView columns
+                // Nettoyage : évite les doublons de colonnes
                 _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
@@ -340,6 +341,8 @@ namespace EasySaveV2._0
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing list view...");
 
+                // Nettoyage : évite les doublons de colonnes
+                _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.name"), Tag = "backup.name", Width = 150 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.source"), Tag = "backup.source", Width = 200 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.destination"), Tag = "backup.destination", Width = 200 });
@@ -535,16 +538,14 @@ namespace EasySaveV2._0
                 _logger.LogAdminAction("System", "UI", "Refreshing backup list");
                 _backupListView.Items.Clear();
 
-                // Initialize columns if they don't exist
-                if (_backupListView.Columns.Count == 0)
-                {
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
-                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
-                }
+                // Nettoyage : évite les doublons de colonnes
+                if (_backupListView.Columns.Count > 0) _backupListView.Columns.Clear();
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
 
                 var backups = _backupController.GetBackups();
                 if (backups != null && backups.Any())
@@ -814,6 +815,25 @@ namespace EasySaveV2._0
                     MessageBoxIcon.Error
                 );
             }
+        }
+
+        private void OnFileProgressChanged(object? sender, FileProgressEventArgs e)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnFileProgressChanged(sender, e)));
+                return;
+            }
+            foreach (ListViewItem item in _backupListView.Items)
+            {
+                if (item.Text == e.BackupName)
+                {
+                    if (item.SubItems.Count > 5)
+                        item.SubItems[5].Text = $"{e.ProgressPercentage}%";
+                    break;
+                }
+            }
+            _progressBar.Value = Math.Min(Math.Max(e.ProgressPercentage, 0), 100);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

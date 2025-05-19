@@ -200,6 +200,7 @@ namespace EasySaveV2._0.Views
             _tabControl.TabPages.Add(_logFormatTab);
 
             // Add controls to form
+            Controls.Clear();
             Controls.Add(_tabControl);
             Controls.Add(mainButtonPanel);
         }
