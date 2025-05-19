@@ -1,90 +1,93 @@
-using EasySaveV2._0.Managers;
+using System;
 using System.Windows.Forms;
+using EasySaveV2._0.Managers;
 
 namespace EasySaveV2._0.Views
 {
     public partial class LanguageSelectionForm : Form
     {
         private readonly LanguageManager _languageManager;
-        private readonly ComboBox _languageComboBox;
-        private readonly Button _okButton;
-        private readonly Button _cancelButton;
+        private bool _languageSelected;
 
         public LanguageSelectionForm()
         {
-            _languageManager = LanguageManager.Instance;
             InitializeComponent();
-            InitializeUI();
+            _languageManager = LanguageManager.Instance;
+            _languageManager.LanguageChanged += OnLanguageChanged;
+            LoadLanguages();
         }
 
-        private void InitializeComponent()
+        private void OnLanguageChanged(object sender, string languageCode)
         {
+            UpdateTranslations();
         }
 
-        private void InitializeUI()
+        private void UpdateTranslations()
         {
-            this.Text = "EasySave - Language Selection";
-            this.Size = new Size(300, 150);
-            this.StartPosition = FormStartPosition.CenterScreen;
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
+            Text = _languageManager.GetTranslation("Select Language");
+            languageLabel.Text = _languageManager.GetTranslation("Choose your language:");
+            okButton.Text = _languageManager.GetTranslation("OK");
+            cancelButton.Text = _languageManager.GetTranslation("Cancel");
+        }
 
-            var label = new Label
+        private void LoadLanguages()
+        {
+            languageComboBox.Items.Clear();
+            foreach (var language in _languageManager.GetAvailableLanguages())
             {
-                Text = "Select your language / Choisissez votre langue",
-                Dock = DockStyle.Top,
-                TextAlign = ContentAlignment.MiddleCenter,
-                Padding = new Padding(10)
-            };
+                languageComboBox.Items.Add(language);
+            }
 
-            var frenchButton = new Button
+            var currentLanguage = _languageManager.GetCurrentLanguage();
+            languageComboBox.SelectedItem = currentLanguage;
+        }
+
+        private void OnOkClick(object sender, EventArgs e)
+        {
+            if (languageComboBox.SelectedItem != null)
             {
-                Text = "Français",
-                Dock = DockStyle.Left,
-                Width = 120,
-                Margin = new Padding(10)
-            };
-            frenchButton.Click += (s, e) => SelectLanguage("fr");
-
-            var englishButton = new Button
+                var selectedLanguage = languageComboBox.SelectedItem.ToString();
+                _languageManager.SetLanguage(selectedLanguage);
+                _languageSelected = true;
+                DialogResult = DialogResult.OK;
+            }
+            else
             {
-                Text = "English",
-                Dock = DockStyle.Right,
-                Width = 120,
-                Margin = new Padding(10)
-            };
-            englishButton.Click += (s, e) => SelectLanguage("en");
+                MessageBox.Show(
+                    _languageManager.GetTranslation("Please select a language"),
+                    _languageManager.GetTranslation("Error"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+            }
+        }
 
-            var buttonPanel = new Panel
+        private void OnCancelClick(object sender, EventArgs e)
+        {
+            if (!_languageSelected)
             {
-                Dock = DockStyle.Bottom,
-                Height = 60
-            };
-            buttonPanel.Controls.Add(frenchButton);
-            buttonPanel.Controls.Add(englishButton);
+                var result = MessageBox.Show(
+                    _languageManager.GetTranslation("No language selected. Do you want to exit?"),
+                    _languageManager.GetTranslation("Exit"),
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question
+                );
 
-            this.Controls.Add(label);
-            this.Controls.Add(buttonPanel);
+                if (result == DialogResult.Yes)
+                {
+                    Application.Exit();
+                }
+            }
+            else
+            {
+                DialogResult = DialogResult.Cancel;
+            }
         }
 
-        private void SelectLanguage(string language)
+        protected override void OnFormClosing(FormClosingEventArgs e)
         {
-            _languageManager.SetLanguage(language);
-            this.DialogResult = DialogResult.OK;
-            this.Close();
-        }
-
-        private void OnLanguageChanged(object sender, EventArgs e)
-        {
-        }
-
-        private void OnOkButtonClick(object sender, EventArgs e)
-        {
-        }
-
-        private void OnCancelButtonClick(object sender, EventArgs e)
-        {
+            base.OnFormClosing(e);
+            _languageManager.LanguageChanged -= OnLanguageChanged;
         }
     }
 } 
