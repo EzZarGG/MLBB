@@ -2,6 +2,14 @@
 {
     partial class MainForm
     {
+        private System.Windows.Forms.MenuStrip _menuStrip;
+        private System.Windows.Forms.ToolStrip _toolStrip;
+        private System.Windows.Forms.ListView _backupListView;
+        private System.Windows.Forms.StatusStrip _statusStrip;
+        private System.Windows.Forms.ToolStripStatusLabel _statusLabel;
+        private System.Windows.Forms.ProgressBar _progressBar;
+        private System.Windows.Forms.Timer _updateTimer;
+
         /// <summary>
         ///  Required designer variable.
         /// </summary>
@@ -121,13 +129,5 @@
         }
 
         #endregion
-
-        private System.Windows.Forms.MenuStrip _menuStrip;
-        private System.Windows.Forms.ToolStrip _toolStrip;
-        private System.Windows.Forms.ListView _backupListView;
-        private System.Windows.Forms.StatusStrip _statusStrip;
-        private System.Windows.Forms.ToolStripStatusLabel _statusLabel;
-        private System.Windows.Forms.ProgressBar _progressBar;
-        private System.Windows.Forms.Timer _updateTimer;
     }
 }

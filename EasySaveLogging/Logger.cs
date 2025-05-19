@@ -254,6 +254,9 @@ namespace EasySaveLogging
         // Saves all entries to the log file.
         private void SaveEntries(List<LogEntry> entries)
         {
+            if (string.IsNullOrWhiteSpace(_logFilePath))
+                throw new InvalidOperationException("Logger: Log file path is not set. Call SetLogFilePath() before logging.");
+
             if (_logFormat == LogFormat.JSON)
             {
                 File.WriteAllText(_logFilePath, JsonSerializer.Serialize(entries, _jsonOpts));

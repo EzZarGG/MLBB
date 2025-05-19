@@ -52,16 +52,17 @@ namespace EasySaveV2._0.Controllers
             _logger.LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
         }
 
-        public void LogFileOperation(string backupName, string sourcePath, string destinationPath, long fileSize)
+        public void LogFileOperation(string backupName, string sourcePath, string targetPath, long fileSize)
         {
             _logger.CreateLog(
                 backupName,
-                TimeSpan.Zero, // Transfer time will be calculated by the backup process
+                TimeSpan.Zero, // Durée de transfert non mesurée ici
                 fileSize,
                 DateTime.Now,
                 sourcePath,
-                destinationPath,
-                "INFO"
+                targetPath,
+                "INFO",
+                0 // Pas de chiffrement
             );
         }
 
@@ -96,12 +97,12 @@ namespace EasySaveV2._0.Controllers
                 }
                 else
                 {
-                    MessageBox.Show(_languageManager.GetTranslation("NoLogsFound"), "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    MessageBox.Show(_languageManager.GetTranslation("message.noLogsFound"), "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 }
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"{_languageManager.GetTranslation("ErrorOpeningLogs")}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show($"{_languageManager.GetTranslation("message.errorOpeningLogs")}: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 

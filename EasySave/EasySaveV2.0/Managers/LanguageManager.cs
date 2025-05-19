@@ -4,45 +4,59 @@ using System.IO;
 using System.Text.Json;
 using System.Linq;
 using EasySaveLogging;
+using EasySaveV2._0;
 
 namespace EasySaveV2._0.Managers
 {
     public class LanguageManager
     {
-        private static LanguageManager _instance;
+        private static LanguageManager? _instance;
         private const string LANGUAGES_DIR = "Ressources";
         private const string DEFAULT_LANGUAGE = "en";
-        private string _currentLanguage;
-        private Dictionary<string, Dictionary<string, string>> _translations;
+        private string _currentLanguage = DEFAULT_LANGUAGE;
+        private Dictionary<string, Dictionary<string, string>> _translations = new();
         private readonly string _translationsFile;
         private readonly JsonSerializerOptions _jsonOptions;
 
-        public event EventHandler<string> LanguageChanged;
-        public event EventHandler TranslationsReloaded;
-        public event EventHandler<Exception> LanguageLoadError;
+        public event EventHandler<string>? LanguageChanged;
+        public event EventHandler? TranslationsReloaded;
+        public event EventHandler<Exception>? LanguageLoadError;
 
         public string CurrentLanguage => _currentLanguage;
 
         private LanguageManager()
         {
-            _translationsFile = Path.Combine(AppContext.BaseDirectory, LANGUAGES_DIR, "translations.json");
-            _currentLanguage = DEFAULT_LANGUAGE;
-            _jsonOptions = new JsonSerializerOptions
+            try
             {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-            };
-            LoadTranslations();
+                _translationsFile = Path.Combine(AppContext.BaseDirectory, LANGUAGES_DIR, "translations.json");
+                _jsonOptions = new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                };
+
+                // Ensure the languages directory exists
+                var languagesDir = Path.Combine(AppContext.BaseDirectory, LANGUAGES_DIR);
+                if (!Directory.Exists(languagesDir))
+                {
+                    Directory.CreateDirectory(languagesDir);
+                }
+
+                LoadTranslations();
+            }
+            catch (Exception ex)
+            {
+                LoggerUtils.EnsureLoggerInitialized();
+                Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error initializing LanguageManager: {ex.Message}");
+                CreateDefaultTranslations();
+            }
         }
 
         public static LanguageManager Instance
         {
             get
             {
-                if (_instance == null)
-                {
-                    _instance = new LanguageManager();
-                }
+                _instance ??= new LanguageManager();
                 return _instance;
             }
         }
@@ -51,9 +65,10 @@ namespace EasySaveV2._0.Managers
         {
             try
             {
-                if (!Directory.Exists(Path.GetDirectoryName(_translationsFile)))
+                var directory = Path.GetDirectoryName(_translationsFile);
+                if (directory != null && !Directory.Exists(directory))
                 {
-                    Directory.CreateDirectory(Path.GetDirectoryName(_translationsFile));
+                    Directory.CreateDirectory(directory);
                 }
 
                 if (!File.Exists(_translationsFile))
@@ -63,12 +78,22 @@ namespace EasySaveV2._0.Managers
                 else
                 {
                     var json = File.ReadAllText(_translationsFile);
-                    _translations = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(json, _jsonOptions);
-                    ValidateTranslations();
+                    var loadedTranslations = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(json, _jsonOptions);
+                    
+                    if (loadedTranslations == null)
+                    {
+                        CreateDefaultTranslations();
+                    }
+                    else
+                    {
+                        _translations = loadedTranslations;
+                        ValidateTranslations();
+                    }
                 }
             }
             catch (Exception ex)
             {
+                LoggerUtils.EnsureLoggerInitialized();
                 Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error loading translations: {ex.Message}");
                 CreateDefaultTranslations();
                 LanguageLoadError?.Invoke(this, ex);
@@ -190,6 +215,7 @@ namespace EasySaveV2._0.Managers
             }
             catch (Exception ex)
             {
+                LoggerUtils.EnsureLoggerInitialized();
                 Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error saving translations: {ex.Message}");
                 LanguageLoadError?.Invoke(this, ex);
             }
@@ -224,28 +250,43 @@ namespace EasySaveV2._0.Managers
                 return string.Empty;
             }
 
-            if (_translations.TryGetValue(_currentLanguage, out var translations) &&
-                translations.TryGetValue(key, out var translation))
+            try
             {
-                return args.Length > 0 ? string.Format(translation, args) : translation;
-            }
+                if (_translations == null)
+                {
+                    LoadTranslations();
+                }
 
-            // Fallback to English if translation not found
-            if (_currentLanguage != DEFAULT_LANGUAGE &&
-                _translations.TryGetValue(DEFAULT_LANGUAGE, out var englishTranslations) &&
-                englishTranslations.TryGetValue(key, out var englishTranslation))
+                if (_translations.TryGetValue(_currentLanguage, out var translations) &&
+                    translations.TryGetValue(key, out var translation))
+                {
+                    return args.Length > 0 ? string.Format(translation, args) : translation;
+                }
+
+                // Fallback to English if translation not found
+                if (_currentLanguage != DEFAULT_LANGUAGE &&
+                    _translations.TryGetValue(DEFAULT_LANGUAGE, out var englishTranslations) &&
+                    englishTranslations.TryGetValue(key, out var englishTranslation))
+                {
+                    return args.Length > 0 ? string.Format(englishTranslation, args) : englishTranslation;
+                }
+
+                // If still not found, log the missing translation and return the key
+                LoggerUtils.EnsureLoggerInitialized();
+                Logger.GetInstance().LogAdminAction(
+                    "System",
+                    "WARNING",
+                    $"Missing translation for key: {key}"
+                );
+
+                return key;
+            }
+            catch (Exception ex)
             {
-                return args.Length > 0 ? string.Format(englishTranslation, args) : englishTranslation;
+                LoggerUtils.EnsureLoggerInitialized();
+                Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error getting translation: {ex.Message}");
+                return key;
             }
-
-            // If still not found, log the missing translation and return the key
-            Logger.GetInstance().LogAdminAction(
-                "System",
-                "WARNING",
-                GetTranslation("error.missingTranslation", key)
-            );
-
-            return key;
         }
 
         public List<string> GetAvailableLanguages()

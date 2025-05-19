@@ -102,22 +102,22 @@ namespace EasySaveV2._0
 
 
         /// <summary>
-        /// Retourne la clé de chiffrement (UTF8) ou null si non configurée.
+        /// Retourne la clÃ© de chiffrement (UTF8) ou un tableau vide si non configurÃ©e.
         /// </summary>
         public static byte[] GetEncryptionKey()
         {
             var key = LoadSettings().EncryptionKey;
             if (string.IsNullOrWhiteSpace(key))
-                return null;
+                return Array.Empty<byte>();
 
             var b = Encoding.UTF8.GetBytes(key);
             if (b.Length < 8)
-                throw new InvalidOperationException("La clé doit faire au moins 8 octets.");
+                throw new InvalidOperationException("La clÃ© doit faire au moins 8 octets.");
             return b;
         }
 
         /// <summary>
-        /// Liste des extensions (avec '.') à chiffrer.
+        /// Liste des extensions (avec '.') Ã  chiffrer.
         /// </summary>
         public static HashSet<string> GetEncryptionExtensions()
         {

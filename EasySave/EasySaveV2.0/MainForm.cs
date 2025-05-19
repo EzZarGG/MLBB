@@ -20,60 +20,68 @@ namespace EasySaveV2._0
         private readonly Logger _logger;
         private bool _isInitialized = false;
 
-        private ListView _backupListView;
-        private StatusStrip _statusStrip;
-        private ToolStripStatusLabel _statusLabel;
-        private ProgressBar _progressBar;
-        private System.Windows.Forms.Timer _updateTimer;
-        private MenuStrip _menuStrip;
-        private ToolStrip _toolStrip;
-
         public MainForm()
         {
             try
             {
+                AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+                {
+                    MessageBox.Show("Unhandled exception: " + (e.ExceptionObject as Exception)?.ToString());
+                };
+
+                // Initialize logger and set log file path FIRST
                 _logger = Logger.GetInstance();
-                _logger.SetLogFilePath(Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs", "application.log"));
+                var logDir = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "logs");
+                if (!Directory.Exists(logDir))
+                    Directory.CreateDirectory(logDir);
+                _logger.SetLogFilePath(Path.Combine(logDir, "application.log"));
                 _logger.LogAdminAction("System", "STARTUP", "Starting application initialization...");
                 UpdateStatus("Initializing application...");
 
-                InitializeComponent();
-                _logger.LogAdminAction("System", "INIT", "Components initialized");
-
-                _backupController = new BackupController();
-                _settingsController = new SettingsController();
+                // Initialize managers and controllers
                 _languageManager = LanguageManager.Instance;
-                _logger.LogAdminAction("System", "INIT", "Controllers and managers initialized");
+                _settingsController = new SettingsController();
+                _backupController = new BackupController();
 
-                // Subscribe to language events
-                _languageManager.LanguageChanged += OnLanguageChanged;
-                _languageManager.TranslationsReloaded += OnTranslationsReloaded;
-                _logger.LogAdminAction("System", "INIT", "Language events subscribed");
+                // Initialize UI components
+                InitializeComponent();
 
-                // Show language selection first if no language is set
-                if (string.IsNullOrEmpty(_languageManager.CurrentLanguage))
+                // Initialize UI elements in correct order
+                InitializeUI();
+                InitializeMenuStrip();
+                InitializeToolStrip();
+                InitializeListView();
+                InitializeStatusStrip();
+                InitializeContextMenu();
+                InitializeTimer();
+
+                // Set up event handlers
+                if (_languageManager != null)
                 {
-                    _logger.LogAdminAction("System", "LANGUAGE", "No language set, showing language selection");
-                    UpdateStatus("Please select a language...");
-                    ShowLanguageSelection();
+                    _languageManager.LanguageChanged += OnLanguageChanged;
+                    _languageManager.TranslationsReloaded += OnTranslationsReloaded;
                 }
-                else
-                {
-                    _logger.LogAdminAction("System", "LANGUAGE", $"Language already set to: {_languageManager.CurrentLanguage}");
-                    UpdateStatus("Initializing interface...");
-                    InitializeApplication();
-                }
+
+                // Update UI with translations
+                UpdateAllTexts();
+
+                // Initialize application state
+                InitializeApplication();
+
+                _isInitialized = true;
+                _logger.LogAdminAction("System", "INIT", "MainForm initialized successfully");
             }
             catch (Exception ex)
             {
-                _logger?.LogAdminAction("System", "ERROR", $"Error during initialization: {ex.Message}");
+                _logger?.LogAdminAction("System", "ERROR", $"Error initializing MainForm: {ex.Message}\nStackTrace: {ex.StackTrace}");
                 MessageBox.Show(
-                    $"Error during initialization: {ex.Message}\n\nStack trace:\n{ex.StackTrace}",
-                    "Initialization Error",
+                    (_languageManager?.GetTranslation("message.error")?.Replace("{0}", ex.Message) ?? ex.Message) +
+                    "\n\nStackTrace:\n" + ex.StackTrace,
+                    _languageManager?.GetTranslation("menu.title") ?? "Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );
-                Application.Exit();
+                throw;
             }
         }
 
@@ -151,9 +159,15 @@ namespace EasySaveV2._0
                 UpdateStatus("Initializing UI...");
                 InitializeUI();
 
+                UpdateStatus("Loading backup list...");
+                if (_backupController != null)
+                {
+                    RefreshBackupList();
+                }
+
                 _isInitialized = true;
                 _logger.LogAdminAction("System", "INIT", "Application initialization completed successfully");
-                UpdateStatus(_languageManager.GetTranslation("status.ready"));
+                UpdateStatus(_languageManager?.GetTranslation("status.ready") ?? "Ready");
             }
             catch (Exception ex)
             {
@@ -173,7 +187,6 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing timer...");
-                _updateTimer = new System.Windows.Forms.Timer();
                 _updateTimer.Interval = 1000;
                 _updateTimer.Tick += OnUpdateTimerTick;
                 _updateTimer.Start();
@@ -186,7 +199,7 @@ namespace EasySaveV2._0
             }
         }
 
-        private void OnUpdateTimerTick(object sender, EventArgs e)
+        private void OnUpdateTimerTick(object? sender, EventArgs e)
         {
             try
             {
@@ -202,19 +215,22 @@ namespace EasySaveV2._0
         {
             try
             {
-                _logger.LogAdminAction("System", "INIT", "Initializing UI components...");
-                
-                this.Size = new Size(1024, 768);
-                this.Text = _languageManager.GetTranslation("menu.title");
-                this.Icon = SystemIcons.Application;
+                if (_backupListView == null)
+                {
+                    _logger?.LogAdminAction("System", "ERROR", "BackupListView is null during initialization");
+                    throw new InvalidOperationException("BackupListView is null");
+                }
 
-                InitializeMenuStrip();
-                InitializeToolStrip();
-                InitializeListView();
-                InitializeStatusStrip();
-                InitializeContextMenu();
+                // Initialize ListView columns
+                _backupListView.Columns.Clear();
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
+                _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
 
-                _logger.LogAdminAction("System", "INIT", "UI components initialized successfully");
+                _logger?.LogAdminAction("System", "INIT", "UI initialized successfully");
             }
             catch (Exception ex)
             {
@@ -228,9 +244,6 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing menu strip...");
-                _menuStrip = new MenuStrip();
-                this.MainMenuStrip = _menuStrip;
-                _menuStrip.Dock = DockStyle.Top;
 
                 // File menu
                 var fileMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.file")) { Tag = "menu.file" };
@@ -273,7 +286,6 @@ namespace EasySaveV2._0
                 var helpMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.help")) { Tag = "menu.help" };
 
                 _menuStrip.Items.AddRange(new ToolStripItem[] { fileMenu, backupMenu, settingsMenu, languageMenu, viewMenu, helpMenu });
-                this.Controls.Add(_menuStrip);
                 _logger.LogAdminAction("System", "INIT", "Menu strip initialized successfully");
             }
             catch (Exception ex)
@@ -288,7 +300,6 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing tool strip...");
-                _toolStrip = new ToolStrip { Dock = DockStyle.Top };
 
                 var newButton = new ToolStripButton(_languageManager.GetTranslation("menu.new")) { Tag = "menu.new" };
                 newButton.Click += (s, e) => AddJob();
@@ -314,7 +325,6 @@ namespace EasySaveV2._0
                     settingsButton, languageButton
                 });
 
-                this.Controls.Add(_toolStrip);
                 _logger.LogAdminAction("System", "INIT", "Tool strip initialized successfully");
             }
             catch (Exception ex)
@@ -329,14 +339,6 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing list view...");
-                _backupListView = new ListView
-                {
-                    Dock = DockStyle.Fill,
-                    View = View.Details,
-                    FullRowSelect = true,
-                    GridLines = true,
-                    MultiSelect = false
-                };
 
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.name"), Tag = "backup.name", Width = 150 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.source"), Tag = "backup.source", Width = 200 });
@@ -345,7 +347,6 @@ namespace EasySaveV2._0
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.status"), Tag = "backup.status", Width = 100 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.progress"), Tag = "backup.progress", Width = 150 });
 
-                this.Controls.Add(_backupListView);
                 _logger.LogAdminAction("System", "INIT", "List view initialized successfully");
             }
             catch (Exception ex)
@@ -360,22 +361,7 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing status strip...");
-                _statusStrip = new StatusStrip();
-                _statusStrip.Dock = DockStyle.Bottom;
-
-                _statusLabel = new ToolStripStatusLabel(_languageManager.GetTranslation("status.ready"));
-                _statusLabel.Spring = true;
-                _statusLabel.TextAlign = ContentAlignment.MiddleLeft;
-
-                _progressBar = new ProgressBar();
-                _progressBar.Dock = DockStyle.Bottom;
-                _progressBar.Height = 20;
-                _progressBar.Visible = false;
-
-                _statusStrip.Items.Add(_statusLabel);
-
-                this.Controls.Add(_progressBar);
-                this.Controls.Add(_statusStrip);
+                _statusLabel.Text = _languageManager.GetTranslation("status.ready");
                 _logger.LogAdminAction("System", "INIT", "Status strip initialized successfully");
             }
             catch (Exception ex)
@@ -403,6 +389,7 @@ namespace EasySaveV2._0
 
                 contextMenu.Items.AddRange(new ToolStripItem[] { editContextItem, deleteContextItem, runContextItem });
                 _backupListView.ContextMenuStrip = contextMenu;
+
                 _logger.LogAdminAction("System", "INIT", "Context menu initialized successfully");
             }
             catch (Exception ex)
@@ -412,7 +399,7 @@ namespace EasySaveV2._0
             }
         }
 
-        private void OnLanguageChanged(object sender, string languageCode)
+        private void OnLanguageChanged(object? sender, string languageCode)
         {
             if (!_isInitialized) return;
 
@@ -426,7 +413,7 @@ namespace EasySaveV2._0
             RefreshBackupList();
         }
 
-        private void OnTranslationsReloaded(object sender, EventArgs e)
+        private void OnTranslationsReloaded(object? sender, EventArgs e)
         {
             _logger.LogAdminAction("System", "LANGUAGE", "Translations reloaded");
             OnLanguageChanged(sender, _languageManager.CurrentLanguage);
@@ -527,27 +514,72 @@ namespace EasySaveV2._0
         {
             try
             {
+                if (_backupListView == null)
+                {
+                    _logger?.LogAdminAction("System", "ERROR", "BackupListView is null");
+                    return;
+                }
+
+                if (_backupController == null)
+                {
+                    _logger?.LogAdminAction("System", "ERROR", "BackupController is null");
+                    return;
+                }
+
+                if (_languageManager == null)
+                {
+                    _logger?.LogAdminAction("System", "ERROR", "LanguageManager is null");
+                    return;
+                }
+
                 _logger.LogAdminAction("System", "UI", "Refreshing backup list");
                 _backupListView.Items.Clear();
 
-                foreach (Backup backup in _backupController.GetBackups())
+                // Initialize columns if they don't exist
+                if (_backupListView.Columns.Count == 0)
                 {
-                    var item = new ListViewItem(backup.Name);
-                    item.SubItems.Add(backup.SourcePath);
-                    item.SubItems.Add(backup.TargetPath);
-                    item.SubItems.Add(backup.Type);
-                    var state = _backupController.GetBackupState(backup.Name);
-                    string status = state != null ? GetStatusText(state.Status) : GetStatusText("pending");
-                    item.SubItems.Add(status);
-                    item.SubItems.Add("0%");
-                    item.Tag = backup;
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.destination"), 200);
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.type"), 100);
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.status"), 100);
+                    _backupListView.Columns.Add(_languageManager.GetTranslation("backup.progress"), 100);
+                }
 
-                    _backupListView.Items.Add(item);
+                var backups = _backupController.GetBackups();
+                if (backups != null && backups.Any())
+                {
+                    foreach (Backup backup in backups)
+                    {
+                        if (backup == null) continue;
+
+                        var item = new ListViewItem(backup.Name);
+                        item.SubItems.Add(backup.SourcePath);
+                        item.SubItems.Add(backup.TargetPath);
+                        item.SubItems.Add(backup.Type);
+                        var state = _backupController.GetBackupState(backup.Name);
+                        string status = state != null ? GetStatusText(state.Status) : GetStatusText("pending");
+                        item.SubItems.Add(status);
+                        item.SubItems.Add("0%");
+                        item.Tag = backup;
+
+                        _backupListView.Items.Add(item);
+                    }
+                }
+                else
+                {
+                    _logger.LogAdminAction("System", "UI", "No backups found");
                 }
             }
             catch (Exception ex)
             {
                 _logger?.LogAdminAction("System", "ERROR", $"Error refreshing backup list: {ex.Message}");
+                MessageBox.Show(
+                    _languageManager?.GetTranslation("message.error")?.Replace("{0}", ex.Message) ?? ex.Message,
+                    _languageManager?.GetTranslation("menu.title") ?? "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
@@ -744,7 +776,7 @@ namespace EasySaveV2._0
             try
             {
                 _logger.LogAdminAction("System", "UI", "Opening settings form");
-                using (var form = new SettingsForm())
+                using (var form = new SettingsForm(_languageManager, _settingsController))
                 {
                     if (form.ShowDialog() == DialogResult.OK)
                     {

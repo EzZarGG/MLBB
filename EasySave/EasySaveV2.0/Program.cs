@@ -15,6 +15,11 @@ namespace EasySaveV2._0
         [STAThread]
         static void Main()
         {
+            var logDir = Path.Combine(AppContext.BaseDirectory, "logs");
+            if (!Directory.Exists(logDir))
+                Directory.CreateDirectory(logDir);
+            Logger.GetInstance().SetLogFilePath(Path.Combine(logDir, "application.log"));
+
             Application.SetHighDpiMode(HighDpiMode.SystemAware);
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
@@ -63,14 +68,17 @@ namespace EasySaveV2._0
             }
         }
 
-        private static void Application_ThreadException(object sender, System.Threading.ThreadExceptionEventArgs e)
+        private static void Application_ThreadException(object? sender, ThreadExceptionEventArgs e)
         {
-            HandleException(e.Exception);
+            MessageBox.Show($"Une erreur inattendue s'est produite : {e.Exception.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
 
-        private static void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        private static void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
         {
-            HandleException(e.ExceptionObject as Exception);
+            if (e.ExceptionObject is Exception ex)
+            {
+                MessageBox.Show($"Une erreur critique s'est produite : {ex.Message}", "Erreur Critique", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         private static void HandleException(Exception ex)

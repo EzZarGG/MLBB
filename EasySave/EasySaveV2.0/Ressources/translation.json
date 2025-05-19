@@ -80,7 +80,21 @@
     "logFormat.xml": "XML",
     "button.browse": "Parcourir",
     "backup.type.full": "Complet",
-    "backup.type.differential": "Différentielle"
+    "backup.type.differential": "Différentielle",
+    "settings.tab.businessSoftware": "Logiciels métier",
+    "settings.tab.encryption": "Chiffrement",
+    "settings.tab.logFormat": "Format des logs",
+    "settings.businessSoftware.name": "Nom du logiciel",
+    "settings.businessSoftware.add": "Ajouter un logiciel",
+    "settings.businessSoftware.remove": "Supprimer le logiciel",
+    "settings.encryption.extension": "Extension",
+    "settings.encryption.add": "Ajouter une extension",
+    "settings.encryption.remove": "Supprimer l'extension",
+    "settings.logFormat.title": "Format des logs",
+    "settings.logFormat.json": "JSON",
+    "settings.logFormat.xml": "XML",
+    "button.save": "Enregistrer",
+    "button.cancel": "Annuler"
   },
   "en": {
     "language.french": "Français",
@@ -163,6 +177,20 @@
     "logFormat.xml": "XML",
     "button.browse": "Browse",
     "backup.type.full": "Full",
-    "backup.type.differential": "Differential"
+    "backup.type.differential": "Differential",
+    "settings.tab.businessSoftware": "Business Software",
+    "settings.tab.encryption": "Encryption",
+    "settings.tab.logFormat": "Log Format",
+    "settings.businessSoftware.name": "Software Name",
+    "settings.businessSoftware.add": "Add Software",
+    "settings.businessSoftware.remove": "Remove Software",
+    "settings.encryption.extension": "Extension",
+    "settings.encryption.add": "Add Extension",
+    "settings.encryption.remove": "Remove Extension",
+    "settings.logFormat.title": "Log Format",
+    "settings.logFormat.json": "JSON",
+    "settings.logFormat.xml": "XML",
+    "button.save": "Save",
+    "button.cancel": "Cancel"
   }
 }

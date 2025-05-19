@@ -4,6 +4,7 @@ using EasySaveV2._0.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using EasySaveV2._0;
 
 namespace EasySaveV2._0.Controllers
 {
@@ -14,12 +15,33 @@ namespace EasySaveV2._0.Controllers
         private readonly LogController _logController;
         private readonly LanguageManager _languageManager;
 
+        public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
+        public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
+
         public BackupController()
         {
-            _backupManager = new BackupManager();
-            _settingsController = new SettingsController();
-            _logController = new LogController();
-            _languageManager = LanguageManager.Instance;
+            try
+            {
+                _backupManager = new BackupManager();
+                _settingsController = new SettingsController();
+                _logController = new LogController();
+                _languageManager = LanguageManager.Instance;
+
+                if (_backupManager == null || _settingsController == null || _logController == null || _languageManager == null)
+                {
+                    throw new InvalidOperationException("Failed to initialize required components");
+                }
+
+                // Subscribe to BackupManager events
+                _backupManager.FileProgressChanged += OnFileProgress;
+                _backupManager.EncryptionProgressChanged += OnEncryptionProgress;
+            }
+            catch (Exception ex)
+            {
+                LoggerUtils.EnsureLoggerInitialized();
+                Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error initializing BackupController: {ex.Message}");
+                throw;
+            }
         }
 
         public void CreateBackup(string name, string sourcePath, string destinationPath, string type)
@@ -178,11 +200,15 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
+                if (_backupManager == null)
+                {
+                    throw new InvalidOperationException("BackupManager is not initialized");
+                }
                 return new List<Backup>(_backupManager.Jobs);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction("System", "ERROR", $"Error getting backups: {ex.Message}");
+                _logController?.LogAdminAction("System", "ERROR", $"Error getting backups: {ex.Message}");
                 throw;
             }
         }
@@ -191,11 +217,15 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
+                if (_backupManager == null)
+                {
+                    throw new InvalidOperationException("BackupManager is not initialized");
+                }
                 return _backupManager.GetJob(name);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error getting backup: {ex.Message}");
+                _logController?.LogAdminAction(name, "ERROR", $"Error getting backup: {ex.Message}");
                 throw;
             }
         }
@@ -204,11 +234,15 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
+                if (_backupManager == null)
+                {
+                    throw new InvalidOperationException("BackupManager is not initialized");
+                }
                 return _backupManager.GetJobState(name);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error getting backup state: {ex.Message}");
+                _logController?.LogAdminAction(name, "ERROR", $"Error getting backup state: {ex.Message}");
                 throw;
             }
         }
@@ -252,39 +286,27 @@ namespace EasySaveV2._0.Controllers
             }
         }
 
-        private void OnFileProgress(object sender, FileProgressEventArgs e)
+        private void OnFileProgress(object? sender, FileProgressEventArgs e)
         {
             try
             {
-                _logController.LogFileOperation(
-                    e.BackupName,
-                    e.SourcePath,
-                    e.TargetPath,
-                    e.FileSize
-                );
+                FileProgressChanged?.Invoke(this, e);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error logging file progress: {ex.Message}");
+                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error handling file progress: {ex.Message}");
             }
         }
 
-        private void OnEncryptionProgress(object sender, EncryptionProgressEventArgs e)
+        private void OnEncryptionProgress(object? sender, EncryptionProgressEventArgs e)
         {
             try
             {
-                if (e.IsComplete)
-                {
-                    _logController.LogEncryptionComplete(e.BackupName);
-                }
-                else if (e.HasError)
-                {
-                    _logController.LogEncryptionError(e.BackupName, e.ErrorMessage);
-                }
+                EncryptionProgressChanged?.Invoke(this, e);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error logging encryption progress: {ex.Message}");
+                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error handling encryption progress: {ex.Message}");
             }
         }
     }

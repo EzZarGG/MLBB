@@ -8,17 +8,15 @@ namespace EasySaveV2._0.Views
     {
         private readonly LanguageManager _languageManager;
         private bool _languageSelected;
-
-        // UI Controls
-        private Label _languageLabel;
-        private ComboBox _languageComboBox;
-        private Button _okButton;
-        private Button _cancelButton;
+        private Label _languageLabel = new();
+        private ComboBox _languageComboBox = new();
+        private Button _okButton = new();
+        private Button _cancelButton = new();
 
         public LanguageSelectionForm()
         {
-            InitializeComponent();
             _languageManager = LanguageManager.Instance;
+            InitializeComponent();
             _languageSelected = false;
 
             InitializeUI();
@@ -98,7 +96,7 @@ namespace EasySaveV2._0.Views
             _cancelButton.Click += OnCancelClick;
         }
 
-        private void OnLanguageChanged(object sender, string languageCode)
+        private void OnLanguageChanged(object? sender, string languageCode)
         {
             UpdateFormTexts();
         }
@@ -148,7 +146,7 @@ namespace EasySaveV2._0.Views
             }
         }
 
-        private void OnOkClick(object sender, EventArgs e)
+        private void OnOkClick(object? sender, EventArgs e)
         {
             if (_languageComboBox.SelectedItem is LanguageItem selectedLanguage)
             {
@@ -168,7 +166,7 @@ namespace EasySaveV2._0.Views
             }
         }
 
-        private void OnCancelClick(object sender, EventArgs e)
+        private void OnCancelClick(object? sender, EventArgs e)
         {
             if (!_languageSelected)
             {

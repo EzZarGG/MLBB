@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Managers;
 using EasySaveV2._0.Models;
+using EasySaveLogging;
 
 namespace EasySaveV2._0.Views
 {
@@ -12,222 +13,276 @@ namespace EasySaveV2._0.Views
     {
         private readonly LanguageManager _languageManager;
         private readonly SettingsController _settingsController;
-        private ComboBox _languageComboBox;
-        private ComboBox _logFormatComboBox;
+        private TabControl _tabControl = new();
+        private TabPage _businessSoftwareTab = new();
+        private TabPage _encryptionTab = new();
+        private TabPage _logFormatTab = new();
+        private ListView _businessSoftwareList = new();
+        private ListView _encryptionList = new();
+        private Button _addBusinessSoftwareButton = new();
+        private Button _removeBusinessSoftwareButton = new();
+        private Button _addEncryptionButton = new();
+        private Button _removeEncryptionButton = new();
+        private Button _saveButton = new();
+        private Button _cancelButton = new();
+        private ColumnHeader _businessSoftwareColumn = new();
+        private ColumnHeader _encryptionColumn = new();
+        private ComboBox _logFormatComboBox = new();
 
-        public SettingsForm()
+        public SettingsForm(LanguageManager languageManager, SettingsController settingsController)
         {
-            InitializeComponent();
-            _settingsController = new SettingsController();
-            _languageManager = LanguageManager.Instance;
+            _languageManager = languageManager;
+            _settingsController = settingsController;
 
+            InitializeComponent();
             InitializeUI();
             SetupEventHandlers();
             LoadSettings();
-            UpdateTranslations();
-        }
-
-        private void InitializeUI()
-        {
-            // Add language and log format controls to business software tab
-            var languagePanel = new TableLayoutPanel
-            {
-                Dock = DockStyle.Top,
-                ColumnCount = 2,
-                RowCount = 2,
-                Height = 80,
-                Padding = new Padding(10)
-            };
-
-            // Language selection
-            languagePanel.Controls.Add(new Label 
-            { 
-                Text = _languageManager.GetTranslation("settings.language"),
-                Anchor = AnchorStyles.Right,
-                AutoSize = true
-            }, 0, 0);
-
-            _languageComboBox = new ComboBox
-            {
-                Width = 200,
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            _languageComboBox.Items.AddRange(new object[] { "Français", "English" });
-            _languageComboBox.SelectedItem = _languageManager.CurrentLanguage == "fr" ? "Français" : "English";
-            languagePanel.Controls.Add(_languageComboBox, 1, 0);
-
-            // Log format selection
-            languagePanel.Controls.Add(new Label 
-            { 
-                Text = _languageManager.GetTranslation("settings.logFormat"),
-                Anchor = AnchorStyles.Right,
-                AutoSize = true
-            }, 0, 1);
-
-            _logFormatComboBox = new ComboBox
-            {
-                Width = 200,
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            _logFormatComboBox.Items.AddRange(new object[] { "JSON", "XML" });
-            _logFormatComboBox.SelectedItem = _settingsController.GetCurrentLogFormat().ToString();
-            languagePanel.Controls.Add(_logFormatComboBox, 1, 1);
-
-            businessSoftwareTab.Controls.Add(languagePanel);
         }
 
         private void SetupEventHandlers()
         {
-            _languageManager.LanguageChanged += OnLanguageChanged;
-            _languageComboBox.SelectedIndexChanged += OnLanguageComboBoxChanged;
-            _logFormatComboBox.SelectedIndexChanged += OnLogFormatComboBoxChanged;
-            addBusinessSoftwareButton.Click += OnAddBusinessSoftwareClick;
-            removeBusinessSoftwareButton.Click += OnRemoveBusinessSoftwareClick;
-            addEncryptionButton.Click += OnAddEncryptionClick;
-            removeEncryptionButton.Click += OnRemoveEncryptionClick;
-            saveButton.Click += OnSaveClick;
-            cancelButton.Click += OnCancelClick;
-            this.Load += OnLoad;
+            _addBusinessSoftwareButton.Click += OnAddBusinessSoftwareClick;
+            _removeBusinessSoftwareButton.Click += OnRemoveBusinessSoftwareClick;
+            _addEncryptionButton.Click += OnAddEncryptionClick;
+            _removeEncryptionButton.Click += OnRemoveEncryptionClick;
+            _saveButton.Click += OnSaveClick;
+            _cancelButton.Click += OnCancelClick;
         }
 
-        private void OnLoad(object sender, EventArgs e)
+        private void LoadSettings()
         {
             LoadBusinessSoftware();
             LoadEncryptionExtensions();
-            UpdateTranslations();
         }
 
-        private void OnLanguageChanged(object sender, string languageCode)
+        private void InitializeUI()
         {
-            UpdateTranslations();
-        }
+            // Initialize tab control
+            _tabControl = new TabControl
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(10, 10, 10, 10)
+            };
+            _businessSoftwareTab = new TabPage(_languageManager.GetTranslation("settings.tab.businessSoftware"));
+            _encryptionTab = new TabPage(_languageManager.GetTranslation("settings.tab.encryption"));
+            _logFormatTab = new TabPage(_languageManager.GetTranslation("settings.tab.logFormat"));
 
-        private void OnLanguageComboBoxChanged(object sender, EventArgs e)
-        {
-            var language = _languageComboBox.SelectedItem.ToString() == "Français" ? "fr" : "en";
-            _languageManager.SetLanguage(language);
-        }
+            // Initialize business software list
+            _businessSoftwareList = new ListView
+            {
+                Dock = DockStyle.Fill,
+                View = View.Details,
+                FullRowSelect = true,
+                MultiSelect = false
+            };
+            _businessSoftwareColumn = new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("settings.businessSoftware.name"),
+                Width = 200
+            };
+            _businessSoftwareList.Columns.Add(_businessSoftwareColumn);
 
-        private void OnLogFormatComboBoxChanged(object sender, EventArgs e)
-        {
-            var logFormat = (LogFormat)Enum.Parse(typeof(LogFormat), _logFormatComboBox.SelectedItem.ToString());
-            _settingsController.SetLogFormat(logFormat);
-        }
+            // Initialize encryption list
+            _encryptionList = new ListView
+            {
+                Dock = DockStyle.Fill,
+                View = View.Details,
+                FullRowSelect = true,
+                MultiSelect = false
+            };
+            _encryptionColumn = new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("settings.encryption.extension"),
+                Width = 200
+            };
+            _encryptionList.Columns.Add(_encryptionColumn);
 
-        private void UpdateTranslations()
-        {
-            Text = _languageManager.GetTranslation("settings.title");
-            businessSoftwareTab.Text = _languageManager.GetTranslation("settings.tab.businessSoftware");
-            encryptionTab.Text = _languageManager.GetTranslation("settings.tab.encryption");
-            businessSoftwareColumn.Text = _languageManager.GetTranslation("settings.businessSoftware.name");
-            encryptionColumn.Text = _languageManager.GetTranslation("settings.encryption.extension");
-            addBusinessSoftwareButton.Text = _languageManager.GetTranslation("settings.businessSoftware.add");
-            removeBusinessSoftwareButton.Text = _languageManager.GetTranslation("settings.businessSoftware.remove");
-            addEncryptionButton.Text = _languageManager.GetTranslation("settings.encryption.add");
-            removeEncryptionButton.Text = _languageManager.GetTranslation("settings.encryption.remove");
-            saveButton.Text = _languageManager.GetTranslation("button.save");
-            cancelButton.Text = _languageManager.GetTranslation("button.cancel");
+            // Initialize log format combo box
+            _logFormatComboBox = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 200
+            };
+            _logFormatComboBox.Items.AddRange(new object[] { LogFormat.JSON, LogFormat.XML });
+
+            // Add label for log format
+            var logFormatLabel = new Label
+            {
+                Text = _languageManager.GetTranslation("settings.logFormat.title"),
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                Padding = new Padding(0, 10, 0, 5)
+            };
+
+            // Add controls to log format tab
+            _logFormatTab.Controls.Add(logFormatLabel);
+            _logFormatTab.Controls.Add(_logFormatComboBox);
+
+            // Initialize buttons
+            _addBusinessSoftwareButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.businessSoftware.add"),
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _removeBusinessSoftwareButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.businessSoftware.remove"),
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _addEncryptionButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.encryption.add"),
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _removeEncryptionButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.encryption.remove"),
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _saveButton = new Button
+            {
+                Text = _languageManager.GetTranslation("button.save"),
+                DialogResult = DialogResult.OK,
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _cancelButton = new Button
+            {
+                Text = _languageManager.GetTranslation("button.cancel"),
+                DialogResult = DialogResult.Cancel,
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+
+            // Create button panels
+            var businessSoftwareButtonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 40,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+            businessSoftwareButtonPanel.Controls.Add(_addBusinessSoftwareButton);
+            businessSoftwareButtonPanel.Controls.Add(_removeBusinessSoftwareButton);
+
+            var encryptionButtonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 40,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+            encryptionButtonPanel.Controls.Add(_addEncryptionButton);
+            encryptionButtonPanel.Controls.Add(_removeEncryptionButton);
+
+            var mainButtonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 40,
+                FlowDirection = FlowDirection.RightToLeft
+            };
+            mainButtonPanel.Controls.Add(_cancelButton);
+            mainButtonPanel.Controls.Add(_saveButton);
+
+            // Add controls to tabs
+            _businessSoftwareTab.Controls.Add(_businessSoftwareList);
+            _businessSoftwareTab.Controls.Add(businessSoftwareButtonPanel);
+
+            _encryptionTab.Controls.Add(_encryptionList);
+            _encryptionTab.Controls.Add(encryptionButtonPanel);
+
+            _tabControl.TabPages.Add(_businessSoftwareTab);
+            _tabControl.TabPages.Add(_encryptionTab);
+            _tabControl.TabPages.Add(_logFormatTab);
+
+            // Add controls to form
+            Controls.Add(_tabControl);
+            Controls.Add(mainButtonPanel);
         }
 
         private void LoadBusinessSoftware()
         {
-            businessSoftwareList.Items.Clear();
+            _businessSoftwareList.Items.Clear();
             foreach (var software in _settingsController.GetBusinessSoftware())
             {
-                businessSoftwareList.Items.Add(software);
+                _businessSoftwareList.Items.Add(software);
             }
         }
 
         private void LoadEncryptionExtensions()
         {
-            encryptionList.Items.Clear();
+            _encryptionList.Items.Clear();
             foreach (var extension in _settingsController.GetEncryptionExtensions())
             {
-                encryptionList.Items.Add(extension);
+                _encryptionList.Items.Add(extension);
             }
         }
 
-        private void OnAddBusinessSoftwareClick(object sender, EventArgs e)
+        private void OnAddBusinessSoftwareClick(object? sender, EventArgs e)
         {
-            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.businessSoftware.enter")))
+            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.businessSoftware.add")))
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    var softwareName = dialog.InputText.Trim();
-                    if (!string.IsNullOrEmpty(softwareName))
-                    {
-                        _settingsController.AddBusinessSoftware(softwareName);
-                        LoadBusinessSoftware();
-                    }
+                    _settingsController.AddBusinessSoftware(dialog.InputText);
+                    LoadBusinessSoftware();
                 }
             }
         }
 
-        private void OnRemoveBusinessSoftwareClick(object sender, EventArgs e)
+        private void OnRemoveBusinessSoftwareClick(object? sender, EventArgs e)
         {
-            if (businessSoftwareList.SelectedItems.Count > 0)
+            if (_businessSoftwareList.SelectedItems.Count > 0)
             {
-                var softwareName = businessSoftwareList.SelectedItems[0].Text;
-                _settingsController.RemoveBusinessSoftware(softwareName);
+                _settingsController.RemoveBusinessSoftware(_businessSoftwareList.SelectedItems[0].Text);
                 LoadBusinessSoftware();
             }
         }
 
-        private void OnAddEncryptionClick(object sender, EventArgs e)
+        private void OnAddEncryptionClick(object? sender, EventArgs e)
         {
-            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.encryption.enter")))
+            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.encryption.add")))
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {
-                    var extension = dialog.InputText.Trim();
-                    if (!string.IsNullOrEmpty(extension))
-                    {
-                        if (!extension.StartsWith("."))
-                        {
-                            extension = "." + extension;
-                        }
-                        _settingsController.AddEncryptionExtension(extension);
-                        LoadEncryptionExtensions();
-                    }
+                    _settingsController.AddEncryptionExtension(dialog.InputText);
+                    LoadEncryptionExtensions();
                 }
             }
         }
 
-        private void OnRemoveEncryptionClick(object sender, EventArgs e)
+        private void OnRemoveEncryptionClick(object? sender, EventArgs e)
         {
-            if (encryptionList.SelectedItems.Count > 0)
+            if (_encryptionList.SelectedItems.Count > 0)
             {
-                var extension = encryptionList.SelectedItems[0].Text;
-                _settingsController.RemoveEncryptionExtension(extension);
+                _settingsController.RemoveEncryptionExtension(_encryptionList.SelectedItems[0].Text);
                 LoadEncryptionExtensions();
             }
         }
 
-        private void OnSaveClick(object sender, EventArgs e)
+        private void OnSaveClick(object? sender, EventArgs e)
         {
             DialogResult = DialogResult.OK;
             Close();
         }
 
-        private void OnCancelClick(object sender, EventArgs e)
+        private void OnCancelClick(object? sender, EventArgs e)
         {
             DialogResult = DialogResult.Cancel;
             Close();
-        }
-
-        protected override void OnFormClosing(FormClosingEventArgs e)
-        {
-            base.OnFormClosing(e);
-            _languageManager.LanguageChanged -= OnLanguageChanged;
         }
     }
 
     public class InputDialog : Form
     {
-        private TextBox _textBox;
-        private Button _okButton;
-        private Button _cancelButton;
-        private Label _label;
+        private TextBox _textBox = new();
+        private Button _okButton = new();
+        private Button _cancelButton = new();
+        private Label _label = new();
 
         public string InputText => _textBox.Text;
 
