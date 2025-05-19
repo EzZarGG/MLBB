@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows.Forms;
 using System.Drawing;
+using System.Linq;
 
 namespace EasySaveV2._0.Views
 {
@@ -24,6 +25,8 @@ namespace EasySaveV2._0.Views
         private Button _removeExtensionButton;
         private Button _saveButton;
         private Button _cancelButton;
+        private TextBox _encryptionKeyTextBox;
+
 
         public SettingsForm()
         {
@@ -41,9 +44,12 @@ namespace EasySaveV2._0.Views
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 7,
+                RowCount = 5,
                 Padding = new Padding(10)
             };
+            layout.RowStyles.Clear();
+            for (int i = 0; i < 5; i++)
+                layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
             // Language selection
             layout.Controls.Add(new Label { Text = _languageManager.GetTranslation("settings.language"), Anchor = AnchorStyles.Right }, 0, 0);
@@ -88,26 +94,56 @@ namespace EasySaveV2._0.Views
             businessSoftwarePanel.Controls.Add(_removeBusinessSoftwareButton);
             layout.Controls.Add(businessSoftwarePanel, 2, 2);
 
-            // Encryption extensions list
-            layout.Controls.Add(new Label { Text = _languageManager.GetTranslation("settings.encryptionExtensions"), Anchor = AnchorStyles.Right }, 0, 3);
-            _encryptionExtensionsListBox = new ListBox { Width = 200, Height = 100 };
-            _encryptionExtensionsListBox.Items.AddRange(_settingsController.GetEncryptionExtensions().ToArray());
-            layout.Controls.Add(_encryptionExtensionsListBox, 1, 3);
+          
+            layout.Controls.Add(
+                new Label
+                {
+                    Text = _languageManager.GetTranslation("settings.encryptionKey"),
+                    Anchor = AnchorStyles.Right
+                },
+                0, 3
+            );
+            _encryptionKeyTextBox = new TextBox { Width = 200 };
+            _encryptionKeyTextBox.Text = _settingsController.Load().EncryptionKey ?? "";
+            layout.Controls.Add(_encryptionKeyTextBox, 1, 3);
 
-            var extensionsPanel = new FlowLayoutPanel
+          
+            layout.Controls.Add(
+                new Label
+                {
+                    Text = _languageManager.GetTranslation("settings.encryptionExtensions"),
+                    Anchor = AnchorStyles.Right
+                },
+                0, 4
+            );
+            _encryptionExtensionsListBox = new ListBox { Width = 200, Height = 100 };
+            _encryptionExtensionsListBox.Items.AddRange(
+                _settingsController.GetEncryptionExtensions().ToArray()
+            );
+            layout.Controls.Add(_encryptionExtensionsListBox, 1, 4);
+
+            var extPanel = new FlowLayoutPanel
             {
                 FlowDirection = FlowDirection.TopDown,
                 Width = 100
             };
             _newExtensionTextBox = new TextBox { Width = 100 };
-            _addExtensionButton = new Button { Text = _languageManager.GetTranslation("settings.add"), Width = 100 };
+            _addExtensionButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.add"),
+                Width = 100
+            };
             _addExtensionButton.Click += (s, e) => AddExtension();
-            _removeExtensionButton = new Button { Text = _languageManager.GetTranslation("settings.remove"), Width = 100 };
+            _removeExtensionButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.remove"),
+                Width = 100
+            };
             _removeExtensionButton.Click += (s, e) => RemoveExtension();
-            extensionsPanel.Controls.Add(_newExtensionTextBox);
-            extensionsPanel.Controls.Add(_addExtensionButton);
-            extensionsPanel.Controls.Add(_removeExtensionButton);
-            layout.Controls.Add(extensionsPanel, 2, 3);
+            extPanel.Controls.Add(_newExtensionTextBox);
+            extPanel.Controls.Add(_addExtensionButton);
+            extPanel.Controls.Add(_removeExtensionButton);
+            layout.Controls.Add(extPanel, 2, 4);
 
             // Buttons
             var buttonPanel = new FlowLayoutPanel
@@ -157,54 +193,59 @@ namespace EasySaveV2._0.Views
 
         private void AddExtension()
         {
-            var extension = _newExtensionTextBox.Text.Trim();
-            if (!string.IsNullOrEmpty(extension) && !_encryptionExtensionsListBox.Items.Contains(extension))
+            var ext = _newExtensionTextBox.Text.Trim();
+            if (!string.IsNullOrEmpty(ext))
             {
-                if (!extension.StartsWith("."))
+                if (!ext.StartsWith(".")) ext = "." + ext;
+                if (!_encryptionExtensionsListBox.Items.Contains(ext))
                 {
-                    extension = "." + extension;
+                    _encryptionExtensionsListBox.Items.Add(ext);
+                    _newExtensionTextBox.Clear();
                 }
-                _encryptionExtensionsListBox.Items.Add(extension);
-                _newExtensionTextBox.Clear();
             }
         }
 
         private void RemoveExtension()
         {
             if (_encryptionExtensionsListBox.SelectedItem != null)
-            {
-                _encryptionExtensionsListBox.Items.Remove(_encryptionExtensionsListBox.SelectedItem);
-            }
+                _encryptionExtensionsListBox.Items.Remove(
+                    _encryptionExtensionsListBox.SelectedItem
+                );
         }
 
         private void SaveSettings()
         {
-            // Save language
-            var language = _languageComboBox.SelectedItem.ToString() == "Français" ? "fr" : "en";
-            _languageManager.SetLanguage(language);
+            // Langue
+            var lang = _languageComboBox.SelectedItem.ToString() == "Français"
+                ? "fr"
+                : "en";
+            _languageManager.SetLanguage(lang);
 
-            // Save log format
-            var logFormat = (LogFormat)Enum.Parse(typeof(LogFormat), _logFormatComboBox.SelectedItem.ToString());
-            _settingsController.SetLogFormat(logFormat);
+            // Format de log
+            var fmt = (LogFormat)Enum.Parse(
+                typeof(LogFormat),
+                _logFormatComboBox.SelectedItem.ToString()
+            );
+            _settingsController.SetLogFormat(fmt);
 
-            // Save business software list
-            var businessSoftware = new List<string>();
-            foreach (var item in _businessSoftwareListBox.Items)
-            {
-                businessSoftware.Add(item.ToString());
-            }
-            _settingsController.SetBusinessSoftware(businessSoftware);
+            // Business software
+            var bs = _businessSoftwareListBox.Items
+                      .Cast<string>()
+                      .ToList();
+            _settingsController.SetBusinessSoftware(bs);
 
-            // Save encryption extensions list
-            var extensions = new List<string>();
-            foreach (var item in _encryptionExtensionsListBox.Items)
-            {
-                extensions.Add(item.ToString());
-            }
-            _settingsController.SetEncryptionExtensions(extensions);
+            // Clé de chiffrement
+            var key = _encryptionKeyTextBox.Text.Trim();
+            _settingsController.SetEncryptionKey(key);
 
-            this.DialogResult = DialogResult.OK;
-            this.Close();
+            // Extensions à chiffrer
+            var exts = _encryptionExtensionsListBox.Items
+                        .Cast<string>()
+                        .ToList();
+            _settingsController.SetEncryptionExtensions(exts);
+
+            DialogResult = DialogResult.OK;
+            Close();
         }
     }
 
@@ -217,4 +258,4 @@ namespace EasySaveV2._0.Views
         {
         }
     }
-} 
+}

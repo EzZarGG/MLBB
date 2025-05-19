@@ -22,11 +22,13 @@ namespace EasySaveLogging
         public string SourcePath { get; set; }
         public string TargetPath { get; set; }
         public long FileSize { get; set; }
-        public long TransferTime { get; set; }
+        public long TransferTime { get; set; }  // ms
+        public long EncryptionTime { get; set; }  // ms, <0 = erreur
         public string Message { get; set; }
         public string LogType { get; set; }
         public string ActionType { get; set; }
     }
+
 
     // Represents a collection of log entries for XML serialization
     [XmlRoot("Logs")]
@@ -166,7 +168,8 @@ namespace EasySaveLogging
                               DateTime date,
                               string sourcePath,
                               string targetPath,
-                              string logType)
+                              string logType,
+                              long encryptionTime)
         {
             var entry = new LogEntry
             {
@@ -176,6 +179,7 @@ namespace EasySaveLogging
                 TargetPath = targetPath,
                 FileSize = fileSize,
                 TransferTime = (long)transferTime.TotalMilliseconds,
+                EncryptionTime = encryptionTime,
                 Message = logType == "ERROR"
                                  ? "Error during transfer"
                                  : "File transferred",

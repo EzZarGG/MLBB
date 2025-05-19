@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using CryptoLibrary;
 using System.Threading.Tasks;
 
 namespace EasySaveV2._0.Managers
@@ -16,6 +17,12 @@ namespace EasySaveV2._0.Managers
         private readonly string _stateFile;
         private readonly Dictionary<string, StateModel> _jobStates;
         private readonly JsonSerializerOptions _jsonOptions;
+        private readonly byte[] _encryptionKey;
+        private readonly bool _encryptEnabled;
+        private readonly HashSet<string> _encryptExtensions;
+        public event EventHandler<FileProgressEventArgs> FileProgress;
+        public event EventHandler<EncryptionProgressEventArgs> EncryptionProgress;
+
 
         public BackupManager()
         {
@@ -29,6 +36,9 @@ namespace EasySaveV2._0.Managers
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             LoadOrInitializeStates();
+            _encryptionKey = Config.GetEncryptionKey();
+            _encryptEnabled = _encryptionKey != null;
+            _encryptExtensions = Config.GetEncryptionExtensions();
         }
 
         public IReadOnlyList<Backup> Jobs => _backups;
@@ -165,17 +175,17 @@ namespace EasySaveV2._0.Managers
 
         private void RunBackup(Backup job)
         {
+            // Log the start of execution
             _logger.LogAdminAction(job.Name, "EXECUTE_START", $"Started executing backup job: {job.Name}");
 
             try
             {
-                var allFiles = Directory
-                    .EnumerateFiles(job.SourcePath, "*", SearchOption.AllDirectories)
-                    .ToList();
-
+                // Gather all files under the source directory
+                var allFiles = Directory.EnumerateFiles(job.SourcePath, "*", SearchOption.AllDirectories).ToList();
                 long totalBytes = allFiles.Sum(f => new FileInfo(f).Length);
                 int totalFiles = allFiles.Count;
 
+                // Initialize state to “Active”
                 UpdateJobState(job.Name, state => {
                     state.Status = "Active";
                     state.TotalFilesCount = totalFiles;
@@ -186,57 +196,106 @@ namespace EasySaveV2._0.Managers
                     state.CurrentTargetFile = job.TargetPath;
                 });
 
+                // Process each file one by one
                 foreach (var src in allFiles)
                 {
                     var rel = Path.GetRelativePath(job.SourcePath, src);
                     var dst = Path.Combine(job.TargetPath, rel);
                     long fileSize = new FileInfo(src).Length;
 
+                    // Ensure the target folder exists
                     Directory.CreateDirectory(Path.GetDirectoryName(dst));
 
+                    // Update state before copying
                     UpdateJobState(job.Name, state => {
                         state.CurrentSourceFile = src;
                         state.CurrentTargetFile = dst;
                     });
 
                     var sw = System.Diagnostics.Stopwatch.StartNew();
+                    long encryptionTime = 0;
 
                     try
                     {
-                        File.Copy(src, dst, true);
+                        // Copy the file
+                        File.Copy(src, dst, overwrite: true);
                         sw.Stop();
+
+                        // If encryption is enabled and the file’s extension matches
+                        var ext = Path.GetExtension(src).ToLower();
+                        if (_encryptEnabled && _encryptExtensions.Contains(ext))
+                        {
+                            var cryptDst = dst + ".crypt";
+                            encryptionTime = CryptoManager.EncryptFile(dst, cryptDst, _encryptionKey);
+
+                            if (encryptionTime < 0)
+                            {
+                                _logger.LogAdminAction(job.Name, "ERROR",
+                                    $"Erreur de chiffrement {dst} (code {encryptionTime})");
+                            }
+                            else
+                            {
+                                _logger.LogAdminAction(job.Name, "INFO",
+                                    $"Fichier chiffré en {encryptionTime} ms ? {cryptDst}");
+                            }
+
+                            // Remove the unencrypted copy
+                            File.Delete(dst);
+                        }
+
+                        FileProgress?.Invoke(this, new FileProgressEventArgs(
+                                job.Name,
+                                src,
+                                dst,
+                                fileSize,
+                                progressPercentage: (int)((totalBytes - _jobStates[job.Name].BytesRemaining) * 100 / totalBytes),
+                                bytesTransferred: totalBytes - _jobStates[job.Name].BytesRemaining,
+                                totalBytes: totalBytes,
+                                filesProcessed: totalFiles - _jobStates[job.Name].FilesRemaining,
+                                totalFiles: totalFiles,
+                                transferTime: sw.Elapsed,
+                                encryptionTime: encryptionTime
+                            ));
+                        // Write a log entry including transfer and encryption times
                         _logger.CreateLog(
-                            job.Name,
-                            sw.Elapsed,
-                            fileSize,
-                            DateTime.Now,
-                            src,
-                            dst,
-                            "INFO"
+                            backupName: job.Name,
+                            transferTime: sw.Elapsed,
+                            fileSize: fileSize,
+                            date: DateTime.Now,
+                            sourcePath: src,
+                            targetPath: dst,
+                            logType: "INFO",
+                            encryptionTime: encryptionTime
                         );
 
+                        // Update state after successful copy
                         UpdateJobState(job.Name, state => {
                             state.FilesRemaining -= 1;
                             state.BytesRemaining -= fileSize;
                         });
                     }
-                    catch (Exception ex)
+                    catch (Exception exFile)
                     {
                         sw.Stop();
+
+                        // Log the failed file transfer (negative transfer time) and no encryption
                         _logger.CreateLog(
-                            job.Name,
-                            sw.Elapsed.Negate(),
-                            0,
-                            DateTime.Now,
-                            src,
-                            dst,
-                            "ERROR"
+                            backupName: job.Name,
+                            transferTime: sw.Elapsed.Negate(),
+                            fileSize: 0,
+                            date: DateTime.Now,
+                            sourcePath: src,
+                            targetPath: dst,
+                            logType: "ERROR",
+                            encryptionTime: 0
                         );
 
-                        _logger.LogAdminAction(job.Name, "ERROR", $"Error copying file {src}: {ex.Message}");
+                        _logger.LogAdminAction(job.Name, "ERROR",
+                            $"Error processing file {src}: {exFile.Message}");
                     }
                 }
 
+                // Mark job as completed
                 UpdateJobState(job.Name, state => {
                     state.Status = "Inactive";
                     state.FilesRemaining = 0;
@@ -245,11 +304,14 @@ namespace EasySaveV2._0.Managers
                     state.CurrentTargetFile = "";
                 });
 
-                _logger.LogAdminAction(job.Name, "EXECUTE_COMPLETE", $"Completed executing backup job: {job.Name}");
+                _logger.LogAdminAction(job.Name, "EXECUTE_COMPLETE",
+                    $"Completed executing backup job: {job.Name}");
             }
             catch (Exception ex)
             {
-                _logger.LogAdminAction(job.Name, "ERROR", $"Critical error during backup: {ex.Message}");
+                // Critical failure: log and set job inactive
+                _logger.LogAdminAction(job.Name, "ERROR",
+                    $"Critical error during backup: {ex.Message}");
 
                 UpdateJobState(job.Name, state => {
                     state.Status = "Inactive";
@@ -258,6 +320,7 @@ namespace EasySaveV2._0.Managers
                 });
             }
         }
+
 
         public void ShowLogs()
         {

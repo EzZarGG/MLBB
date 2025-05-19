@@ -1,0 +1,26 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+	<ItemGroup>
+		<ProjectReference Include="..\CryptoLibrary\CryptoLibrary.csproj" />
+	</ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.0" />
+	</ItemGroup>
+	<ItemGroup>
+		<!-- Pour que App.config soit copié en sortie sous la forme CryptoConsole.dll.config -->
+		<None Include="App.config">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
+
+
+
+</Project>

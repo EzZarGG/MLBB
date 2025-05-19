@@ -1,8 +1,7 @@
-using EasySaveLogging;
-using System.Diagnostics;
-using EasySaveV2._0.Managers;
 using System;
-using System.Windows.Forms;
+using EasySaveLogging;
+using EasySaveV2._0;
+using EasySaveV2._0.Managers;
 
 namespace EasySaveV2._0.Controllers
 {
@@ -20,7 +19,8 @@ namespace EasySaveV2._0.Controllers
 
         private void InitializeLogger()
         {
-            _logger.SetLogFilePath(Config.GetLogDirectory() + "/logs.json");
+            // Configure the logger output path and format based on app settings
+            _logger.SetLogFilePath(Path.Combine(Config.GetLogDirectory(), DateTime.Today.ToString("yyyy-MM-dd") + ".json"));
             _logger.SetLogFormat(Config.GetLogFormat());
         }
 
@@ -31,50 +31,69 @@ namespace EasySaveV2._0.Controllers
 
         public void LogBackupStart(string backupName)
         {
-            _logger.LogAdminAction(backupName, "EXECUTE_START", $"Started executing backup job: {backupName}");
+            LogAdminAction(backupName, "EXECUTE_START", $"Started executing backup job: {backupName}");
         }
 
         public void LogBackupComplete(string backupName)
         {
-            _logger.LogAdminAction(backupName, "EXECUTE_COMPLETE", $"Completed executing backup job: {backupName}");
+            LogAdminAction(backupName, "EXECUTE_COMPLETE", $"Completed executing backup job: {backupName}");
         }
 
         public void LogBackupError(string backupName, string error)
         {
-            _logger.LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
+            LogAdminAction(backupName, "ERROR", $"Error during backup: {error}");
         }
 
-        public void LogFileOperation(string backupName, string sourcePath, string destinationPath, long fileSize)
+        /// <summary>
+        /// Logs a file transfer, including optional encryption time.
+        /// </summary>
+        /// <param name="backupName">Name of the backup job</param>
+        /// <param name="sourcePath">Original file path</param>
+        /// <param name="destinationPath">Destination file path</param>
+        /// <param name="fileSize">Size of the file in bytes</param>
+        /// <param name="transferTime">Time taken to transfer the file</param>
+        /// <param name="encryptionTime">
+        /// Time taken to encrypt the file (ms):
+        /// 0 = no encryption, >0 = time in ms, <0 = error code
+        /// </param>
+        public void LogFileOperation(
+            string backupName,
+            string sourcePath,
+            string destinationPath,
+            long fileSize,
+            TimeSpan transferTime,
+            long encryptionTime)
         {
             _logger.CreateLog(
-                backupName,
-                TimeSpan.Zero, // Transfer time will be calculated by the backup process
-                fileSize,
-                DateTime.Now,
-                sourcePath,
-                destinationPath,
-                "INFO"
+                backupName: backupName,
+                transferTime: transferTime,
+                fileSize: fileSize,
+                date: DateTime.Now,
+                sourcePath: sourcePath,
+                targetPath: destinationPath,
+                logType: "INFO",
+                encryptionTime: encryptionTime
             );
         }
 
         public void LogBusinessSoftwareDetected(string softwareName)
         {
-            _logger.LogAdminAction("System", "BUSINESS_SOFTWARE", $"Business software detected: {softwareName}");
+            LogAdminAction("System", "BUSINESS_SOFTWARE", $"Business software detected: {softwareName}");
         }
 
         public void LogEncryptionStart(string backupName)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_START", $"Started encryption for backup: {backupName}");
+            LogAdminAction(backupName, "ENCRYPTION_START", $"Started encryption for backup: {backupName}");
         }
 
         public void LogEncryptionComplete(string backupName)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_COMPLETE", $"Completed encryption for backup: {backupName}");
+            LogAdminAction(backupName, "ENCRYPTION_COMPLETE", $"Completed encryption for backup: {backupName}");
         }
 
         public void LogEncryptionError(string backupName, string error)
         {
-            _logger.LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Encryption error: {error}");
+            LogAdminAction(backupName, "ENCRYPTION_ERROR", $"Encryption error: {error}");
         }
 
         public void DisplayLogs()
@@ -93,4 +112,4 @@ namespace EasySaveV2._0.Controllers
             return _logger.CurrentFormat;
         }
     }
-} 
+}

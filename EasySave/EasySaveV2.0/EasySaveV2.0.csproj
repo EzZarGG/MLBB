@@ -12,5 +12,9 @@
   <ItemGroup>
     <ProjectReference Include="..\..\EasySaveLogging\EasySaveLogging.csproj" />
   </ItemGroup>
+	<ItemGroup>
+		<ProjectReference Include="..\CryptoLibrary\CryptoLibrary.csproj" />
+	</ItemGroup>
+
 
 </Project>
