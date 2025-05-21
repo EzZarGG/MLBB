@@ -69,6 +69,15 @@ namespace EasySaveV2._0.Controllers
         {
             _settings.LogFormat = format;
             SaveSettings();
+            
+            // Propagate the change to the Logger
+            var logger = Logger.GetInstance();
+            logger.SetLogFormat(format);
+            
+            // Update the log file path with the new extension
+            string logFileName = "log" + (format == LogFormat.JSON ? ".json" : ".xml");
+            string logPath = Path.Combine(AppContext.BaseDirectory, "Logs", logFileName);
+            logger.SetLogFilePath(logPath);
         }
 
         public List<string> GetBusinessSoftware()

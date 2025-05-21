@@ -80,6 +80,7 @@ namespace EasySaveV2._0.Views
                 FullRowSelect = true,
                 MultiSelect = false
             };
+            _businessSoftwareList.SelectedIndexChanged += (s, e) => UpdateButtonsState();
             _businessSoftwareColumn = new ColumnHeader
             {
                 Text = _languageManager.GetTranslation("settings.businessSoftware.name"),
@@ -95,6 +96,7 @@ namespace EasySaveV2._0.Views
                 FullRowSelect = true,
                 MultiSelect = false
             };
+            _encryptionList.SelectedIndexChanged += (s, e) => UpdateButtonsState();
             _encryptionColumn = new ColumnHeader
             {
                 Text = _languageManager.GetTranslation("settings.encryption.extension"),
@@ -107,21 +109,12 @@ namespace EasySaveV2._0.Views
             {
                 Dock = DockStyle.Top,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Width = 200
+                Width = 200,
+                Padding = new Padding(10, 10, 10, 10)
             };
             _logFormatComboBox.Items.AddRange(new object[] { LogFormat.JSON, LogFormat.XML });
 
-            // Add label for log format
-            var logFormatLabel = new Label
-            {
-                Text = _languageManager.GetTranslation("settings.logFormat.title"),
-                Dock = DockStyle.Top,
-                AutoSize = true,
-                Padding = new Padding(0, 10, 0, 5)
-            };
-
             // Add controls to log format tab
-            _logFormatTab.Controls.Add(logFormatLabel);
             _logFormatTab.Controls.Add(_logFormatComboBox);
 
             // Initialize buttons
@@ -135,7 +128,8 @@ namespace EasySaveV2._0.Views
             {
                 Text = _languageManager.GetTranslation("settings.businessSoftware.remove"),
                 Dock = DockStyle.Bottom,
-                Height = 30
+                Height = 30,
+                Enabled = false
             };
             _addEncryptionButton = new Button
             {
@@ -147,7 +141,8 @@ namespace EasySaveV2._0.Views
             {
                 Text = _languageManager.GetTranslation("settings.encryption.remove"),
                 Dock = DockStyle.Bottom,
-                Height = 30
+                Height = 30,
+                Enabled = false
             };
             _saveButton = new Button
             {
@@ -216,6 +211,7 @@ namespace EasySaveV2._0.Views
             {
                 _businessSoftwareList.Items.Add(software);
             }
+            UpdateButtonsState();
         }
 
         private void LoadEncryptionExtensions()
@@ -225,6 +221,13 @@ namespace EasySaveV2._0.Views
             {
                 _encryptionList.Items.Add(extension);
             }
+            UpdateButtonsState();
+        }
+
+        private void UpdateButtonsState()
+        {
+            _removeBusinessSoftwareButton.Enabled = _businessSoftwareList.Items.Count > 0 && _businessSoftwareList.SelectedItems.Count > 0;
+            _removeEncryptionButton.Enabled = _encryptionList.Items.Count > 0 && _encryptionList.SelectedItems.Count > 0;
         }
 
         private void OnAddBusinessSoftwareClick(object? sender, EventArgs e)

@@ -23,7 +23,7 @@ namespace EasySaveLogging
         public string TargetPath { get; set; }
         public long FileSize { get; set; }
         public long TransferTime { get; set; }  // ms
-        public long EncryptionTime { get; set; }  // ms, <0 = erreur
+        public long EncryptionTime { get; set; }  // ms, <0 = error
         public string Message { get; set; }
         public string LogType { get; set; }
         public string ActionType { get; set; }
@@ -218,15 +218,15 @@ namespace EasySaveLogging
             {
                 DebugLog("ConvertLogFileFormat - Starting conversion");
                 
-                // Lire les entrées existantes
+                // Read existing entries
                 var entries = ReadAllEntries();
                 DebugLog($"ConvertLogFileFormat - Read {entries.Count} entries");
                 
-                // Déterminer le nouveau chemin de fichier
+                // Determine the new file path
                 string newFilePath = Path.ChangeExtension(_logFilePath, _logFormat == LogFormat.JSON ? ".json" : ".xml");
                 DebugLog($"ConvertLogFileFormat - New file path: {newFilePath}");
                 
-                // Sauvegarder dans le nouveau format
+                // Save in the new format
                 if (_logFormat == LogFormat.JSON)
                 {
                     var json = JsonSerializer.Serialize(entries, _jsonOpts);
@@ -243,21 +243,14 @@ namespace EasySaveLogging
                     }
                 }
                 
-                // Supprimer l'ancien fichier si le chemin a changé
+                // Delete the old file if the path has changed
                 if (newFilePath != _logFilePath && File.Exists(_logFilePath))
                 {
-                    try
-                    {
-                        File.Delete(_logFilePath);
-                        DebugLog("ConvertLogFileFormat - Deleted old file");
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLog($"ConvertLogFileFormat - Error deleting old file: {ex.Message}");
-                    }
+                    File.Delete(_logFilePath);
+                    DebugLog("ConvertLogFileFormat - Deleted old file");
                 }
                 
-                // Mettre à jour le chemin du fichier
+                // Update the file path
                 _logFilePath = newFilePath;
                 DebugLog("ConvertLogFileFormat - Conversion complete");
             }

@@ -19,6 +19,9 @@ namespace EasySaveV2._0
         private readonly LanguageManager _languageManager;
         private readonly Logger _logger;
         private bool _isInitialized = false;
+        private ToolStripMenuItem? _editBackupMenuItem;
+        private ToolStripMenuItem? _deleteBackupMenuItem;
+        private ToolStripMenuItem? _runBackupMenuItem;
 
         public MainForm()
         {
@@ -223,7 +226,7 @@ namespace EasySaveV2._0
                     throw new InvalidOperationException("BackupListView is null");
                 }
 
-                // Nettoyage : évite les doublons de colonnes
+                // Cleanup: avoid duplicate columns
                 _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
@@ -248,32 +251,90 @@ namespace EasySaveV2._0
                 _logger.LogAdminAction("System", "INIT", "Initializing menu strip...");
 
                 // Backup menu
-                var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup")) { Tag = "menu.backup" };
-                var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create")) { Tag = "menu.backup.create" };
+                var backupMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup")) 
+                { 
+                    Tag = "menu.backup",
+                    Image = SystemIcons.Shield.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit
+                };
+                
+                // Create backup item (always enabled)
+                var createBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.create")) 
+                { 
+                    Tag = "menu.backup.create",
+                    Image = SystemIcons.Information.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit
+                };
                 createBackupItem.Click += (s, e) => AddJob();
-                var editBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.edit")) { Tag = "menu.backup.edit" };
+
+                // Edit backup item (disabled by default)
+                var editBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.edit")) 
+                { 
+                    Tag = "menu.backup.edit",
+                    Image = SystemIcons.Exclamation.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit,
+                    Enabled = false
+                };
                 editBackupItem.Click += (s, e) => UpdateJob();
-                var deleteBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.delete")) { Tag = "menu.backup.delete" };
+
+                // Delete backup item (disabled by default)
+                var deleteBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.delete")) 
+                { 
+                    Tag = "menu.backup.delete",
+                    Image = SystemIcons.Error.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit,
+                    Enabled = false
+                };
                 deleteBackupItem.Click += (s, e) => RemoveJob();
-                var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run")) { Tag = "menu.backup.run" };
+
+                // Run backup item (disabled by default)
+                var runBackupItem = new ToolStripMenuItem(_languageManager.GetTranslation("menu.backup.run")) 
+                { 
+                    Tag = "menu.backup.run",
+                    Image = SystemIcons.WinLogo.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit,
+                    Enabled = false
+                };
                 runBackupItem.Click += (s, e) => ExecuteJob();
+
                 backupMenu.DropDownItems.AddRange(new[] { createBackupItem, editBackupItem, deleteBackupItem, runBackupItem });
 
-                // Settings menu (ouvre directement le SettingsForm)
-                var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings")) { Tag = "menu.settings" };
+                // Settings menu
+                var settingsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.settings")) 
+                { 
+                    Tag = "menu.settings",
+                    Image = SystemIcons.Application.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit
+                };
                 settingsMenu.Click += (s, e) => OpenSettings();
 
-                // Language menu (ouvre directement le LanguageSelectionForm)
-                var languageMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.language")) { Tag = "menu.language" };
+                // Language menu
+                var languageMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.language")) 
+                { 
+                    Tag = "menu.language",
+                    Image = SystemIcons.Question.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit
+                };
                 languageMenu.Click += (s, e) => ShowLanguageSelection();
 
-                // Logs menu (remplace View)
-                var logsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs")) { Tag = "menu.view.logs" };
+                // Logs menu
+                var logsMenu = new ToolStripMenuItem(_languageManager.GetTranslation("menu.view.logs")) 
+                { 
+                    Tag = "menu.view.logs",
+                    Image = SystemIcons.Warning.ToBitmap(),
+                    ImageScaling = ToolStripItemImageScaling.SizeToFit
+                };
                 logsMenu.Click += (s, e) => ViewLogs();
 
-                // Nettoyage du menu
+                // Cleanup menu
                 _menuStrip.Items.Clear();
                 _menuStrip.Items.AddRange(new ToolStripItem[] { backupMenu, settingsMenu, languageMenu, logsMenu });
+
+                // Store menu item references for later updates
+                _editBackupMenuItem = editBackupItem;
+                _deleteBackupMenuItem = deleteBackupItem;
+                _runBackupMenuItem = runBackupItem;
+
                 _logger.LogAdminAction("System", "INIT", "Menu strip initialized successfully");
             }
             catch (Exception ex)
@@ -289,7 +350,7 @@ namespace EasySaveV2._0
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing tool strip...");
 
-                // Nettoyage de la barre d'outils (ToolStrip)
+                // Cleanup toolbar (ToolStrip)
                 _toolStrip.Items.Clear();
 
                 _logger.LogAdminAction("System", "INIT", "Tool strip initialized successfully");
@@ -307,7 +368,7 @@ namespace EasySaveV2._0
             {
                 _logger.LogAdminAction("System", "INIT", "Initializing list view...");
 
-                // Nettoyage : évite les doublons de colonnes
+                // Cleanup: avoid duplicate columns
                 _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.name"), Tag = "backup.name", Width = 150 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.source"), Tag = "backup.source", Width = 200 });
@@ -315,6 +376,8 @@ namespace EasySaveV2._0
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.type"), Tag = "backup.type", Width = 100 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.status"), Tag = "backup.status", Width = 100 });
                 _backupListView.Columns.Add(new ColumnHeader { Text = _languageManager.GetTranslation("backup.progress"), Tag = "backup.progress", Width = 150 });
+
+                _backupListView.SelectedIndexChanged += (s, e) => UpdateMenuItemsState();
 
                 _logger.LogAdminAction("System", "INIT", "List view initialized successfully");
             }
@@ -440,6 +503,19 @@ namespace EasySaveV2._0
             }
         }
 
+        private void UpdateMenuItemsState()
+        {
+            bool hasBackups = _backupListView.Items.Count > 0;
+            bool hasSelection = _backupListView.SelectedItems.Count > 0;
+
+            if (_editBackupMenuItem != null)
+                _editBackupMenuItem.Enabled = hasSelection;
+            if (_deleteBackupMenuItem != null)
+                _deleteBackupMenuItem.Enabled = hasSelection;
+            if (_runBackupMenuItem != null)
+                _runBackupMenuItem.Enabled = hasSelection;
+        }
+
         private void UpdateBackupStates()
         {
             try
@@ -500,7 +576,7 @@ namespace EasySaveV2._0
                 }
                 _logger.LogAdminAction("System", "UI", "Refreshing backup list");
                 _backupListView.Items.Clear();
-                // Nettoyage : évite les doublons de colonnes
+                // Cleanup: avoid duplicate columns
                 if (_backupListView.Columns.Count > 0) _backupListView.Columns.Clear();
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.name"), 150);
                 _backupListView.Columns.Add(_languageManager.GetTranslation("backup.source"), 200);
@@ -531,6 +607,7 @@ namespace EasySaveV2._0
                 {
                     _logger.LogAdminAction("System", "UI", "No backups found");
                 }
+                UpdateMenuItemsState();
             }
             catch (Exception ex)
             {
