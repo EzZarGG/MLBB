@@ -15,6 +15,7 @@ namespace EasySaveV2._0.Models
         public long BytesRemaining { get; set; }
         public string CurrentSourceFile { get; set; } = string.Empty;
         public string CurrentTargetFile { get; set; } = string.Empty;
+        public int ProgressPercentage { get; set; }
 
         // Constructor for initial state
         public static StateModel CreateInitialState(string jobName)
@@ -29,7 +30,8 @@ namespace EasySaveV2._0.Models
                 FilesRemaining = 0,
                 BytesRemaining = 0,
                 CurrentSourceFile = string.Empty,
-                CurrentTargetFile = string.Empty
+                CurrentTargetFile = string.Empty,
+                ProgressPercentage = 0
             };
         }
     }

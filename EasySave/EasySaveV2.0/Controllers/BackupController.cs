@@ -4,32 +4,49 @@ using EasySaveV2._0.Models;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using System.IO;
 using EasySaveV2._0;
+using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
+using System.Diagnostics;
+using System.Threading;
 
 namespace EasySaveV2._0.Controllers
 {
-    public class BackupController
+    /// <summary>
+    /// Controller responsible for managing backup operations.
+    /// Handles backup creation, execution, and monitoring.
+    /// </summary>
+    public class BackupController : IDisposable
     {
         private readonly BackupManager _backupManager;
         private readonly SettingsController _settingsController;
         private readonly LogController _logController;
         private readonly LanguageManager _languageManager;
+        private readonly Dictionary<string, StateModel> _backupStates;
+        private bool _isDisposed;
 
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
 
+        /// <summary>
+        /// Initializes a new instance of the BackupController class.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when required components fail to initialize.</exception>
         public BackupController()
         {
             try
             {
                 _backupManager = new BackupManager();
-                _settingsController = new SettingsController();
+                _settingsController = SettingsController.Instance;
                 _logController = new LogController();
                 _languageManager = LanguageManager.Instance;
+                _backupStates = new Dictionary<string, StateModel>();
 
                 if (_backupManager == null || _settingsController == null || _logController == null || _languageManager == null)
                 {
-                    throw new InvalidOperationException("Failed to initialize required components");
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.componentInitFailed"));
                 }
 
                 // Subscribe to BackupManager events
@@ -38,41 +55,110 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                LoggerUtils.EnsureLoggerInitialized();
-                Logger.GetInstance().LogAdminAction("System", "ERROR", $"Error initializing BackupController: {ex.Message}");
-                throw;
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.controllerInitFailed"), ex);
             }
         }
 
-        public void CreateBackup(string name, string sourcePath, string destinationPath, string type)
+        /// <summary>
+        /// Validates source and destination paths for a backup operation.
+        /// </summary>
+        /// <param name="sourcePath">Source directory path</param>
+        /// <param name="destinationPath">Destination directory path</param>
+        /// <exception cref="ArgumentException">Thrown when paths are invalid</exception>
+        private void ValidatePaths(string sourcePath, string destinationPath)
         {
+            if (string.IsNullOrWhiteSpace(sourcePath))
+                throw new ArgumentException(_languageManager.GetTranslation("error.sourcePathEmpty"));
+
+            if (string.IsNullOrWhiteSpace(destinationPath))
+                throw new ArgumentException(_languageManager.GetTranslation("error.destinationPathEmpty"));
+
+            if (!Directory.Exists(sourcePath))
+                throw new ArgumentException(_languageManager.GetTranslation("error.sourcePathNotFound"));
+
             try
             {
+                // Ensure destination directory exists or can be created
+                if (!Directory.Exists(destinationPath))
+                {
+                    Directory.CreateDirectory(destinationPath);
+                }
+
+                // Test write access to destination
+                var testFile = Path.Combine(destinationPath, "test.tmp");
+                File.WriteAllText(testFile, "test");
+                File.Delete(testFile);
+            }
+            catch (Exception ex)
+            {
+                throw new ArgumentException(_languageManager.GetTranslation("error.destinationPathAccess"), ex);
+            }
+
+            // Check if paths are the same
+            if (Path.GetFullPath(sourcePath).Equals(Path.GetFullPath(destinationPath), StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(_languageManager.GetTranslation("error.samePaths"));
+        }
+
+        /// <summary>
+        /// Creates a new backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job</param>
+        /// <param name="sourcePath">Source directory path</param>
+        /// <param name="destinationPath">Destination directory path</param>
+        /// <param name="type">Type of backup (Full or Differential)</param>
+        /// <exception cref="ArgumentException">Thrown when parameters are invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup creation fails</exception>
+        public void CreateBackup(string name, string sourcePath, string destinationPath, string type)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
+            if (!type.Equals("Full", StringComparison.OrdinalIgnoreCase) && 
+                !type.Equals("Differential", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(_languageManager.GetTranslation("error.invalidBackupType"));
+
+            try
+            {
+                ValidatePaths(sourcePath, destinationPath);
+
                 var backup = new Backup
                 {
                     Name = name,
                     SourcePath = sourcePath,
                     TargetPath = destinationPath,
-                    Type = type,
-                    FileLength = 0
+                    Type = type
                 };
 
                 if (!_backupManager.AddJob(backup))
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupExists"));
                 }
-
-                _logController.LogBackupStart(name);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error creating backup: {ex.Message}");
+                _logController.LogBackupError(name, type, ex.Message, sourcePath, destinationPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Edits an existing backup job.
+        /// </summary>
+        /// <param name="name">Current name of the backup job</param>
+        /// <param name="sourcePath">New source directory path</param>
+        /// <param name="destinationPath">New destination directory path</param>
+        /// <param name="type">New backup type</param>
+        /// <exception cref="ArgumentException">Thrown when parameters are invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup update fails</exception>
         public void EditBackup(string name, string sourcePath, string destinationPath, string type)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
+            if (!type.Equals("Full", StringComparison.OrdinalIgnoreCase) && 
+                !type.Equals("Differential", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException(_languageManager.GetTranslation("error.invalidBackupType"));
+
             try
             {
                 var existingBackup = _backupManager.GetJob(name);
@@ -80,6 +166,8 @@ namespace EasySaveV2._0.Controllers
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
+
+                ValidatePaths(sourcePath, destinationPath);
 
                 var updatedBackup = new Backup
                 {
@@ -94,35 +182,59 @@ namespace EasySaveV2._0.Controllers
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
-
-                _logController.LogBackupStart(name);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error editing backup: {ex.Message}");
+                _logController.LogBackupError(name, type, ex.Message, sourcePath, destinationPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Deletes a backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to delete</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup deletion fails</exception>
         public void DeleteBackup(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
-                if (!_backupManager.RemoveJob(name))
+                var backup = GetBackup(name);
+                if (backup == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                _logController.LogBackupComplete(name);
+                var state = GetBackupState(name);
+                if (state?.Status == "Active" || state?.Status == "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupInProgress"));
+                }
+
+                if (!_backupManager.RemoveJob(name))
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error deleting backup: {ex.Message}");
+                var backup = GetBackup(name);
+                _logController.LogBackupError(name, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
                 throw;
             }
         }
 
-        public async Task StartBackup(string name)
+        /// <summary>
+        /// Starts a backup job.
+        /// </summary>
+        /// <param name="backupName">Name of the backup job to start</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup start fails</exception>
+        public async Task StartBackup(string backupName)
         {
             try
             {
@@ -131,122 +243,220 @@ namespace EasySaveV2._0.Controllers
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
                 }
 
-                _logController.LogBackupStart(name);
-                await _backupManager.ExecuteJob(name);
-                _logController.LogBackupComplete(name);
+                var backup = GetBackup(backupName);
+                if (backup == null)
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
+                var state = GetBackupState(backupName);
+                if (state?.Status == "Active" || state?.Status == "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupAlreadyRunning"));
+                }
+
+                // Démarrer la sauvegarde directement
+                await ExecuteBackup(backup);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error starting backup: {ex.Message}");
+                var backup = GetBackup(backupName);
+                _logController.LogBackupError(backupName, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Pauses a running backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to pause</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup pause fails</exception>
         public void PauseBackup(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
-                var state = _backupManager.GetJobState(name);
-                if (state != null && state.Status == "Active")
+                var backup = GetBackup(name);
+                if (backup == null)
                 {
-                    _logController.LogAdminAction(name, "PAUSE", "Backup paused");
-                    // TODO: Implement actual pause functionality
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
+
+                var state = GetBackupState(name);
+                if (state?.Status != "Active")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotRunning"));
+                }
+
+                _backupManager.PauseJob(name);
+                _logController.LogBackupStart(name, backup.Type, "Backup paused", backup.SourcePath, backup.TargetPath);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error pausing backup: {ex.Message}");
+                var backup = GetBackup(name);
+                _logController.LogBackupError(name, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Resumes a paused backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to resume</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup resume fails</exception>
         public void ResumeBackup(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
-                var state = _backupManager.GetJobState(name);
-                if (state != null && state.Status == "Paused")
+                var backup = GetBackup(name);
+                if (backup == null)
                 {
-                    _logController.LogAdminAction(name, "RESUME", "Backup resumed");
-                    // TODO: Implement actual resume functionality
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
+
+                var state = GetBackupState(name);
+                if (state?.Status != "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotPaused"));
+                }
+
+                if (_settingsController.IsBusinessSoftwareRunning())
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
+                }
+
+                _backupManager.ResumeJob(name);
+                _logController.LogBackupStart(name, backup.Type, "Backup resumed", backup.SourcePath, backup.TargetPath);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error resuming backup: {ex.Message}");
+                var backup = GetBackup(name);
+                _logController.LogBackupError(name, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Stops a running or paused backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to stop</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup stop fails</exception>
         public void StopBackup(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
-                var state = _backupManager.GetJobState(name);
-                if (state != null && (state.Status == "Active" || state.Status == "Paused"))
+                var backup = GetBackup(name);
+                if (backup == null)
                 {
-                    _logController.LogAdminAction(name, "STOP", "Backup stopped");
-                    // TODO: Implement actual stop functionality
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
+
+                var state = GetBackupState(name);
+                if (state?.Status != "Active" && state?.Status != "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotRunning"));
+                }
+
+                _backupManager.StopJob(name);
+                _logController.LogBackupError(name, backup.Type, "Backup stopped", backup.SourcePath, backup.TargetPath);
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(name, "ERROR", $"Error stopping backup: {ex.Message}");
+                var backup = GetBackup(name);
+                _logController.LogBackupError(name, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Gets the list of all backup jobs.
+        /// </summary>
+        /// <returns>List of backup jobs</returns>
+        /// <exception cref="InvalidOperationException">Thrown when backup list retrieval fails</exception>
         public List<Backup> GetBackups()
         {
             try
             {
                 if (_backupManager == null)
                 {
-                    throw new InvalidOperationException("BackupManager is not initialized");
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
                 }
                 return new List<Backup>(_backupManager.Jobs);
             }
             catch (Exception ex)
             {
-                _logController?.LogAdminAction("System", "ERROR", $"Error getting backups: {ex.Message}");
-                throw;
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.backupListRetrievalFailed"), ex);
             }
         }
 
+        /// <summary>
+        /// Gets a specific backup job by name.
+        /// </summary>
+        /// <param name="name">Name of the backup job to retrieve</param>
+        /// <returns>The backup job if found, null otherwise</returns>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup retrieval fails</exception>
         public Backup GetBackup(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
                 if (_backupManager == null)
                 {
-                    throw new InvalidOperationException("BackupManager is not initialized");
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
                 }
                 return _backupManager.GetJob(name);
             }
             catch (Exception ex)
             {
-                _logController?.LogAdminAction(name, "ERROR", $"Error getting backup: {ex.Message}");
+                _logController.LogBackupError(name, "Unknown", ex.Message);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Gets the current state of a backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job</param>
+        /// <returns>The current state of the backup job</returns>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when state retrieval fails</exception>
         public StateModel GetBackupState(string name)
         {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
             try
             {
                 if (_backupManager == null)
                 {
-                    throw new InvalidOperationException("BackupManager is not initialized");
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
                 }
                 return _backupManager.GetJobState(name);
             }
             catch (Exception ex)
             {
-                _logController?.LogAdminAction(name, "ERROR", $"Error getting backup state: {ex.Message}");
+                _logController.LogBackupError(name, "Unknown", ex.Message);
                 throw;
             }
         }
 
+        /// <summary>
+        /// Displays the log viewer.
+        /// </summary>
         public void DisplayLogs()
         {
             try
@@ -255,11 +465,14 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction("System", "ERROR", $"Error displaying logs: {ex.Message}");
-                throw;
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.logDisplayFailed"), ex);
             }
         }
 
+        /// <summary>
+        /// Sets the format for log files.
+        /// </summary>
+        /// <param name="format">Desired log format</param>
         public void SetLogFormat(LogFormat format)
         {
             try
@@ -268,11 +481,14 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction("System", "ERROR", $"Error setting log format: {ex.Message}");
-                throw;
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.logFormatChangeFailed"), ex);
             }
         }
 
+        /// <summary>
+        /// Gets the current log format.
+        /// </summary>
+        /// <returns>Current log format</returns>
         public LogFormat GetCurrentLogFormat()
         {
             try
@@ -281,8 +497,7 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction("System", "ERROR", $"Error getting log format: {ex.Message}");
-                throw;
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.logFormatRetrievalFailed"), ex);
             }
         }
 
@@ -294,7 +509,8 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error handling file progress: {ex.Message}");
+                var backup = GetBackup(e.BackupName);
+                _logController.LogBackupError(e.BackupName, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
             }
         }
 
@@ -306,8 +522,158 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                _logController.LogAdminAction(e.BackupName, "ERROR", $"Error handling encryption progress: {ex.Message}");
+                var backup = GetBackup(e.BackupName);
+                _logController.LogBackupError(e.BackupName, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
             }
+        }
+
+        /// <summary>
+        /// Disposes of the BackupController and its resources.
+        /// </summary>
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+        /// <summary>
+        /// Disposes of the BackupController and its resources.
+        /// </summary>
+        /// <param name="disposing">True if called from Dispose, false if called from finalizer</param>
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_isDisposed)
+            {
+                if (disposing)
+                {
+                    _backupManager.FileProgressChanged -= OnFileProgress;
+                    _backupManager.EncryptionProgressChanged -= OnEncryptionProgress;
+                    if (_backupManager is IDisposable disposable)
+                    {
+                        disposable.Dispose();
+                    }
+                }
+                _isDisposed = true;
+            }
+        }
+
+        /// <summary>
+        /// Finalizer for BackupController.
+        /// </summary>
+        ~BackupController()
+        {
+            Dispose(false);
+        }
+
+        /// <summary>
+        /// Starts all backup jobs.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when backup start fails</exception>
+        public async Task StartAllBackups()
+        {
+            try
+            {
+                if (_settingsController.IsBusinessSoftwareRunning())
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
+                }
+
+                var backups = GetBackups();
+                foreach (var backup in backups)
+                {
+                    var state = GetBackupState(backup.Name);
+                    if (state?.Status != "Active" && state?.Status != "Paused")
+                    {
+                        await ExecuteBackup(backup);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("All", "Unknown", ex.Message, null, null);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Starts selected backup jobs.
+        /// </summary>
+        /// <param name="backupNames">List of backup names to execute</param>
+        /// <exception cref="InvalidOperationException">Thrown when backup start fails</exception>
+        public async Task StartSelectedBackups(List<string> backupNames)
+        {
+            try
+            {
+                if (_settingsController.IsBusinessSoftwareRunning())
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
+                }
+
+                foreach (var backupName in backupNames)
+                {
+                    var backup = GetBackup(backupName);
+                    if (backup != null)
+                    {
+                        var state = GetBackupState(backupName);
+                        if (state?.Status != "Active" && state?.Status != "Paused")
+                        {
+                            await ExecuteBackup(backup);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("Selected", "Unknown", ex.Message, null, null);
+                throw;
+            }
+        }
+
+        private async Task ExecuteBackup(Backup backup)
+        {
+            try
+            {
+                var state = GetBackupState(backup.Name);
+                if (state == null)
+                {
+                    state = StateModel.CreateInitialState(backup.Name);
+                    state.Status = "Active";
+                    _backupStates[backup.Name] = state;
+                }
+                else
+                {
+                    state.Status = "Active";
+                }
+
+                _logController.LogBackupStart(backup.Name, backup.Type, "Backup started", backup.SourcePath, backup.TargetPath);
+                state.LastActionTime = DateTime.Now;
+                state.TotalFilesCount = 0;
+                state.FilesRemaining = 0;
+                state.TotalFilesSize = 0;
+                state.BytesRemaining = 0;
+
+                // Lancer la sauvegarde via le BackupManager
+                await _backupManager.ExecuteJob(backup.Name);
+
+                state.Status = "Completed";
+                state.LastActionTime = DateTime.Now;
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError(backup.Name, backup.Type, ex.Message, backup.SourcePath, backup.TargetPath);
+                var state = GetBackupState(backup.Name);
+                if (state != null)
+                {
+                    state.Status = "Error";
+                    state.LastActionTime = DateTime.Now;
+                }
+                throw;
+            }
+        }
+
+        private void LogFileOperation(string backupName, string sourcePath, string targetPath, long fileSize, long transferTime, long encryptionTime, string backupType)
+        {
+            _logController.LogFileOperation(backupName, backupType, sourcePath, targetPath, fileSize, transferTime, encryptionTime);
         }
     }
 }

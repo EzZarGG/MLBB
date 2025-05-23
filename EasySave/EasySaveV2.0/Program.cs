@@ -4,90 +4,133 @@ using System.Windows.Forms;
 using EasySaveLogging;
 using EasySaveV2._0.Managers;
 using EasySaveV2._0.Views;
+using EasySaveV2._0.Models;
 
 namespace EasySaveV2._0
 {
+    /// <summary>
+    /// Main entry point for the EasySave application.
+    /// Handles application initialization, configuration, and error management.
+    /// </summary>
     internal static class Program
     {
+        private static readonly LanguageManager _languageManager = LanguageManager.Instance;
+        private static readonly Logger _logger = Logger.GetInstance();
+
         /// <summary>
-        ///  The main entry point for the application.
+        /// Main entry point for the application.
         /// </summary>
         [STAThread]
         static void Main()
         {
             try
             {
-                // Get configured log format
-                var logFormat = Config.GetLogFormat();
-                DebugLog($"Main - Initial log format from config: {logFormat}");
-                
-                // Ensure log directory exists with correct case
-                var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
-                if (!Directory.Exists(logDir))
-                {
-                    DebugLog("Main - Creating log directory");
-                    Directory.CreateDirectory(logDir);
-                }
+                // Application configuration
+                ConfigureApplication();
 
-                // Initialize logger with correct format
-                var logger = Logger.GetInstance();
-                DebugLog($"Main - Setting initial format to: {logFormat}");
-                logger.SetLogFormat(logFormat);
-                
-                // Set log file path with correct name and extension
-                string logFileName = "log" + (logFormat == LogFormat.JSON ? ".json" : ".xml");
-                string logPath = Path.Combine(logDir, logFileName);
-                DebugLog($"Main - Setting log path to: {logPath}");
-                logger.SetLogFilePath(logPath);
+                // Critical components initialization
+                InitializeComponents();
 
-                // Delete any old application.json file if it exists
-                string oldLogPath = Path.Combine(logDir, "application.json");
-                if (File.Exists(oldLogPath))
-                {
-                    DebugLog($"Main - Deleting old log file: {oldLogPath}");
-                    try
-                    {
-                        File.Delete(oldLogPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        DebugLog($"Main - Error deleting old log file: {ex.Message}");
-                    }
-                }
-
-                Application.SetHighDpiMode(HighDpiMode.SystemAware);
-                Application.EnableVisualStyles();
-                Application.SetCompatibleTextRenderingDefault(false);
-
-                // Configure unhandled exception handling
-                Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
-                Application.ThreadException += Application_ThreadException;
-                AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
-
-                // Ensure required directories exist
-                EnsureDirectoriesExist();
-
-                // Initialize language selection
-                using (var languageForm = new LanguageSelectionForm())
-                {
-                    if (languageForm.ShowDialog() == DialogResult.OK)
-                    {
-                        // Start the main application
-                        Application.Run(new MainForm());
-                    }
-                }
+                // User interface startup
+                StartUserInterface();
             }
             catch (Exception ex)
             {
-                HandleException(ex);
+                HandleCriticalError(ex);
             }
         }
 
+        /// <summary>
+        /// Configures the basic application settings.
+        /// </summary>
+        private static void ConfigureApplication()
+        {
+            // User interface configuration
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+
+            // Exception handling configuration
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += Application_ThreadException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        }
+
+        /// <summary>
+        /// Initializes critical application components.
+        /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when initialization fails.</exception>
+        private static void InitializeComponents()
+        {
+            try
+            {
+                // Create required directories
+                EnsureDirectoriesExist();
+
+                // Logger configuration
+                ConfigureLogger();
+
+                // Critical components validation
+                ValidateCriticalComponents();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException(
+                    _languageManager.GetTranslation("error.initFailed"), ex);
+            }
+        }
+
+        /// <summary>
+        /// Configures the logging system.
+        /// </summary>
+        private static void ConfigureLogger()
+        {
+            var logFormat = Config.GetLogFormat();
+            var logDir = Config.GetLogDirectory();
+            var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
+            
+            _logger.SetLogFormat(logFormat);
+            _logger.SetLogFilePath(logPath);
+        }
+
+        /// <summary>
+        /// Validates that all critical components are properly initialized.
+        /// </summary>
+        private static void ValidateCriticalComponents()
+        {
+            if (_languageManager == null)
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.languageManagerInitFailed"));
+            
+            if (_logger == null)
+                throw new InvalidOperationException(_languageManager.GetTranslation("error.loggerInitFailed"));
+        }
+
+        /// <summary>
+        /// Starts the application's user interface.
+        /// </summary>
+        private static void StartUserInterface()
+        {
+            using (var languageForm = new LanguageSelectionForm())
+            {
+                if (languageForm.ShowDialog() == DialogResult.OK)
+                {
+                    Application.Run(new MainForm());
+                }
+                else
+                {
+                    _logger.LogAdminAction("Program", "INFO", "Language selection cancelled by user");
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ensures all required directories exist.
+        /// </summary>
         private static void EnsureDirectoriesExist()
         {
             var directories = new[]
             {
-                Path.Combine(AppContext.BaseDirectory, "Logs"),
+                Config.GetLogDirectory(),
                 Path.Combine(AppContext.BaseDirectory, "State"),
                 Path.Combine(AppContext.BaseDirectory, "Ressources")
             };
@@ -97,45 +140,56 @@ namespace EasySaveV2._0
                 if (!Directory.Exists(directory))
                 {
                     Directory.CreateDirectory(directory);
+                    _logger.LogAdminAction("Program", "INFO", $"Created directory: {directory}");
                 }
             }
         }
 
+        /// <summary>
+        /// Handles unhandled exceptions from the main thread.
+        /// </summary>
         private static void Application_ThreadException(object? sender, ThreadExceptionEventArgs e)
         {
-            MessageBox.Show($"Une erreur inattendue s'est produite : {e.Exception.Message}", "Erreur", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            HandleException(e.Exception, false);
         }
 
+        /// <summary>
+        /// Handles unhandled exceptions from the application domain.
+        /// </summary>
         private static void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
             {
-                MessageBox.Show($"Une erreur critique s'est produite : {ex.Message}", "Erreur Critique", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                HandleException(ex, e.IsTerminating);
             }
         }
 
-        private static void HandleException(Exception ex)
+        /// <summary>
+        /// Handles an exception appropriately based on its type.
+        /// </summary>
+        /// <param name="ex">The exception to handle</param>
+        /// <param name="isTerminating">Indicates whether the exception is fatal</param>
+        private static void HandleException(Exception ex, bool isTerminating)
         {
             try
             {
-                // Log the exception
-                Logger.GetInstance().LogAdminAction(
-                    "System",
-                    "ERROR",
-                    $"Unhandled exception: {ex.Message}\nStack trace: {ex.StackTrace}"
-                );
+                _logger.LogAdminAction("Program", "ERROR", 
+                    $"{(isTerminating ? "Critical" : "Unhandled")} error: {ex}");
 
-                // Show error message to user
+                var message = isTerminating
+                    ? _languageManager.GetTranslation("error.critical")
+                    : _languageManager.GetTranslation("error.unhandled");
+
                 MessageBox.Show(
-                    $"An error occurred: {ex.Message}\n\nPlease check the logs for more details.",
-                    "Error",
+                    message.Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("error.title"),
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );
             }
             catch
             {
-                // If logging fails, at least show a basic error message
+                // If logging fails, display a basic error message
                 MessageBox.Show(
                     "A critical error occurred. The application will now exit.",
                     "Critical Error",
@@ -144,21 +198,39 @@ namespace EasySaveV2._0
                 );
             }
 
-            // Exit the application
-            Application.Exit();
+            if (isTerminating)
+            {
+                Application.Exit();
+            }
         }
 
-        private static void DebugLog(string message)
+        /// <summary>
+        /// Handles a critical error that prevents application startup.
+        /// </summary>
+        /// <param name="ex">The critical exception</param>
+        private static void HandleCriticalError(Exception ex)
         {
             try
             {
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-                var logMessage = $"[{timestamp}] {message}{Environment.NewLine}";
-                File.AppendAllText(Path.Combine(AppContext.BaseDirectory, "debug.log"), logMessage);
+                MessageBox.Show(
+                    _languageManager.GetTranslation("error.startupFailed").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("error.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
             catch
             {
-                // Ignore debug logging errors
+                MessageBox.Show(
+                    "Failed to start the application. Please check the logs for details.",
+                    "Startup Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+            finally
+            {
+                Application.Exit();
             }
         }
     }

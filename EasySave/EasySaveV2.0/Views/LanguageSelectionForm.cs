@@ -8,14 +8,16 @@ namespace EasySaveV2._0.Views
     {
         private readonly LanguageManager _languageManager;
         private bool _languageSelected;
+        private readonly bool _isInitialLaunch;
         private Label _languageLabel = new();
         private ComboBox _languageComboBox = new();
         private Button _okButton = new();
         private Button _cancelButton = new();
 
-        public LanguageSelectionForm()
+        public LanguageSelectionForm(bool isInitialLaunch = false)
         {
             _languageManager = LanguageManager.Instance;
+            _isInitialLaunch = isInitialLaunch;
             InitializeComponent();
             _languageSelected = false;
 
@@ -199,11 +201,11 @@ namespace EasySaveV2._0.Views
 
         private void OnCancelClick(object? sender, EventArgs e)
         {
-            if (!_languageSelected)
+            if (_isInitialLaunch && !_languageSelected)
             {
                 var result = MessageBox.Show(
-                    _languageManager.GetTranslation("language.selection.exit.confirm"),
-                    _languageManager.GetTranslation("language.selection.exit.title"),
+                    _languageManager.GetTranslation("language.selection.exitConfirm"),
+                    _languageManager.GetTranslation("language.selection.exitTitle"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question
                 );
@@ -211,13 +213,12 @@ namespace EasySaveV2._0.Views
                 if (result == DialogResult.Yes)
                 {
                     Application.Exit();
+                    return;
                 }
             }
-            else
-            {
-                DialogResult = DialogResult.Cancel;
-                Close();
-            }
+            
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

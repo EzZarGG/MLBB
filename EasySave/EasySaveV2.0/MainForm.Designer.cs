@@ -52,7 +52,7 @@
             this._menuStrip.Dock = System.Windows.Forms.DockStyle.Top;
             this._menuStrip.Location = new System.Drawing.Point(0, 0);
             this._menuStrip.Name = "_menuStrip";
-            this._menuStrip.Size = new System.Drawing.Size(1024, 24);
+            this._menuStrip.Size = new System.Drawing.Size(1280, 24);
             this._menuStrip.TabIndex = 0;
             // 
             // _toolStrip
@@ -60,7 +60,7 @@
             this._toolStrip.Dock = System.Windows.Forms.DockStyle.Top;
             this._toolStrip.Location = new System.Drawing.Point(0, 24);
             this._toolStrip.Name = "_toolStrip";
-            this._toolStrip.Size = new System.Drawing.Size(1024, 25);
+            this._toolStrip.Size = new System.Drawing.Size(1280, 25);
             this._toolStrip.TabIndex = 1;
             // 
             // _backupListView
@@ -68,10 +68,10 @@
             this._backupListView.Dock = System.Windows.Forms.DockStyle.Fill;
             this._backupListView.FullRowSelect = true;
             this._backupListView.GridLines = true;
-            this._backupListView.Location = new System.Drawing.Point(0, 49);
+            this._backupListView.Location = new System.Drawing.Point(0, 24);
             this._backupListView.MultiSelect = false;
             this._backupListView.Name = "_backupListView";
-            this._backupListView.Size = new System.Drawing.Size(1024, 699);
+            this._backupListView.Size = new System.Drawing.Size(1280, 756);
             this._backupListView.TabIndex = 2;
             this._backupListView.UseCompatibleStateImageBehavior = false;
             this._backupListView.View = System.Windows.Forms.View.Details;
@@ -81,9 +81,9 @@
             this._statusStrip.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
                 this._statusLabel
             });
-            this._statusStrip.Location = new System.Drawing.Point(0, 748);
+            this._statusStrip.Location = new System.Drawing.Point(0, 780);
             this._statusStrip.Name = "_statusStrip";
-            this._statusStrip.Size = new System.Drawing.Size(1024, 20);
+            this._statusStrip.Size = new System.Drawing.Size(1280, 20);
             this._statusStrip.TabIndex = 3;
             // 
             // _statusLabel
@@ -96,32 +96,33 @@
             // _progressBar
             // 
             this._progressBar.Dock = System.Windows.Forms.DockStyle.Bottom;
-            this._progressBar.Location = new System.Drawing.Point(0, 728);
+            this._progressBar.Location = new System.Drawing.Point(0, 760);
             this._progressBar.Name = "_progressBar";
-            this._progressBar.Size = new System.Drawing.Size(1024, 20);
+            this._progressBar.Size = new System.Drawing.Size(1280, 20);
             this._progressBar.TabIndex = 4;
             this._progressBar.Visible = false;
             // 
             // _updateTimer
             // 
             this._updateTimer.Interval = 1000;
-            this._updateTimer.Tick += new System.EventHandler(this.OnUpdateTimerTick);
+            this._updateTimer.Tick += new System.EventHandler(async (s, e) => await UpdateBackupStatesAsync());
             // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(1024, 768);
+            this.ClientSize = new System.Drawing.Size(1280, 800);
+            this.MinimumSize = new System.Drawing.Size(1024, 600);
             this.Controls.Add(this._backupListView);
             this.Controls.Add(this._progressBar);
             this.Controls.Add(this._statusStrip);
-            this.Controls.Add(this._toolStrip);
             this.Controls.Add(this._menuStrip);
             this.Icon = System.Drawing.SystemIcons.Application;
             this.MainMenuStrip = this._menuStrip;
             this.Name = "MainForm";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterScreen;
             this.Text = "EasySave";
+            this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this._statusStrip.ResumeLayout(false);
             this._statusStrip.PerformLayout();
             this.ResumeLayout(false);

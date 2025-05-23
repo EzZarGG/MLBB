@@ -102,7 +102,7 @@ namespace EasySaveV2._0
 
 
         /// <summary>
-        /// Retourne la clé de chiffrement (UTF8) ou un tableau vide si non configurée.
+        /// Returns the encryption key (UTF8) or an empty array if not configured.
         /// </summary>
         public static byte[] GetEncryptionKey()
         {
@@ -112,12 +112,12 @@ namespace EasySaveV2._0
 
             var b = Encoding.UTF8.GetBytes(key);
             if (b.Length < 8)
-                throw new InvalidOperationException("La clé doit faire au moins 8 octets.");
+                throw new InvalidOperationException("The key must be at least 8 bytes long.");
             return b;
         }
 
         /// <summary>
-        /// Liste des extensions (avec '.') à chiffrer.
+        /// List of extensions (with '.') to encrypt.
         /// </summary>
         public static HashSet<string> GetEncryptionExtensions()
         {
