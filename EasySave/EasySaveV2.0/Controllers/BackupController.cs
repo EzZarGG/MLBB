@@ -255,7 +255,7 @@ namespace EasySaveV2._0.Controllers
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupAlreadyRunning"));
                 }
 
-                // Démarrer la sauvegarde directement
+                // Start the backup directly
                 await ExecuteBackup(backup);
             }
             catch (Exception ex)

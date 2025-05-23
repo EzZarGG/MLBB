@@ -16,35 +16,37 @@ namespace EasySaveV2._0.Managers
     /// <summary>
     /// Manages backup operations including creation, execution, and monitoring of backup jobs.
     /// Handles file operations, encryption, and logging of backup activities.
+    /// Provides comprehensive backup management with support for differential backups,
+    /// encryption, progress tracking, and state management.
     /// </summary>
     public class BackupManager
     {
-        // Constants
-        private const int MAX_BACKUPS = 5;
-        private const int BUFFER_SIZE = 8192; // 8KB buffer for file operations
+        // Configuration constants
+        private const int MAX_BACKUPS = 5;  // Maximum number of backup jobs allowed
+        private const int BUFFER_SIZE = 8192;  // 8KB buffer size for file operations
 
-        // File paths
-        private readonly string _backupFilePath;
-        private readonly string _stateFile;
+        // File paths for persistent storage
+        private readonly string _backupFilePath;  // Path to store backup job configurations
+        private readonly string _stateFile;       // Path to store backup job states
 
-        // Collections and state management
-        private readonly List<Backup> _backups;
-        private readonly Dictionary<string, StateModel> _jobStates;
-        private readonly JsonSerializerOptions _jsonOptions;
+        // Core data structures
+        private readonly List<Backup> _backups;           // Collection of all backup jobs
+        private readonly Dictionary<string, StateModel> _jobStates;  // Current state of each backup job
+        private readonly JsonSerializerOptions _jsonOptions;  // JSON serialization settings
 
-        // Controllers and services
-        private readonly LogController _logController;
-        private readonly EncryptionKey _encryptionKey;
-        private readonly Logger _logger;
+        // Service dependencies
+        private readonly LogController _logController;  // Handles logging operations
+        private readonly EncryptionKey _encryptionKey;  // Manages encryption keys
+        private readonly Logger _logger;               // Main logging service
 
-        // Thread synchronization
-        private readonly object _stateLock = new();
-        private readonly object _backupLock = new();
-        private readonly Dictionary<string, CancellationTokenSource> _jobCancellationTokens = new();
+        // Thread synchronization primitives
+        private readonly object _stateLock = new();     // Lock for state modifications
+        private readonly object _backupLock = new();    // Lock for backup list modifications
+        private readonly Dictionary<string, CancellationTokenSource> _jobCancellationTokens = new();  // Cancellation tokens for running jobs
 
-        // Events for progress tracking
-        public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
-        public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
+        // Progress tracking events
+        public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
+        public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
 
         /// <summary>
         /// Initializes a new instance of the BackupManager class.
@@ -75,7 +77,8 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Loads or initializes the state for all backup jobs.
-        /// Attempts to load existing states from file, falls back to initial states if needed.
+        /// Attempts to load existing states from persistent storage,
+        /// falls back to initial states if no saved state exists.
         /// </summary>
         private void LoadOrInitializeStates()
         {
@@ -113,6 +116,7 @@ namespace EasySaveV2._0.Managers
         /// <summary>
         /// Loads backup jobs from configuration or JSON file.
         /// Prioritizes loading from Config, falls back to JSON file if needed.
+        /// Ensures data consistency by saving loaded backups.
         /// </summary>
         private void LoadBackups()
         {
@@ -149,7 +153,8 @@ namespace EasySaveV2._0.Managers
         }
 
         /// <summary>
-        /// Saves the current state of all backup jobs to the state file.
+        /// Saves the current state of all backup jobs to persistent storage.
+        /// Serializes job states to JSON format for durability.
         /// </summary>
         private void SaveStates(List<StateModel> states)
         {
@@ -166,6 +171,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Saves the current list of backup jobs to both JSON file and Config.
+        /// Ensures backup configurations are persisted across application restarts.
         /// </summary>
         private void SaveBackups()
         {
@@ -183,9 +189,11 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Updates the state of a specific backup job.
+        /// Thread-safe operation that persists state changes.
         /// </summary>
         /// <param name="jobName">Name of the backup job to update</param>
         /// <param name="updateAction">Action to perform on the job's state</param>
+        /// <exception cref="ArgumentNullException">Thrown when jobName is null or empty</exception>
         private void UpdateJobState(string jobName, Action<StateModel> updateAction)
         {
             if (string.IsNullOrEmpty(jobName))
@@ -214,9 +222,12 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Adds a new backup job to the manager.
+        /// Validates job parameters and ensures uniqueness of job names.
         /// </summary>
-        /// <param name="job">The backup job to add</param>
-        /// <returns>True if the job was added successfully, false otherwise</returns>
+        /// <param name="job">The backup job configuration to add</param>
+        /// <returns>True if the job was added successfully, false if maximum jobs reached or name exists</returns>
+        /// <exception cref="ArgumentNullException">Thrown when job is null</exception>
+        /// <exception cref="ArgumentException">Thrown when job name is null or empty</exception>
         public bool AddJob(Backup job)
         {
             if (job == null)
@@ -272,9 +283,10 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Removes a backup job from the manager.
+        /// Cleans up associated resources and logs the deletion.
         /// </summary>
         /// <param name="name">Name of the backup job to remove</param>
-        /// <returns>True if the job was removed successfully, false otherwise</returns>
+        /// <returns>True if the job was removed successfully, false if not found</returns>
         public bool RemoveJob(string name)
         {
             try
@@ -287,7 +299,7 @@ namespace EasySaveV2._0.Managers
                     return false;
                 }
 
-                // Créer un log de suppression avant de supprimer la sauvegarde
+                // Create a deletion log before removing the backup
                 var deleteLogEntry = new LogEntry
                 {
                     Timestamp = DateTime.Now,
@@ -297,11 +309,11 @@ namespace EasySaveV2._0.Managers
                     TargetPath = backup.TargetPath,
                     Message = $"Backup job deleted. Details: Type={backup.Type}, Source={backup.SourcePath}, Target={backup.TargetPath}",
                     LogType = "INFO",
-                    ActionType = "BACKUP_DELETE"  // Nouveau type d'action pour la suppression
+                    ActionType = "BACKUP_DELETE"  // New action type for deleting
                 };
                 _logger.AddLogEntry(deleteLogEntry);
 
-                // Supprimer la sauvegarde
+                // Remove the backup
                 _backups.Remove(backup);
                 _jobStates.Remove(name);
                 SaveBackups();
@@ -319,10 +331,11 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Updates an existing backup job with new settings.
+        /// Maintains job history and logs configuration changes.
         /// </summary>
         /// <param name="name">Current name of the backup job</param>
-        /// <param name="updated">Updated backup job settings</param>
-        /// <returns>True if the job was updated successfully, false otherwise</returns>
+        /// <param name="updated">Updated backup job configuration</param>
+        /// <returns>True if the job was updated successfully, false if not found</returns>
         public bool UpdateJob(string name, Backup updated)
         {
             try
@@ -335,10 +348,10 @@ namespace EasySaveV2._0.Managers
                     return false;
                 }
 
-                // Sauvegarder l'ancienne configuration pour le log
+                // Save the old configuration for log
                 var oldBackup = _backups[index];
 
-                // Mettre à jour la sauvegarde
+                // Update the backup
                 _backups[index] = updated;
                 Config.SaveJobs(_backups);
 
@@ -352,7 +365,7 @@ namespace EasySaveV2._0.Managers
                     SaveStates(_jobStates.Values.ToList());
                 }
 
-                // Créer un nouveau log pour l'édition
+                // Create a new log for the edit
                 var updateLogEntry = new LogEntry
                 {
                     Timestamp = DateTime.Now,
@@ -366,7 +379,7 @@ namespace EasySaveV2._0.Managers
                              $"{(oldBackup.SourcePath != updated.SourcePath ? $"Source: {oldBackup.SourcePath} -> {updated.SourcePath}, " : "")}" +
                              $"{(oldBackup.TargetPath != updated.TargetPath ? $"Target: {oldBackup.TargetPath} -> {updated.TargetPath}" : "")}",
                     LogType = "INFO",
-                    ActionType = "BACKUP_EDIT"  // Nouveau type d'action pour l'édition
+                    ActionType = "BACKUP_EDIT"  // New action type for editing
                 };
                 _logger.AddLogEntry(updateLogEntry);
                 return true;
@@ -380,11 +393,11 @@ namespace EasySaveV2._0.Managers
         }
 
         /// <summary>
-        /// Gets a backup job by its name.
+        /// Retrieves a backup job by its name.
         /// </summary>
         /// <param name="name">Name of the backup job to retrieve</param>
         /// <returns>The backup job if found, null otherwise</returns>
-        public Backup GetJob(string name)
+        public Backup? GetJob(string name)
         {
             return _backups.FirstOrDefault(b => b.Name == name);
         }
@@ -394,13 +407,14 @@ namespace EasySaveV2._0.Managers
         /// </summary>
         /// <param name="name">Name of the backup job</param>
         /// <returns>The current state of the backup job, null if not found</returns>
-        public StateModel GetJobState(string name)
+        public StateModel? GetJobState(string name)
         {
             return _jobStates.TryGetValue(name, out var state) ? state : null;
         }
 
         /// <summary>
         /// Decrypts a file using AES encryption.
+        /// Tracks and reports decryption progress.
         /// </summary>
         /// <param name="sourceFile">Path to the encrypted file</param>
         /// <param name="targetFile">Path where the decrypted file will be saved</param>
@@ -449,6 +463,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Encrypts a file using AES encryption.
+        /// Tracks and reports encryption progress.
         /// </summary>
         /// <param name="sourceFile">Path to the file to encrypt</param>
         /// <param name="targetFile">Path where the encrypted file will be saved</param>
@@ -497,6 +512,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Pauses a running backup job.
+        /// Saves the current state and allows for later resumption.
         /// </summary>
         /// <param name="name">Name of the backup job to pause</param>
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found or not running</exception>
@@ -558,6 +574,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Resumes a paused backup job.
+        /// Restores the job state and continues from the last saved point.
         /// </summary>
         /// <param name="name">Name of the backup job to resume</param>
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found or not paused</exception>
@@ -619,6 +636,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Stops a running or paused backup job.
+        /// Cleans up resources and updates job state.
         /// </summary>
         /// <param name="name">Name of the backup job to stop</param>
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
@@ -679,8 +697,10 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Executes a backup job, copying and optionally encrypting files.
+        /// Handles differential backups, progress tracking, and error management.
         /// </summary>
         /// <param name="name">Name of the backup job to execute</param>
+        /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
         public async Task ExecuteJob(string name)
         {
             var backup = GetJob(name);
@@ -748,7 +768,7 @@ namespace EasySaveV2._0.Managers
                     {
                         // Ensure target directory exists
                         var dir = Path.GetDirectoryName(targetFile);
-                        if (!Directory.Exists(dir))
+                        if (dir != null && !Directory.Exists(dir))
                         {
                             Directory.CreateDirectory(dir);
                         }
@@ -847,16 +867,16 @@ namespace EasySaveV2._0.Managers
                     state.CurrentTargetFile = "";
                 });
 
-                // Ne pas envoyer d'événement de progression final si la sauvegarde est terminée normalement
+                // Do not send final progress event if backup completed normally
                 if (hasErrors)
                 {
-                    // Envoyer un événement de progression uniquement en cas d'erreur
+                    // Send progress event only in case of error
                     FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
                         name,
                         backup.SourcePath,
                         backup.TargetPath,
                         0,
-                        (int)(filesProcessed * 100.0 / totalFiles),  // Garder le dernier pourcentage réel
+                        (int)(filesProcessed * 100.0 / totalFiles),  // Keep the last real percentage
                         bytesTransferred,
                         totalBytes,
                         filesProcessed,
@@ -937,9 +957,10 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Formats a file size in bytes to a human-readable string.
+        /// Converts to appropriate unit (B, KB, MB, GB, TB).
         /// </summary>
         /// <param name="bytes">Size in bytes</param>
-        /// <returns>Formatted string with appropriate unit (B, KB, MB, GB, TB)</returns>
+        /// <returns>Formatted string with appropriate unit</returns>
         private string FormatFileSize(long bytes)
         {
             string[] sizes = { "B", "KB", "MB", "GB", "TB" };
@@ -955,9 +976,11 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Restores a backup to a specified target location.
+        /// Handles decryption if the backup was encrypted.
         /// </summary>
         /// <param name="name">Name of the backup to restore</param>
         /// <param name="targetPath">Path where the backup will be restored</param>
+        /// <exception cref="InvalidOperationException">Thrown when backup is not found</exception>
         public async Task RestoreJob(string name, string targetPath)
         {
             var backup = GetJob(name);
@@ -1004,7 +1027,7 @@ namespace EasySaveV2._0.Managers
 
                     // Ensure target directory exists
                     var dir = Path.GetDirectoryName(targetFile);
-                    if (!Directory.Exists(dir))
+                    if (dir != null && !Directory.Exists(dir))
                     {
                         Directory.CreateDirectory(dir);
                     }
@@ -1174,6 +1197,7 @@ namespace EasySaveV2._0.Managers
 
         /// <summary>
         /// Displays all logs using the log controller.
+        /// Provides access to the backup operation history.
         /// </summary>
         public void DisplayLogs()
         {
