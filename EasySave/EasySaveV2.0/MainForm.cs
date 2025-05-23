@@ -116,6 +116,11 @@ namespace EasySaveV2._0
                             var state = _backupController.GetBackupState(backup.Name);
                             if (state != null)
                             {
+                                if (state.Status == "Completed" || state.Status == "Error")
+                                {
+                                    continue;
+                                }
+
                                 if (InvokeRequired)
                                 {
                                     Invoke(new Action(() => UpdateBackupItem(item, state)));
@@ -146,14 +151,24 @@ namespace EasySaveV2._0
             item.SubItems[4].Text = state.Status;
             item.SubItems[5].Text = $"{state.ProgressPercentage}%";
 
-            // Update item color based on status
             item.BackColor = state.Status switch
             {
                 "Active" => Color.LightGreen,
                 "Paused" => Color.LightYellow,
                 "Error" => Color.LightPink,
+                "Completed" => Color.LightBlue,
                 _ => SystemColors.Window
             };
+
+            if (state.Status == "Active" || state.Status == "Completed")
+            {
+                _progressBar.Value = Math.Min(Math.Max(state.ProgressPercentage, 0), 100);
+                _progressBar.Visible = true;
+            }
+            else
+            {
+                _progressBar.Visible = false;
+            }
         }
 
         private void RefreshBackupList()
@@ -181,13 +196,14 @@ namespace EasySaveV2._0
         private ListViewItem CreateBackupListItem(Backup backup)
         {
             var item = new ListViewItem(backup.Name) { Tag = backup };
+            var state = _backupController.GetBackupState(backup.Name);
             item.SubItems.AddRange(new[]
             {
                 backup.SourcePath,
                 backup.TargetPath,
                 backup.Type,
-                "Ready",
-                "0%"
+                state?.Status ?? "Ready",
+                $"{state?.ProgressPercentage ?? 0}%"
             });
             return item;
         }
@@ -605,18 +621,15 @@ namespace EasySaveV2._0
 
         private string GetStatusText(string status)
         {
-            switch (status?.ToLower() ?? "pending")
+            return status.ToLower() switch
             {
-                case "active":
-                    return _languageManager.GetTranslation("backup.state.running");
-                case "completed":
-                    return _languageManager.GetTranslation("backup.state.completed");
-                case "error":
-                    return _languageManager.GetTranslation("backup.state.error");
-                case "pending":
-                default:
-                    return _languageManager.GetTranslation("backup.state.waiting");
-            }
+                "ready" => _languageManager.GetTranslation("status.ready"),
+                "active" => _languageManager.GetTranslation("status.active"),
+                "completed" => _languageManager.GetTranslation("status.completed"),
+                "error" => _languageManager.GetTranslation("status.error"),
+                "paused" => _languageManager.GetTranslation("status.paused"),
+                _ => _languageManager.GetTranslation("status.ready")
+            };
         }
 
         private void AddJob()
@@ -921,16 +934,28 @@ namespace EasySaveV2._0
                 Invoke(new Action(() => OnFileProgressChanged(sender, e)));
                 return;
             }
-            foreach (ListViewItem item in _backupListView.Items)
+
+            if (_backupItems.TryGetValue(e.BackupName, out var item))
             {
-                if (item.Text == e.BackupName)
+                // Mettre à jour l'état du backup
+                var state = new StateModel
                 {
-                    if (item.SubItems.Count > 5)
-                        item.SubItems[5].Text = $"{e.ProgressPercentage}%";
-                    break;
+                    Status = e.ProgressPercentage == 100 ? "Completed" : "Active",
+                    ProgressPercentage = e.ProgressPercentage
+                };
+
+                // Si l'état est Completed, désactiver le timer pour ce backup
+                if (state.Status == "Completed")
+                {
+                    _updateTimer.Stop();
                 }
+
+                UpdateBackupItem(item, state);
+
+                // Mettre à jour la barre de progression
+                _progressBar.Value = Math.Min(Math.Max(e.ProgressPercentage, 0), 100);
+                _progressBar.Visible = state.Status == "Active";
             }
-            _progressBar.Value = Math.Min(Math.Max(e.ProgressPercentage, 0), 100);
         }
 
         private void OnEncryptionProgressChanged(object? sender, EncryptionProgressEventArgs e)

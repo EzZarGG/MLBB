@@ -84,28 +84,32 @@ namespace EasySaveV2._0.Managers
         {
             try
             {
-                // Initialize states for all existing jobs
-                foreach (var job in _backups.Where(j => !string.IsNullOrEmpty(j.Name)))
+                lock (_stateLock)
                 {
-                    _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
-                }
-
-                // Load existing states if available
-                if (File.Exists(_stateFile))
-                {
-                    var json = File.ReadAllText(_stateFile);
-                    var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
-
-                    if (loadedStates != null)
+                    // Load existing states if available
+                    if (File.Exists(_stateFile))
                     {
-                        foreach (var state in loadedStates.Where(s => !string.IsNullOrEmpty(s.Name) && _jobStates.ContainsKey(s.Name)))
+                        var json = File.ReadAllText(_stateFile);
+                        var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
+
+                        if (loadedStates != null)
                         {
-                            _jobStates[state.Name] = state;
+                            foreach (var state in loadedStates.Where(s => !string.IsNullOrEmpty(s.Name)))
+                            {
+                                _jobStates[state.Name] = state;
+                            }
                         }
                     }
-                }
 
-                SaveStates(_jobStates.Values.ToList());
+                    // Initialize states only for jobs that don't have a state yet
+                    foreach (var job in _backups.Where(j => !string.IsNullOrEmpty(j.Name) && !_jobStates.ContainsKey(j.Name)))
+                    {
+                        _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
+                    }
+
+                    // Sauvegarder les états
+                    SaveStates(_jobStates.Values.ToList());
+                }
             }
             catch (Exception)
             {
@@ -160,8 +164,11 @@ namespace EasySaveV2._0.Managers
         {
             try
             {
-                var json = JsonSerializer.Serialize(states, _jsonOptions);
-                File.WriteAllText(_stateFile, json);
+                lock (_stateLock)
+                {
+                    var json = JsonSerializer.Serialize(states, _jsonOptions);
+                    File.WriteAllText(_stateFile, json);
+                }
             }
             catch (Exception)
             {
@@ -194,28 +201,35 @@ namespace EasySaveV2._0.Managers
         /// <param name="jobName">Name of the backup job to update</param>
         /// <param name="updateAction">Action to perform on the job's state</param>
         /// <exception cref="ArgumentNullException">Thrown when jobName is null or empty</exception>
-        private void UpdateJobState(string jobName, Action<StateModel> updateAction)
+        public void UpdateJobState(string name, Action<StateModel> updateAction)
         {
-            if (string.IsNullOrEmpty(jobName))
+            if (string.IsNullOrEmpty(name))
             {
-                throw new ArgumentNullException(nameof(jobName));
+                throw new ArgumentNullException(nameof(name));
             }
 
             try
             {
-                if (!_jobStates.ContainsKey(jobName))
+                lock (_stateLock)
                 {
-                    _jobStates[jobName] = StateModel.CreateInitialState(jobName);
-                }
+                    if (!_jobStates.ContainsKey(name))
+                    {
+                        _jobStates[name] = StateModel.CreateInitialState(name);
+                    }
 
-                updateAction(_jobStates[jobName]);
-                _jobStates[jobName].LastActionTime = DateTime.Now;
-                SaveStates(_jobStates.Values.ToList());
+                    updateAction(_jobStates[name]);
+                    _jobStates[name].LastActionTime = DateTime.Now;
+                    
+                    // Sauvegarder immédiatement l'état
+                    var states = _jobStates.Values.ToList();
+                    var json = JsonSerializer.Serialize(states, _jsonOptions);
+                    File.WriteAllText(_stateFile, json);
+                }
             }
             catch (Exception ex)
             {
-                var existingBackup = GetJob(jobName);
-                _logController.LogBackupError(jobName, existingBackup?.Type ?? "Unknown", ex.Message);
+                var existingBackup = GetJob(name);
+                _logController.LogBackupError(name, existingBackup?.Type ?? "Unknown", ex.Message);
                 throw;
             }
         }
@@ -409,7 +423,14 @@ namespace EasySaveV2._0.Managers
         /// <returns>The current state of the backup job, null if not found</returns>
         public StateModel? GetJobState(string name)
         {
-            return _jobStates.TryGetValue(name, out var state) ? state : null;
+            lock (_stateLock)
+            {
+                if (_jobStates.TryGetValue(name, out var state))
+                {
+                    return state;
+                }
+                return null;
+            }
         }
 
         /// <summary>
@@ -521,7 +542,7 @@ namespace EasySaveV2._0.Managers
             var backup = GetJob(name);
             if (backup == null)
             {
-                throw new InvalidOperationException($"Backup '{name}' not found.");
+                throw new InvalidOperationException($"Backup job '{name}' not found");
             }
 
             // Create a new cancellation token for this job
@@ -545,10 +566,11 @@ namespace EasySaveV2._0.Managers
                 totalFiles = files.Length;
                 totalBytes = files.Sum(f => new FileInfo(f).Length);
 
-                // Update initial state
+                // Update initial state to Active
                 UpdateJobState(name, state =>
                 {
                     state.Status = "Active";
+                    state.ProgressPercentage = 0;
                     state.TotalFilesCount = totalFiles;
                     state.TotalFilesSize = totalBytes;
                     state.FilesRemaining = totalFiles;
@@ -563,7 +585,11 @@ namespace EasySaveV2._0.Managers
                     // Check for cancellation
                     if (cts.Token.IsCancellationRequested)
                     {
-                        UpdateJobState(name, state => state.Status = "Paused");
+                        UpdateJobState(name, state => 
+                        {
+                            state.Status = "Paused";
+                            state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
+                        });
                         return;
                     }
 
@@ -607,25 +633,14 @@ namespace EasySaveV2._0.Managers
                             bytesTransferred += sourceInfo.Length;
                             filesProcessed++;
 
-                            // Update progress
-                            FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                                name,
-                                sourceFile,
-                                targetFile,
-                                sourceInfo.Length,
-                                (int)(filesProcessed * 100.0 / totalFiles),
-                                bytesTransferred,
-                                totalBytes,
-                                filesProcessed,
-                                totalFiles,
-                                stopwatch.Elapsed,
-                                true
-                            ));
-
+                            // Update progress after each file
+                            var progress = (int)((filesProcessed * 100.0) / totalFiles);
+                            
                             UpdateJobState(name, state =>
                             {
-                                state.FilesRemaining--;
-                                state.BytesRemaining -= sourceInfo.Length;
+                                state.ProgressPercentage = progress;
+                                state.FilesRemaining = totalFiles - filesProcessed;
+                                state.BytesRemaining = totalBytes - bytesTransferred;
                                 state.CurrentSourceFile = sourceFile;
                                 state.CurrentTargetFile = targetFile;
                             });
@@ -633,7 +648,11 @@ namespace EasySaveV2._0.Managers
                         catch (OperationCanceledException)
                         {
                             stopwatch.Stop();
-                            UpdateJobState(name, state => state.Status = "Paused");
+                            UpdateJobState(name, state => 
+                            {
+                                state.Status = "Paused";
+                                state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
+                            });
                             return;
                         }
                         catch (Exception ex)
@@ -672,14 +691,15 @@ namespace EasySaveV2._0.Managers
                     }
                 }
 
-                // Update final state
+                // Update final state to Completed
                 UpdateJobState(name, state =>
                 {
-                    state.Status = hasErrors ? "Error" : "Completed";
+                    state.Status = "Completed";
+                    state.ProgressPercentage = 100;
                     state.FilesRemaining = 0;
                     state.BytesRemaining = 0;
-                    state.CurrentSourceFile = "";
-                    state.CurrentTargetFile = "";
+                    state.CurrentSourceFile = string.Empty;
+                    state.CurrentTargetFile = string.Empty;
                 });
 
                 // Do not send final progress event if backup completed normally
@@ -698,6 +718,22 @@ namespace EasySaveV2._0.Managers
                         totalFiles,
                         TimeSpan.Zero,
                         false
+                    ));
+                }
+                else {
+                    // Send final progress event with completed status and 100% progress
+                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
+                        name,
+                        backup.SourcePath,
+                        backup.TargetPath,
+                        0,
+                        100, // Ensure progress is 100% on completion
+                        totalBytes,
+                        totalBytes,
+                        totalFiles,
+                        totalFiles,
+                        TimeSpan.Zero,
+                        true // Indicate success
                     ));
                 }
 
@@ -723,7 +759,11 @@ namespace EasySaveV2._0.Managers
             }
             catch (OperationCanceledException)
             {
-                UpdateJobState(name, state => state.Status = "Paused");
+                UpdateJobState(name, state => 
+                {
+                    state.Status = "Paused";
+                    state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
+                });
             }
             catch (Exception ex)
             {
@@ -731,8 +771,9 @@ namespace EasySaveV2._0.Managers
                 UpdateJobState(name, state =>
                 {
                     state.Status = "Error";
-                    state.CurrentSourceFile = "";
-                    state.CurrentTargetFile = "";
+                    state.ProgressPercentage = 0;
+                    state.CurrentSourceFile = string.Empty;
+                    state.CurrentTargetFile = string.Empty;
                 });
 
                 // Report error progress

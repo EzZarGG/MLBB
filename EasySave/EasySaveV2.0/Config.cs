@@ -57,7 +57,7 @@ namespace EasySaveV2._0
             var dir = Environment.GetEnvironmentVariable("EASYSAVE_STATE_DIR")
                    ?? Path.Combine(AppContext.BaseDirectory, "State");
             Directory.CreateDirectory(dir);
-            return Path.Combine(dir, "state.json");
+            return Path.Combine(dir, "states.json");
         }
 
         /// <summary>

@@ -79,7 +79,7 @@ namespace EasySaveV2._0.Models
             {
                 Name = jobName,
                 LastActionTime = DateTime.Now,
-                Status = "Pending",
+                Status = "Ready",
                 TotalFilesCount = 0,
                 TotalFilesSize = 0,
                 FilesRemaining = 0,
