@@ -15,7 +15,7 @@ namespace EasySaveV2._0.Managers
     {
         private static LanguageManager? _instance;
         private static readonly object _lock = new();
-        private const string LANGUAGES_DIR = "Ressources";
+        private const string LANGUAGES_DIR = "Resources";
         private const string DEFAULT_LANGUAGE = "en";
         private const int CACHE_SIZE = 1000; // Maximum number of cached translations
         private string _currentLanguage = DEFAULT_LANGUAGE;
