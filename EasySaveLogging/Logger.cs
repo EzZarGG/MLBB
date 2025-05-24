@@ -76,6 +76,7 @@ namespace EasySaveLogging
         private static Logger? _instance;
         private static readonly object _lock = new object();
         private static readonly object _fileLock = new object();
+        private static LogFormat _defaultFormat = LogFormat.JSON;  // Format par défaut, peut être modifié avant la première instance
 
         private string _logFilePath;
         private LogFormat _currentFormat;
@@ -90,15 +91,24 @@ namespace EasySaveLogging
 
         private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntry));
 
+        // Méthode pour définir le format par défaut avant la première instance
+        public static void SetDefaultFormat(LogFormat format)
+        {
+            if (_instance == null)
+            {
+                _defaultFormat = format;
+            }
+        }
+
         private Logger()
         {
-            _currentFormat = LogFormat.JSON;
+            _currentFormat = _defaultFormat;
             var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
             if (!Directory.Exists(logDir))
             {
                 Directory.CreateDirectory(logDir);
             }
-            _logFilePath = Path.Combine(logDir, "log.json");
+            _logFilePath = Path.Combine(logDir, $"log{(_currentFormat == LogFormat.JSON ? ".json" : ".xml")}");
             InitializeLogFile();
         }
 

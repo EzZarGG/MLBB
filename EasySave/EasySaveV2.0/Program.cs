@@ -15,7 +15,7 @@ namespace EasySaveV2._0
     internal static class Program
     {
         private static readonly LanguageManager _languageManager = LanguageManager.Instance;
-        private static readonly Logger _logger = Logger.GetInstance();
+        private static Logger _logger;
 
         /// <summary>
         /// Main entry point for the application.
@@ -64,11 +64,11 @@ namespace EasySaveV2._0
         {
             try
             {
-                // Create required directories
-                EnsureDirectoriesExist();
-
-                // Logger configuration
+                // Logger configuration first
                 ConfigureLogger();
+
+                // Then create required directories
+                EnsureDirectoriesExist();
 
                 // Critical components validation
                 ValidateCriticalComponents();
@@ -86,10 +86,14 @@ namespace EasySaveV2._0
         private static void ConfigureLogger()
         {
             var logFormat = Config.GetLogFormat();
+            Logger.SetDefaultFormat(logFormat);
+            
             var logDir = Config.GetLogDirectory();
+            Directory.CreateDirectory(logDir);  // Ensure log directory exists
+            
             var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
             
-            _logger.SetLogFormat(logFormat);
+            _logger = Logger.GetInstance();
             _logger.SetLogFilePath(logPath);
         }
 
@@ -130,7 +134,6 @@ namespace EasySaveV2._0
         {
             var directories = new[]
             {
-                Config.GetLogDirectory(),
                 Path.Combine(AppContext.BaseDirectory, "State"),
                 Path.Combine(AppContext.BaseDirectory, "Ressources")
             };

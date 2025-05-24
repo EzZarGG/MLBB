@@ -1,6 +1,0 @@
-{
-  "LogFormat": "JSON",
-  "BusinessSoftware": [ "Excel", "Word" ],
-  "EncryptionKey": "MaSuperClef1234",
-  "EncryptionExtensions": [ ".txt", ".pdf", ".docx" ]
-}
