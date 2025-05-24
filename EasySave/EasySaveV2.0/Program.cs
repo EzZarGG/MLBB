@@ -85,16 +85,24 @@ namespace EasySaveV2._0
         /// </summary>
         private static void ConfigureLogger()
         {
-            var logFormat = Config.GetLogFormat();
-            Logger.SetDefaultFormat(logFormat);
-            
-            var logDir = Config.GetLogDirectory();
-            Directory.CreateDirectory(logDir);  // Ensure log directory exists
-            
-            var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
-            
-            _logger = Logger.GetInstance();
-            _logger.SetLogFilePath(logPath);
+            try
+            {
+                var logFormat = Config.GetLogFormat();
+                Logger.SetDefaultFormat(logFormat);
+                
+                var logDir = Config.GetLogDirectory();
+                Directory.CreateDirectory(logDir);  // Ensure log directory exists
+                
+                var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
+                
+                _logger = Logger.GetInstance();
+                _logger.SetLogFormat(logFormat);  // Explicitly set the format
+                _logger.SetLogFilePath(logPath);
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed to configure logger", ex);
+            }
         }
 
         /// <summary>
