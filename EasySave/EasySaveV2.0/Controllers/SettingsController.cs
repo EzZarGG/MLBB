@@ -193,6 +193,9 @@ namespace EasySaveV2._0.Controllers
             {
                 _settings.LogFormat = format;
                 SaveSettings();
+                
+                // Use the singleton LogController instance
+                LogController.Instance.SetLogFormat(format);
             }
         }
 

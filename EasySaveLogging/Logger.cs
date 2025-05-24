@@ -485,5 +485,16 @@ namespace EasySaveLogging
             }
             return $"{size:0.##} {sizes[order]}";
         }
+
+        /// <summary>
+        /// Resets the singleton instance of the logger.
+        /// </summary>
+        public static void ResetInstance()
+        {
+            lock (_lock)
+            {
+                _instance = null;
+            }
+        }
     }
 }

@@ -63,7 +63,7 @@ namespace EasySaveV2._0.Managers
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
-            _logController = new LogController();
+            _logController = LogController.Instance;
             _encryptionKey = new EncryptionKey();
             _logger = Logger.GetInstance();
             LoadBackups();
