@@ -131,10 +131,6 @@ namespace EasySaveV2._0
                 {
                     Application.Run(new MainForm());
                 }
-                else
-                {
-                    _logger.LogAdminAction("Program", "INFO", "Language selection cancelled by user");
-                }
             }
         }
 
@@ -150,15 +146,6 @@ namespace EasySaveV2._0
                 Path.Combine(AppContext.BaseDirectory, "State"),
                 Path.Combine(AppContext.BaseDirectory, "Resources")
             };
-
-            foreach (var directory in directories)
-            {
-                if (!Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                    _logger.LogAdminAction("Program", "INFO", $"Created directory: {directory}");
-                }
-            }
         }
 
         /// <summary>
@@ -194,9 +181,6 @@ namespace EasySaveV2._0
         {
             try
             {
-                _logger.LogAdminAction("Program", "ERROR", 
-                    $"{(isTerminating ? "Critical" : "Unhandled")} error: {ex}");
-
                 var message = isTerminating
                     ? _languageManager.GetTranslation("error.critical")
                     : _languageManager.GetTranslation("error.unhandled");

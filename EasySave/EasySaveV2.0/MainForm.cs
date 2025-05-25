@@ -71,7 +71,6 @@ namespace EasySaveV2._0
         {
             if (ex == null) return;
 
-            _logger.LogAdminAction("MainForm", "ERROR", ex.ToString());
             MessageBox.Show(
                 _languageManager.GetTranslation("error.unhandled").Replace("{0}", ex.Message),
                 _languageManager.GetTranslation("error.title"),

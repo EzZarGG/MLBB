@@ -402,7 +402,7 @@ namespace EasySaveV2._0.Controllers
                         ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TARGET;
                 }
 
-                if (oldBackup.Type != newBackup.Type)
+                if (newBackup.Type != oldBackup.Type)
                 {
                     changes.Add($"Backup type: {oldBackup.Type} → {newBackup.Type}");
                     actionType = actionType != ActionTypes.BACKUP_UPDATED ? 
@@ -410,7 +410,7 @@ namespace EasySaveV2._0.Controllers
                 }
 
                 var message = changes.Count > 0 
-                    ? $"Backup updated: {string.Join(", ", changes)}"
+                    ? $"Backup updated - {string.Join(", ", changes)}"
                     : "Backup configuration reviewed (no changes)";
 
                 var entry = new LogEntry
