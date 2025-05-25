@@ -2,10 +2,10 @@ using EasySaveV2._0.Models;
 using EasySaveV2._0.Controllers;
 using EasySaveV2._0.Managers;
 using System;
-using System.Collections.Generic;
 using System.Windows.Forms;
 using System.IO;
 using System.Linq;
+using System.Drawing;
 
 namespace EasySaveV2._0.Views
 {
@@ -36,6 +36,7 @@ namespace EasySaveV2._0.Views
             _languageManager = LanguageManager.Instance;
 
             InitializeComponent();
+            _languageManager.ReloadTranslations();
             InitializeUI();
             SetupEventHandlers();
 
@@ -55,114 +56,206 @@ namespace EasySaveV2._0.Views
         {
             // Form properties
             this.Text = _languageManager.GetTranslation(_isEditMode ? "backup.edit.title" : "backup.create.title");
-            this.Size = new System.Drawing.Size(500, 300);
+            this.Size = new System.Drawing.Size(700, 450);
             this.StartPosition = FormStartPosition.CenterParent;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.MinimizeBox = false;
+            this.Font = new Font("Segoe UI", 10F, FontStyle.Regular, GraphicsUnit.Point);
+            this.BackColor = Color.White;
 
             // Layout panel
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 3,
-                RowCount = 5,
-                Padding = new Padding(10)
+                RowCount = 6,
+                Padding = new Padding(20),
+                RowStyles = {
+                    new RowStyle(SizeType.Percent, 15),  // Title
+                    new RowStyle(SizeType.Percent, 17),  // Name
+                    new RowStyle(SizeType.Percent, 17),  // Source
+                    new RowStyle(SizeType.Percent, 17),  // Target
+                    new RowStyle(SizeType.Percent, 17),  // Type
+                    new RowStyle(SizeType.Percent, 17)   // Buttons
+                },
+                ColumnStyles = {
+                    new ColumnStyle(SizeType.Percent, 20),  // Labels
+                    new ColumnStyle(SizeType.Percent, 60),  // TextBoxes
+                    new ColumnStyle(SizeType.Percent, 20)   // Buttons
+                }
             };
+
+            // Title label
+            var titleLabel = new Label
+            {
+                Tag = _isEditMode ? "backup.edit.title" : "backup.create.title",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 16, FontStyle.Bold),
+                AutoSize = false,
+                ForeColor = Color.FromArgb(0, 120, 215) // Windows blue
+            };
+            layout.Controls.Add(titleLabel, 0, 0);
+            layout.SetColumnSpan(titleLabel, 3);
 
             // Name field
-            layout.Controls.Add(new Label
+            var nameLabel = new Label
             {
                 Tag = "backup.name",
-                Anchor = AnchorStyles.Right
-            }, 0, 0);
+                TextAlign = ContentAlignment.MiddleRight,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold),
+                AutoSize = false,
+                Padding = new Padding(0, 0, 10, 0)
+            };
             _nameTextBox = new TextBox
             {
-                Width = 300,
-                Anchor = AnchorStyles.Left
+                Width = 400,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                BorderStyle = BorderStyle.FixedSingle
             };
-            layout.Controls.Add(_nameTextBox, 1, 0);
+            layout.Controls.Add(nameLabel, 0, 1);
+            layout.Controls.Add(_nameTextBox, 1, 1);
 
             // Source field with browse button
-            layout.Controls.Add(new Label
+            var sourceLabel = new Label
             {
                 Tag = "backup.source",
-                Anchor = AnchorStyles.Right
-            }, 0, 1);
+                TextAlign = ContentAlignment.MiddleRight,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold),
+                AutoSize = false,
+                Padding = new Padding(0, 0, 10, 0)
+            };
             _sourceTextBox = new TextBox
             {
-                Width = 300,
-                Anchor = AnchorStyles.Left
+                Width = 400,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                BorderStyle = BorderStyle.FixedSingle
             };
             _sourceBrowseButton = new Button
             {
                 Tag = "backup.browse",
-                Width = 80
+                Width = 100,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 9),
+                FlatStyle = FlatStyle.System,
+                Image = SystemIcons.WinLogo.ToBitmap(),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(5, 0, 5, 0)
             };
-            layout.Controls.Add(_sourceTextBox, 1, 1);
-            layout.Controls.Add(_sourceBrowseButton, 2, 1);
+            layout.Controls.Add(sourceLabel, 0, 2);
+            layout.Controls.Add(_sourceTextBox, 1, 2);
+            layout.Controls.Add(_sourceBrowseButton, 2, 2);
 
             // Target field with browse button
-            layout.Controls.Add(new Label
+            var targetLabel = new Label
             {
                 Tag = "backup.target",
-                Anchor = AnchorStyles.Right
-            }, 0, 2);
+                TextAlign = ContentAlignment.MiddleRight,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold),
+                AutoSize = false,
+                Padding = new Padding(0, 0, 10, 0)
+            };
             _targetTextBox = new TextBox
             {
-                Width = 300,
-                Anchor = AnchorStyles.Left
+                Width = 400,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                BorderStyle = BorderStyle.FixedSingle
             };
             _targetBrowseButton = new Button
             {
                 Tag = "backup.browse",
-                Width = 80
+                Width = 100,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 9),
+                FlatStyle = FlatStyle.System,
+                Image = SystemIcons.WinLogo.ToBitmap(),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(5, 0, 5, 0)
             };
-            layout.Controls.Add(_targetTextBox, 1, 2);
-            layout.Controls.Add(_targetBrowseButton, 2, 2);
+            layout.Controls.Add(targetLabel, 0, 3);
+            layout.Controls.Add(_targetTextBox, 1, 3);
+            layout.Controls.Add(_targetBrowseButton, 2, 3);
 
             // Type combo box
-            layout.Controls.Add(new Label
+            var typeLabel = new Label
             {
                 Tag = "backup.type",
-                Anchor = AnchorStyles.Right
-            }, 0, 3);
+                TextAlign = ContentAlignment.MiddleRight,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 10, FontStyle.Bold),
+                AutoSize = false,
+                Padding = new Padding(0, 0, 10, 0)
+            };
             _typeComboBox = new ComboBox
             {
-                Width = 300,
-                Anchor = AnchorStyles.Left,
-                DropDownStyle = ComboBoxStyle.DropDownList
+                Width = 400,
+                Height = 30,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                FlatStyle = FlatStyle.System
             };
-            PopulateTypeCombo();
-            layout.Controls.Add(_typeComboBox, 1, 3);
+            layout.Controls.Add(typeLabel, 0, 4);
+            layout.Controls.Add(_typeComboBox, 1, 4);
 
             // Button panel
             var buttonPanel = new FlowLayoutPanel
             {
-                Dock = DockStyle.Bottom,
+                Dock = DockStyle.Fill,
                 FlowDirection = FlowDirection.RightToLeft,
+                AutoSize = false,
                 Height = 40,
-                Padding = new Padding(5)
+                Padding = new Padding(0, 10, 0, 0)
             };
 
             _saveButton = new Button
             {
                 Tag = "button.save",
-                Width = 80
+                Width = 120,
+                Height = 35,
+                Font = new Font(this.Font.FontFamily, 10),
+                FlatStyle = FlatStyle.System,
+                Image = SystemIcons.Shield.ToBitmap(),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(5, 0, 5, 0)
             };
             _cancelButton = new Button
             {
                 Tag = "button.cancel",
-                Width = 80
+                Width = 120,
+                Height = 35,
+                Font = new Font(this.Font.FontFamily, 10),
+                FlatStyle = FlatStyle.System,
+                Image = SystemIcons.Question.ToBitmap(),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                Padding = new Padding(5, 0, 5, 0)
             };
 
             buttonPanel.Controls.Add(_cancelButton);
             buttonPanel.Controls.Add(_saveButton);
+            layout.Controls.Add(buttonPanel, 0, 5);
+            layout.SetColumnSpan(buttonPanel, 3);
 
-            // Nettoyage : n'ajoute pas deux fois les contrôles
+            // Cleanup: don't add controls twice
             this.Controls.Clear();
             this.Controls.Add(layout);
-            this.Controls.Add(buttonPanel);
+
+            // Populate type combo
+            PopulateTypeCombo();
         }
 
         private void SetupEventHandlers()
@@ -189,6 +282,10 @@ namespace EasySaveV2._0.Views
 
             // Update combo box items
             PopulateTypeCombo();
+
+            // Reselect the correct type if editing
+            if (_isEditMode)
+                LoadBackupToUI();
         }
 
         private void UpdateControlTexts(Control.ControlCollection controls)
@@ -206,15 +303,25 @@ namespace EasySaveV2._0.Views
             }
         }
 
+        private class ComboItem
+        {
+            public string Key { get; }
+            public string Display { get; }
+            public ComboItem(string key, string display)
+            {
+                Key = key;
+                Display = display;
+            }
+            public override string ToString() => Display;
+        }
+
         private void PopulateTypeCombo()
         {
             _typeComboBox.Items.Clear();
-            _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.complete"));
-            _typeComboBox.Items.Add(_languageManager.GetTranslation("backup.type.differential"));
+            _typeComboBox.Items.Add(new ComboItem("Full", _languageManager.GetTranslation("backup.type.full")));
+            _typeComboBox.Items.Add(new ComboItem("Differential", _languageManager.GetTranslation("backup.type.differential")));
             if (_typeComboBox.SelectedIndex == -1 && _typeComboBox.Items.Count > 0)
-            {
                 _typeComboBox.SelectedIndex = 0;
-            }
         }
 
         private void OnSourceBrowseClick(object? sender, EventArgs e)
@@ -317,7 +424,7 @@ namespace EasySaveV2._0.Views
             _backup.Name = _nameTextBox.Text;
             _backup.SourcePath = _sourceTextBox.Text;
             _backup.TargetPath = _targetTextBox.Text;
-            _backup.Type = _typeComboBox.SelectedIndex == 0 ? "Full" : "Differential";
+            _backup.Type = (_typeComboBox.SelectedItem as ComboItem)?.Key ?? "Full";
         }
 
         private void LoadBackupToUI()
@@ -325,7 +432,14 @@ namespace EasySaveV2._0.Views
             _nameTextBox.Text = _backup.Name;
             _sourceTextBox.Text = _backup.SourcePath;
             _targetTextBox.Text = _backup.TargetPath;
-            _typeComboBox.SelectedIndex = _backup.Type.Equals("Full", StringComparison.OrdinalIgnoreCase) ? 0 : 1;
+            foreach (ComboItem item in _typeComboBox.Items)
+            {
+                if (item.Key.Equals(_backup.Type, StringComparison.OrdinalIgnoreCase))
+                {
+                    _typeComboBox.SelectedItem = item;
+                    break;
+                }
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

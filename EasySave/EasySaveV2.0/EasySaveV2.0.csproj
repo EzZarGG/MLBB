@@ -16,5 +16,10 @@
 		<ProjectReference Include="..\CryptoLibrary\CryptoLibrary.csproj" />
 	</ItemGroup>
 
+  <ItemGroup>
+    <None Update="Resources\translations.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
 </Project>

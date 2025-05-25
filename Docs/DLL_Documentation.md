@@ -236,7 +236,6 @@ The logger implements thread safety through the use of a lock mechanism on the s
 - JSON is used as the default format if no format is specified
 - When using JSON format, the output is formatted with indentation for better readability
 - When switching formats, any existing log file will be converted to the new format
-
 ---
 
 ## Version Française
@@ -475,3 +474,4 @@ Le logger implémente la sécurité thread grâce à l'utilisation d'un mécanis
 - JSON est utilisé comme format par défaut si aucun format n'est spécifié
 - Lors de l'utilisation du format JSON, la sortie est formatée avec indentation pour une meilleure lisibilité
 - Lors du changement de format, tout fichier journal existant sera converti au nouveau format
+

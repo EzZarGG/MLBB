@@ -8,14 +8,16 @@ namespace EasySaveV2._0.Views
     {
         private readonly LanguageManager _languageManager;
         private bool _languageSelected;
+        private readonly bool _isInitialLaunch;
         private Label _languageLabel = new();
         private ComboBox _languageComboBox = new();
         private Button _okButton = new();
         private Button _cancelButton = new();
 
-        public LanguageSelectionForm()
+        public LanguageSelectionForm(bool isInitialLaunch = false)
         {
             _languageManager = LanguageManager.Instance;
+            _isInitialLaunch = isInitialLaunch;
             InitializeComponent();
             _languageSelected = false;
 
@@ -29,7 +31,7 @@ namespace EasySaveV2._0.Views
         {
             // Form properties
             this.Text = _languageManager.GetTranslation("language.selection.title");
-            this.Size = new System.Drawing.Size(300, 200);
+            this.Size = new System.Drawing.Size(500, 300);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -39,56 +41,85 @@ namespace EasySaveV2._0.Views
             var layout = new TableLayoutPanel
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 2,
+                ColumnCount = 1,
                 RowCount = 3,
-                Padding = new Padding(10)
+                Padding = new Padding(20),
+                RowStyles = {
+                    new RowStyle(SizeType.Percent, 40),  // Title
+                    new RowStyle(SizeType.Percent, 30),  // ComboBox
+                    new RowStyle(SizeType.Percent, 30)   // Buttons
+                }
             };
 
-            // Language label
-            _languageLabel = new Label
+            // Title label
+            var titleLabel = new Label
             {
-                Tag = "language.selection.choose",
-                Anchor = AnchorStyles.Right | AnchorStyles.Top,
-                AutoSize = true
+                Tag = "language.selection.title",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                Font = new Font(this.Font.FontFamily, 14, FontStyle.Bold),
+                AutoSize = false
             };
-            layout.Controls.Add(_languageLabel, 0, 0);
+            layout.Controls.Add(titleLabel, 0, 0);
 
             // Language combo box
             _languageComboBox = new ComboBox
             {
-                Width = 200,
+                Width = 250,
                 DropDownStyle = ComboBoxStyle.DropDownList,
-                Anchor = AnchorStyles.Left
+                Anchor = AnchorStyles.None,
+                Font = new Font(this.Font.FontFamily, 12)
             };
-            layout.Controls.Add(_languageComboBox, 1, 0);
+            var comboBoxPanel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                AutoSize = false
+            };
+            comboBoxPanel.Controls.Add(_languageComboBox);
+            _languageComboBox.Location = new Point(
+                (comboBoxPanel.Width - _languageComboBox.Width) / 2,
+                (comboBoxPanel.Height - _languageComboBox.Height) / 2
+            );
+            layout.Controls.Add(comboBoxPanel, 0, 1);
 
             // Button panel
-            var buttonPanel = new FlowLayoutPanel
+            var buttonPanel = new TableLayoutPanel
             {
-                Dock = DockStyle.Bottom,
-                FlowDirection = FlowDirection.RightToLeft,
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                AutoSize = false,
                 Height = 40,
-                Padding = new Padding(5)
+                ColumnStyles = {
+                    new ColumnStyle(SizeType.Percent, 50),
+                    new ColumnStyle(SizeType.Percent, 50)
+                }
             };
 
             _okButton = new Button
             {
                 Tag = "button.ok",
-                Width = 80
+                Width = 100,
+                Height = 35,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.None
             };
             _cancelButton = new Button
             {
                 Tag = "button.cancel",
-                Width = 80
+                Width = 100,
+                Height = 35,
+                Font = new Font(this.Font.FontFamily, 10),
+                Anchor = AnchorStyles.None
             };
 
-            buttonPanel.Controls.Add(_cancelButton);
-            buttonPanel.Controls.Add(_okButton);
+            buttonPanel.Controls.Add(_okButton, 0, 0);
+            buttonPanel.Controls.Add(_cancelButton, 1, 0);
+            layout.Controls.Add(buttonPanel, 0, 2);
 
-            // Nettoyage : n'ajoute pas deux fois les contrôles
+            // Cleanup: don't add controls twice
             this.Controls.Clear();
             this.Controls.Add(layout);
-            this.Controls.Add(buttonPanel);
         }
 
         private void SetupEventHandlers()
@@ -170,11 +201,11 @@ namespace EasySaveV2._0.Views
 
         private void OnCancelClick(object? sender, EventArgs e)
         {
-            if (!_languageSelected)
+            if (_isInitialLaunch && !_languageSelected)
             {
                 var result = MessageBox.Show(
-                    _languageManager.GetTranslation("language.selection.exit.confirm"),
-                    _languageManager.GetTranslation("language.selection.exit.title"),
+                    _languageManager.GetTranslation("language.selection.exitConfirm"),
+                    _languageManager.GetTranslation("language.selection.exitTitle"),
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Question
                 );
@@ -182,13 +213,12 @@ namespace EasySaveV2._0.Views
                 if (result == DialogResult.Yes)
                 {
                     Application.Exit();
+                    return;
                 }
             }
-            else
-            {
-                DialogResult = DialogResult.Cancel;
-                Close();
-            }
+            
+            DialogResult = DialogResult.Cancel;
+            Close();
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

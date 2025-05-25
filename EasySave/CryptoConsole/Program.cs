@@ -15,7 +15,7 @@ namespace CryptoConsole
                 return -1;
             }
 
-            // 1) Chargement de la clé depuis App.config
+            // 1) Load key from App.config
             var keyString = ConfigurationManager.AppSettings["EncryptionKey"];
             if (string.IsNullOrWhiteSpace(keyString) || keyString.Length < 8)
             {
@@ -24,7 +24,7 @@ namespace CryptoConsole
             }
             var key = Encoding.UTF8.GetBytes(keyString);
 
-            // 2) Appel du chiffrement/déchiffrement
+            // 2) Call encryption/decryption
             bool enc = args[0] == "encrypt";
             int ms = enc
                 ? CryptoManager.EncryptFile(args[1], args[2], key)
