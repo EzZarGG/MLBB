@@ -508,7 +508,7 @@ namespace EasySaveV2._0.Controllers
                         ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TARGET;
                 }
 
-                if (oldBackup.Type != newBackup.Type)
+                if (newBackup.Type != oldBackup.Type)
                 {
                     changes.Add(_languageManager.GetTranslation("message.backupTypeChanged", oldBackup.Type, newBackup.Type));
                     actionType = actionType != ActionTypes.BACKUP_UPDATED ? 
@@ -516,8 +516,8 @@ namespace EasySaveV2._0.Controllers
                 }
 
                 var message = changes.Count > 0 
-                    ? _languageManager.GetTranslation("message.backupUpdated", string.Join(", ", changes))
-                    : _languageManager.GetTranslation("message.backupReviewed");
+                    ? $"Backup updated - {string.Join(", ", changes)}"
+                    : "Backup configuration reviewed (no changes)";
 
                 var entry = CreateLogEntry(
                     backupName,

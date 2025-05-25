@@ -15,7 +15,7 @@ namespace EasySaveV2._0
     internal static class Program
     {
         private static readonly LanguageManager _languageManager = LanguageManager.Instance;
-        private static readonly Logger _logger = Logger.GetInstance();
+        private static Logger _logger;
 
         /// <summary>
         /// Main entry point for the application.
@@ -82,20 +82,34 @@ namespace EasySaveV2._0
 
         /// <summary>
         /// Configures the logging system.
+        /// Sets up the logger with the appropriate format and file path.
         /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when logger configuration fails.</exception>
         private static void ConfigureLogger()
         {
-            var logFormat = Config.GetLogFormat();
-            var logDir = Config.GetLogDirectory();
-            var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
-            
-            _logger.SetLogFormat(logFormat);
-            _logger.SetLogFilePath(logPath);
+            try
+            {
+                var logFormat = Config.GetLogFormat();
+                
+                var logDir = Config.GetLogDirectory();
+                Directory.CreateDirectory(logDir);  // Ensure log directory exists
+                
+                var logPath = Path.Combine(logDir, $"log{(logFormat == LogFormat.JSON ? ".json" : ".xml")}");
+                
+                _logger = Logger.GetInstance();
+                _logger.SetLogFormat(logFormat);  // Set the logging format
+                _logger.SetLogFilePath(logPath);  // Set the log file path
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException("Failed to configure logger", ex);
+            }
         }
 
         /// <summary>
         /// Validates that all critical components are properly initialized.
         /// </summary>
+        /// <exception cref="InvalidOperationException">Thrown when a critical component is not properly initialized.</exception>
         private static void ValidateCriticalComponents()
         {
             if (_languageManager == null)
@@ -107,6 +121,7 @@ namespace EasySaveV2._0
 
         /// <summary>
         /// Starts the application's user interface.
+        /// Displays the language selection form and then the main form.
         /// </summary>
         private static void StartUserInterface()
         {
@@ -116,15 +131,12 @@ namespace EasySaveV2._0
                 {
                     Application.Run(new MainForm());
                 }
-                else
-                {
-                    _logger.LogAdminAction("Program", "INFO", "Language selection cancelled by user");
-                }
             }
         }
 
         /// <summary>
-        /// Ensures all required directories exist.
+        /// Ensures all required application directories exist.
+        /// Creates any missing directories and logs their creation.
         /// </summary>
         private static void EnsureDirectoriesExist()
         {
@@ -132,22 +144,15 @@ namespace EasySaveV2._0
             {
                 Config.GetLogDirectory(),
                 Path.Combine(AppContext.BaseDirectory, "State"),
-                Path.Combine(AppContext.BaseDirectory, "Ressources")
+                Path.Combine(AppContext.BaseDirectory, "Resources")
             };
-
-            foreach (var directory in directories)
-            {
-                if (!Directory.Exists(directory))
-                {
-                    Directory.CreateDirectory(directory);
-                    _logger.LogAdminAction("Program", "INFO", $"Created directory: {directory}");
-                }
-            }
         }
 
         /// <summary>
         /// Handles unhandled exceptions from the main thread.
         /// </summary>
+        /// <param name="sender">The source of the event</param>
+        /// <param name="e">Event data containing the exception</param>
         private static void Application_ThreadException(object? sender, ThreadExceptionEventArgs e)
         {
             HandleException(e.Exception, false);
@@ -156,6 +161,8 @@ namespace EasySaveV2._0
         /// <summary>
         /// Handles unhandled exceptions from the application domain.
         /// </summary>
+        /// <param name="sender">The source of the event</param>
+        /// <param name="e">Event data containing the exception</param>
         private static void CurrentDomain_UnhandledException(object? sender, UnhandledExceptionEventArgs e)
         {
             if (e.ExceptionObject is Exception ex)
@@ -166,16 +173,14 @@ namespace EasySaveV2._0
 
         /// <summary>
         /// Handles an exception appropriately based on its type.
+        /// Logs the error and displays a user-friendly message.
         /// </summary>
         /// <param name="ex">The exception to handle</param>
-        /// <param name="isTerminating">Indicates whether the exception is fatal</param>
+        /// <param name="isTerminating">Indicates whether the exception is fatal and will terminate the application</param>
         private static void HandleException(Exception ex, bool isTerminating)
         {
             try
             {
-                _logger.LogAdminAction("Program", "ERROR", 
-                    $"{(isTerminating ? "Critical" : "Unhandled")} error: {ex}");
-
                 var message = isTerminating
                     ? _languageManager.GetTranslation("error.critical")
                     : _languageManager.GetTranslation("error.unhandled");
@@ -206,8 +211,9 @@ namespace EasySaveV2._0
 
         /// <summary>
         /// Handles a critical error that prevents application startup.
+        /// Displays an error message and terminates the application.
         /// </summary>
-        /// <param name="ex">The critical exception</param>
+        /// <param name="ex">The critical exception that occurred during startup</param>
         private static void HandleCriticalError(Exception ex)
         {
             try

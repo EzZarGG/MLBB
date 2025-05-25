@@ -194,8 +194,13 @@ namespace EasySaveV2._0.Controllers
                 _settings.LogFormat = format;
                 SaveSettings();
                 
-                // Use the singleton LogController instance
-                LogController.Instance.SetLogFormat(format);
+                // Update the logger format and file path
+                var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+                var logPath = Path.Combine(logDir, $"log{(format == LogFormat.JSON ? ".json" : ".xml")}");
+                
+                var logger = Logger.GetInstance();
+                logger.SetLogFormat(format);
+                logger.SetLogFilePath(logPath);
             }
         }
 

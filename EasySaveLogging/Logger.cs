@@ -93,7 +93,7 @@ namespace EasySaveLogging
     /// Collection of log entries for XML serialization.
     /// Used to maintain the root element structure in XML logs.
     /// </summary>
-    [XmlRoot("Logs")]
+    [XmlRoot("Logs", Namespace = "")]
     public class LogEntryCollection
     {
         /// <summary>List of log entries in the collection</summary>
@@ -139,7 +139,7 @@ namespace EasySaveLogging
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
-        private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntry));
+        private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntryCollection), new XmlRootAttribute { ElementName = "Logs", Namespace = "" });
 
         /// <summary>
         /// Private constructor for singleton pattern.
@@ -268,9 +268,9 @@ namespace EasySaveLogging
                 }
                 else
                 {
+                    var emptyCollection = new LogEntryCollection();
                     using var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8);
-                    writer.WriteLine("<?xml version=\"1.0\" encoding=\"utf-8\"?>");
-                    writer.WriteLine("<Logs></Logs>");
+                    _xmlSerializer.Serialize(writer, emptyCollection);
                 }
             }
         }
@@ -327,13 +327,40 @@ namespace EasySaveLogging
         /// <param name="entry">The log entry to append</param>
         private void AppendXmlLog(LogEntry entry)
         {
-            string content = File.ReadAllText(_logFilePath);
-            content = content.Replace("</Logs>", "");
-            using var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8);
-            writer.Write(content);
-            _xmlSerializer.Serialize(writer, entry);
-            writer.WriteLine();
-            writer.Write("</Logs>");
+            try
+            {
+                // Read existing entries
+                var existingEntries = new List<LogEntry>();
+                if (File.Exists(_logFilePath))
+                {
+                    string content = File.ReadAllText(_logFilePath);
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        try
+                        {
+                            existingEntries = DeserializeXmlLogs(content);
+                        }
+                        catch
+                        {
+                            // If deserialization fails, start with an empty list
+                            existingEntries = new List<LogEntry>();
+                        }
+                    }
+                }
+
+                // Add new entry
+                existingEntries.Add(entry);
+
+                // Write all entries back to file
+                var collection = new LogEntryCollection { Entries = existingEntries };
+                using var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8);
+                _xmlSerializer.Serialize(writer, collection);
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"Error appending XML log entry: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to append XML log entry: {ex.Message}", ex);
+            }
         }
 
         /// <summary>
@@ -455,17 +482,17 @@ namespace EasySaveLogging
             if (string.IsNullOrEmpty(content))
                 return new List<LogEntry>();
 
-            using var reader = new StringReader(content);
-            var entries = new List<LogEntry>();
-            while (reader.Peek() != -1)
+            try
             {
-                var entry = _xmlSerializer.Deserialize(reader) as LogEntry;
-                if (entry != null)
-                {
-                    entries.Add(entry);
-                }
+                using var reader = new StringReader(content);
+                var collection = _xmlSerializer.Deserialize(reader) as LogEntryCollection;
+                return collection?.Entries ?? new List<LogEntry>();
             }
-            return entries;
+            catch (Exception ex)
+            {
+                DebugLog($"Error deserializing XML logs: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to deserialize XML logs: {ex.Message}", ex);
+            }
         }
 
         /// <summary>

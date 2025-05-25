@@ -387,13 +387,9 @@ namespace EasySaveV2._0.Managers
                     BackupType = updated.Type,
                     SourcePath = updated.SourcePath,
                     TargetPath = updated.TargetPath,
-                    Message = $"Backup job edited. Changes: " +
-                             $"{(oldBackup.Name != updated.Name ? $"Name: {oldBackup.Name} -> {updated.Name}, " : "")}" +
-                             $"{(oldBackup.Type != updated.Type ? $"Type: {oldBackup.Type} -> {updated.Type}, " : "")}" +
-                             $"{(oldBackup.SourcePath != updated.SourcePath ? $"Source: {oldBackup.SourcePath} -> {updated.SourcePath}, " : "")}" +
-                             $"{(oldBackup.TargetPath != updated.TargetPath ? $"Target: {oldBackup.TargetPath} -> {updated.TargetPath}" : "")}",
+                    Message = $"Backup job edited",
                     LogType = "INFO",
-                    ActionType = "BACKUP_EDIT"  // New action type for editing
+                    ActionType = "BACKUP_EDIT"
                 };
                 _logger.AddLogEntry(updateLogEntry);
                 return true;
