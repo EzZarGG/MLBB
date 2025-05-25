@@ -18,6 +18,7 @@ namespace EasySaveV2._0.Controllers
         // Constants
         private const string LogDirectory = "Logs";
         private const string DefaultLogFileName = "log.json";
+        private const long PERFORMANCE_WARNING_THRESHOLD_MS = 5000; // 5 seconds
 
         // Action Types
         private static class ActionTypes
@@ -39,20 +40,40 @@ namespace EasySaveV2._0.Controllers
             public const string BACKUP_UPDATED_TARGET = "BACKUP_UPDATED_TARGET";
             public const string BACKUP_UPDATED_TYPE = "BACKUP_UPDATED_TYPE";
             public const string BACKUP_UPDATED_MULTIPLE = "BACKUP_UPDATED_MULTIPLE";
+            public const string PERFORMANCE_WARNING = "PERFORMANCE_WARNING";
         }
 
-        // Singleton instance tracking
+        // Singleton instance
+        private static LogController? _instance;
+        private static readonly object _lock = new object();
         private static bool _isInitialized = false;
 
         // Dependencies
-        private readonly Logger _logger;
+        private Logger _logger;
         private readonly LanguageManager _languageManager;
 
         /// <summary>
-        /// Initializes a new instance of the LogController class.
-        /// Sets up the logger with appropriate format and file path.
+        /// Gets the singleton instance of LogController.
         /// </summary>
-        public LogController()
+        public static LogController Instance
+        {
+            get
+            {
+                if (_instance == null)
+                {
+                    lock (_lock)
+                    {
+                        _instance ??= new LogController();
+                    }
+                }
+                return _instance;
+            }
+        }
+
+        /// <summary>
+        /// Private constructor for singleton pattern.
+        /// </summary>
+        private LogController()
         {
             _logger = Logger.GetInstance();
             _languageManager = LanguageManager.Instance;
@@ -61,6 +82,18 @@ namespace EasySaveV2._0.Controllers
             {
                 InitializeLogger();
                 _isInitialized = true;
+            }
+        }
+
+        /// <summary>
+        /// Resets the singleton instance.
+        /// </summary>
+        public static void ResetInstance()
+        {
+            lock (_lock)
+            {
+                _instance = null;
+                _isInitialized = false;
             }
         }
 
@@ -103,6 +136,85 @@ namespace EasySaveV2._0.Controllers
         }
 
         /// <summary>
+        /// Creates a standardized log entry with common properties.
+        /// </summary>
+        private LogEntry CreateLogEntry(
+            string backupName,
+            string backupType,
+            string? sourcePath,
+            string? targetPath,
+            string message,
+            string logType,
+            string actionType,
+            long fileSize = -1,
+            long transferTime = -1,
+            long encryptionTime = -1)
+        {
+            var entry = new LogEntry
+            {
+                Timestamp = DateTime.Now,
+                BackupName = backupName,
+                BackupType = backupType,
+                SourcePath = sourcePath,
+                TargetPath = targetPath,
+                Message = message,
+                LogType = logType,
+                ActionType = actionType
+            };
+
+            // Only set optional fields if they are provided (>= 0)
+            if (fileSize >= 0) entry.FileSize = fileSize;
+            if (transferTime >= 0) entry.TransferTime = transferTime;
+            if (encryptionTime >= 0) entry.EncryptionTime = encryptionTime;
+
+            return entry;
+        }
+
+        /// <summary>
+        /// Maps a message to its corresponding action type.
+        /// </summary>
+        private string MapMessageToActionType(string message)
+        {
+            return message switch
+            {
+                "Backup started" => ActionTypes.BACKUP_STARTED,
+                "Backup paused" => ActionTypes.BACKUP_PAUSED,
+                "Backup resumed" => ActionTypes.BACKUP_RESUMED,
+                "Backup completed" => ActionTypes.BACKUP_COMPLETED,
+                "Backup stopped" => ActionTypes.BACKUP_STOPPED,
+                "Backup job created" => ActionTypes.BACKUP_CREATED,
+                "Backup job deleted" => ActionTypes.BACKUP_DELETED,
+                "Backup updated" => ActionTypes.BACKUP_UPDATED,
+                "File copied" => ActionTypes.FILE_COPY,
+                "File encrypted" => ActionTypes.FILE_ENCRYPT,
+                "File decrypted" => ActionTypes.FILE_DECRYPT,
+                "File skipped" => ActionTypes.FILE_SKIPPED,
+                _ => ActionTypes.BACKUP_UPDATED
+            };
+        }
+
+        /// <summary>
+        /// Logs a performance warning if the operation time exceeds the threshold.
+        /// </summary>
+        private void LogPerformanceWarningIfNeeded(string backupName, long transferTime, long encryptionTime)
+        {
+            if (transferTime > PERFORMANCE_WARNING_THRESHOLD_MS || encryptionTime > PERFORMANCE_WARNING_THRESHOLD_MS)
+            {
+                var warningMessage = _languageManager.GetTranslation("warning.performanceIssue");
+                var entry = CreateLogEntry(
+                    backupName,
+                    "Unknown",
+                    null,
+                    null,
+                    warningMessage,
+                    "WARNING",
+                    ActionTypes.PERFORMANCE_WARNING
+                );
+                _logger.AddLogEntry(entry);
+            }
+        }
+
+        /// <summary>
         /// Logs the start of a backup operation.
         /// </summary>
         /// <param name="backupName">Name of the backup job</param>
@@ -135,24 +247,17 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                var logEntry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = backupType,
-                    SourcePath = sourcePath,
-                    TargetPath = targetPath,
-                    Message = message,
-                    LogType = "INFO",
-                    ActionType = message switch
-                    {
-                        "Backup started" => ActionTypes.BACKUP_STARTED,
-                        "Backup paused" => ActionTypes.BACKUP_PAUSED,
-                        "Backup resumed" => ActionTypes.BACKUP_RESUMED,
-                        _ => ActionTypes.BACKUP_STARTED
-                    }
-                };
-                _logger.AddLogEntry(logEntry);
+                var actionType = MapMessageToActionType(message);
+                var entry = CreateLogEntry(
+                    backupName,
+                    backupType,
+                    sourcePath,
+                    targetPath,
+                    _languageManager.GetTranslation(message),
+                    "INFO",
+                    actionType
+                );
+                _logger.AddLogEntry(entry);
             }
             catch (Exception)
             {
@@ -193,25 +298,17 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                var logEntry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = backupType,
-                    SourcePath = sourcePath,
-                    TargetPath = targetPath,
-                    Message = message,
-                    LogType = "INFO",
-                    ActionType = message switch
-                    {
-                        "Backup job created" => ActionTypes.BACKUP_CREATED,
-                        "Backup job deleted" => ActionTypes.BACKUP_DELETED,
-                        "Backup completed" => ActionTypes.BACKUP_COMPLETED,
-                        "Backup stopped" => ActionTypes.BACKUP_STOPPED,
-                        _ => ActionTypes.BACKUP_COMPLETED
-                    }
-                };
-                _logger.AddLogEntry(logEntry);
+                var actionType = MapMessageToActionType(message);
+                var entry = CreateLogEntry(
+                    backupName,
+                    backupType,
+                    sourcePath,
+                    targetPath,
+                    _languageManager.GetTranslation(message),
+                    "INFO",
+                    actionType
+                );
+                _logger.AddLogEntry(entry);
             }
             catch (Exception)
             {
@@ -242,17 +339,15 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                var entry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = backupType,
-                    SourcePath = sourcePath,
-                    TargetPath = targetPath,
-                    Message = $"Error during backup: {error}",
-                    LogType = "ERROR",
-                    ActionType = ActionTypes.BACKUP_ERROR
-                };
+                var entry = CreateLogEntry(
+                    backupName,
+                    backupType,
+                    sourcePath,
+                    targetPath,
+                    _languageManager.GetTranslation("error.backupFailed", error),
+                    "ERROR",
+                    ActionTypes.BACKUP_ERROR
+                );
                 _logger.AddLogEntry(entry);
             }
             catch (Exception)
@@ -277,24 +372,25 @@ namespace EasySaveV2._0.Controllers
             {
                 var actionType = encryptionTime >= 0 ? ActionTypes.FILE_ENCRYPT : ActionTypes.FILE_COPY;
                 var message = encryptionTime >= 0 
-                    ? $"File encrypted and copied: {Path.GetFileName(sourcePath)}"
-                    : $"File copied: {Path.GetFileName(sourcePath)}";
+                    ? _languageManager.GetTranslation("message.fileEncryptedAndCopied", Path.GetFileName(sourcePath))
+                    : _languageManager.GetTranslation("message.fileCopied", Path.GetFileName(sourcePath));
 
-                var entry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = backupType,
-                    SourcePath = sourcePath,
-                    TargetPath = targetPath,
-                    FileSize = fileSize,
-                    TransferTime = transferTime,
-                    EncryptionTime = encryptionTime,
-                    Message = message,
-                    LogType = "INFO",
-                    ActionType = actionType
-                };
+                var entry = CreateLogEntry(
+                    backupName,
+                    backupType,
+                    sourcePath,
+                    targetPath,
+                    message,
+                    "INFO",
+                    actionType,
+                    fileSize,
+                    transferTime,
+                    encryptionTime
+                );
                 _logger.AddLogEntry(entry);
+
+                // Log performance warning if needed
+                LogPerformanceWarningIfNeeded(backupName, transferTime, encryptionTime);
             }
             catch (Exception)
             {
@@ -329,7 +425,19 @@ namespace EasySaveV2._0.Controllers
         /// <param name="format">Desired log format</param>
         public void SetLogFormat(LogFormat format)
         {
-            _logger.SetLogFormat(format);
+            lock (_lock)
+            {
+                // Reset both logger and log controller instances
+                Logger.ResetInstance();
+                ResetInstance();
+                
+                // Create new instance with updated format
+                var newInstance = new LogController();
+                newInstance._logger.SetLogFormat(format);
+                
+                // Update the instance reference
+                _instance = newInstance;
+            }
         }
 
         /// <summary>
@@ -357,17 +465,15 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                var entry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = backupType,
-                    SourcePath = sourcePath,
-                    TargetPath = targetPath,
-                    Message = $"File skipped: {Path.GetFileName(sourcePath)} - {reason}",
-                    LogType = "INFO",
-                    ActionType = ActionTypes.FILE_SKIPPED
-                };
+                var entry = CreateLogEntry(
+                    backupName,
+                    backupType,
+                    sourcePath,
+                    targetPath,
+                    _languageManager.GetTranslation("message.fileSkipped", Path.GetFileName(sourcePath), reason),
+                    "INFO",
+                    ActionTypes.FILE_SKIPPED
+                );
                 _logger.AddLogEntry(entry);
             }
             catch (Exception)
@@ -391,20 +497,20 @@ namespace EasySaveV2._0.Controllers
 
                 if (oldBackup.SourcePath != newBackup.SourcePath)
                 {
-                    changes.Add($"Source path: {oldBackup.SourcePath} → {newBackup.SourcePath}");
+                    changes.Add(_languageManager.GetTranslation("message.sourcePathChanged", oldBackup.SourcePath, newBackup.SourcePath));
                     actionType = ActionTypes.BACKUP_UPDATED_SOURCE;
                 }
 
                 if (oldBackup.TargetPath != newBackup.TargetPath)
                 {
-                    changes.Add($"Target path: {oldBackup.TargetPath} → {newBackup.TargetPath}");
+                    changes.Add(_languageManager.GetTranslation("message.targetPathChanged", oldBackup.TargetPath, newBackup.TargetPath));
                     actionType = actionType == ActionTypes.BACKUP_UPDATED_SOURCE ? 
                         ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TARGET;
                 }
 
                 if (newBackup.Type != oldBackup.Type)
                 {
-                    changes.Add($"Backup type: {oldBackup.Type} → {newBackup.Type}");
+                    changes.Add(_languageManager.GetTranslation("message.backupTypeChanged", oldBackup.Type, newBackup.Type));
                     actionType = actionType != ActionTypes.BACKUP_UPDATED ? 
                         ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TYPE;
                 }
@@ -413,17 +519,15 @@ namespace EasySaveV2._0.Controllers
                     ? $"Backup updated - {string.Join(", ", changes)}"
                     : "Backup configuration reviewed (no changes)";
 
-                var entry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    BackupType = newBackup.Type,
-                    SourcePath = newBackup.SourcePath,
-                    TargetPath = newBackup.TargetPath,
-                    Message = message,
-                    LogType = "INFO",
-                    ActionType = actionType
-                };
+                var entry = CreateLogEntry(
+                    backupName,
+                    newBackup.Type,
+                    newBackup.SourcePath,
+                    newBackup.TargetPath,
+                    message,
+                    "INFO",
+                    actionType
+                );
                 _logger.AddLogEntry(entry);
             }
             catch (Exception)

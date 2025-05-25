@@ -11,6 +11,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Diagnostics;
 using System.Threading;
+using System.Text.Json;
 
 namespace EasySaveV2._0.Controllers
 {
@@ -26,6 +27,10 @@ namespace EasySaveV2._0.Controllers
         private readonly LanguageManager _languageManager;
         private readonly Dictionary<string, StateModel> _backupStates;
         private bool _isDisposed;
+        private readonly object _stateLock = new object();
+        private readonly string _stateFile;
+        private readonly JsonSerializerOptions _jsonOptions;
+        private bool _isInitialized;
 
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
@@ -40,13 +45,15 @@ namespace EasySaveV2._0.Controllers
             {
                 _backupManager = new BackupManager();
                 _settingsController = SettingsController.Instance;
-                _logController = new LogController();
+                _logController = LogController.Instance;
                 _languageManager = LanguageManager.Instance;
                 _backupStates = new Dictionary<string, StateModel>();
+                _stateFile = Path.Combine(AppContext.BaseDirectory, "backup_states.json");
+                _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 
                 if (_backupManager == null || _settingsController == null || _logController == null || _languageManager == null)
                 {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("error.componentInitFailed"));
+                    throw new InvalidOperationException(_languageManager?.GetTranslation("error.componentInitFailed") ?? "Failed to initialize components");
                 }
 
                 // Subscribe to BackupManager events
@@ -55,7 +62,7 @@ namespace EasySaveV2._0.Controllers
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException(_languageManager.GetTranslation("error.controllerInitFailed"), ex);
+                throw new InvalidOperationException(_languageManager?.GetTranslation("error.controllerInitFailed") ?? "Controller initialization failed", ex);
             }
         }
 
@@ -294,7 +301,7 @@ namespace EasySaveV2._0.Controllers
         /// <returns>The backup job if found, null otherwise</returns>
         /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
         /// <exception cref="InvalidOperationException">Thrown when backup retrieval fails</exception>
-        public Backup GetBackup(string name)
+        public Backup? GetBackup(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
@@ -318,10 +325,10 @@ namespace EasySaveV2._0.Controllers
         /// Gets the current state of a backup job.
         /// </summary>
         /// <param name="name">Name of the backup job</param>
-        /// <returns>The current state of the backup job</returns>
+        /// <returns>The current state of the backup job, or null if not found</returns>
         /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
         /// <exception cref="InvalidOperationException">Thrown when state retrieval fails</exception>
-        public StateModel GetBackupState(string name)
+        public StateModel? GetBackupState(string name)
         {
             if (string.IsNullOrWhiteSpace(name))
                 throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
@@ -597,6 +604,97 @@ namespace EasySaveV2._0.Controllers
         private void LogFileOperation(string backupName, string sourcePath, string targetPath, long fileSize, long transferTime, long encryptionTime, string backupType)
         {
             _logController.LogFileOperation(backupName, backupType, sourcePath, targetPath, fileSize, transferTime, encryptionTime);
+        }
+
+        private void SaveStates(List<StateModel> states)
+        {
+            try
+            {
+                lock (_stateLock)
+                {
+                    var tempFile = _stateFile + ".tmp";
+                    var json = JsonSerializer.Serialize(states, _jsonOptions);
+                    File.WriteAllText(tempFile, json);
+                    File.Move(tempFile, _stateFile, true);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("System", "State", $"Failed to save states: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void UpdateJobState(string name, Action<StateModel> updateAction)
+        {
+            if (string.IsNullOrEmpty(name))
+                throw new ArgumentNullException(nameof(name));
+
+            try
+            {
+                lock (_stateLock)
+                {
+                    if (!_backupStates.ContainsKey(name))
+                    {
+                        _backupStates[name] = StateModel.CreateInitialState(name);
+                    }
+
+                    var state = _backupStates[name];
+                    updateAction(state);
+                    
+                    // Validation des valeurs
+                    state.ProgressPercentage = Math.Max(0, Math.Min(100, state.ProgressPercentage));
+                    state.FilesRemaining = Math.Max(0, state.FilesRemaining);
+                    state.BytesRemaining = Math.Max(0, state.BytesRemaining);
+                    
+                    state.LastActionTime = DateTime.Now;
+                    SaveStates(_backupStates.Values.ToList());
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError(name, "State", $"Failed to update state: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void LoadStates()
+        {
+            try
+            {
+                if (File.Exists(_stateFile))
+                {
+                    var json = File.ReadAllText(_stateFile);
+                    var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
+                    if (loadedStates != null)
+                    {
+                        foreach (var state in loadedStates.Where(s => !string.IsNullOrEmpty(s.Name)))
+                        {
+                            _backupStates[state.Name] = state;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("System", "State", $"Failed to load states: {ex.Message}");
+                throw;
+            }
+        }
+
+        private void EnsureInitialized()
+        {
+            if (!_isInitialized)
+            {
+                lock (_stateLock)
+                {
+                    if (!_isInitialized)
+                    {
+                        LoadStates();
+                        _isInitialized = true;
+                    }
+                }
+            }
         }
     }
 }
