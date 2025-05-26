@@ -17,16 +17,21 @@ namespace EasySaveV3._0.Views
         private TabPage _businessSoftwareTab = new();
         private TabPage _encryptionTab = new();
         private TabPage _logFormatTab = new();
+        private TabPage _priorityTab = new();
         private ListView _businessSoftwareList = new();
         private ListView _encryptionList = new();
+        private ListView _priorityList = new();
         private Button _addBusinessSoftwareButton = new();
         private Button _removeBusinessSoftwareButton = new();
         private Button _addEncryptionButton = new();
         private Button _removeEncryptionButton = new();
+        private Button _addPriorityButton = new();
+        private Button _removePriorityButton = new();
         private Button _saveButton = new();
         private Button _cancelButton = new();
         private ColumnHeader _businessSoftwareColumn = new();
         private ColumnHeader _encryptionColumn = new();
+        private ColumnHeader _priorityColumn = new();
         private ComboBox _logFormatComboBox = new();
 
         public SettingsForm(LanguageManager languageManager, SettingsController settingsController)
@@ -48,6 +53,8 @@ namespace EasySaveV3._0.Views
             _removeBusinessSoftwareButton.Click += OnRemoveBusinessSoftwareClick;
             _addEncryptionButton.Click += OnAddEncryptionClick;
             _removeEncryptionButton.Click += OnRemoveEncryptionClick;
+            _addPriorityButton.Click += OnAddPriorityClick;
+            _removePriorityButton.Click += OnRemovePriorityClick;
             _saveButton.Click += OnSaveClick;
             _cancelButton.Click += OnCancelClick;
         }
@@ -56,6 +63,7 @@ namespace EasySaveV3._0.Views
         {
             LoadBusinessSoftware();
             LoadEncryptionExtensions();
+            LoadPriorityExtensions();
             var currentFormat = _settingsController.GetCurrentLogFormat();
             _logFormatComboBox.SelectedItem = currentFormat;
         }
@@ -71,6 +79,7 @@ namespace EasySaveV3._0.Views
             _businessSoftwareTab = new TabPage(_languageManager.GetTranslation("settings.tab.businessSoftware"));
             _encryptionTab = new TabPage(_languageManager.GetTranslation("settings.tab.encryption"));
             _logFormatTab = new TabPage(_languageManager.GetTranslation("settings.tab.logFormat"));
+            _priorityTab = new TabPage(_languageManager.GetTranslation("settings.tab.priority"));
 
             // Initialize business software list
             _businessSoftwareList = new ListView
@@ -104,6 +113,22 @@ namespace EasySaveV3._0.Views
             };
             _encryptionList.Columns.Add(_encryptionColumn);
 
+            // Initialize priority list
+            _priorityList = new ListView
+            {
+                Dock = DockStyle.Fill,
+                View = View.Details,
+                FullRowSelect = true,
+                MultiSelect = false
+            };
+            _priorityList.SelectedIndexChanged += (s, e) => UpdateButtonsState();
+            _priorityColumn = new ColumnHeader
+            {
+                Text = _languageManager.GetTranslation("settings.priority.extension"),
+                Width = 200
+            };
+            _priorityList.Columns.Add(_priorityColumn);
+
             // Initialize log format combo box
             _logFormatComboBox = new ComboBox
             {
@@ -113,9 +138,6 @@ namespace EasySaveV3._0.Views
                 Padding = new Padding(10, 10, 10, 10)
             };
             _logFormatComboBox.Items.AddRange(new object[] { LogFormat.JSON, LogFormat.XML });
-
-            // Add controls to log format tab
-            _logFormatTab.Controls.Add(_logFormatComboBox);
 
             // Initialize buttons
             _addBusinessSoftwareButton = new Button
@@ -140,6 +162,19 @@ namespace EasySaveV3._0.Views
             _removeEncryptionButton = new Button
             {
                 Text = _languageManager.GetTranslation("settings.encryption.remove"),
+                Dock = DockStyle.Bottom,
+                Height = 30,
+                Enabled = false
+            };
+            _addPriorityButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.priority.add"),
+                Dock = DockStyle.Bottom,
+                Height = 30
+            };
+            _removePriorityButton = new Button
+            {
+                Text = _languageManager.GetTranslation("settings.priority.remove"),
                 Dock = DockStyle.Bottom,
                 Height = 30,
                 Enabled = false
@@ -178,6 +213,15 @@ namespace EasySaveV3._0.Views
             encryptionButtonPanel.Controls.Add(_addEncryptionButton);
             encryptionButtonPanel.Controls.Add(_removeEncryptionButton);
 
+            var priorityButtonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 40,
+                FlowDirection = FlowDirection.LeftToRight
+            };
+            priorityButtonPanel.Controls.Add(_addPriorityButton);
+            priorityButtonPanel.Controls.Add(_removePriorityButton);
+
             var mainButtonPanel = new FlowLayoutPanel
             {
                 Dock = DockStyle.Bottom,
@@ -194,8 +238,15 @@ namespace EasySaveV3._0.Views
             _encryptionTab.Controls.Add(_encryptionList);
             _encryptionTab.Controls.Add(encryptionButtonPanel);
 
+            _priorityTab.Controls.Add(_priorityList);
+            _priorityTab.Controls.Add(priorityButtonPanel);
+
+            _logFormatTab.Controls.Add(_logFormatComboBox);
+
+            // Add tabs to control
             _tabControl.TabPages.Add(_businessSoftwareTab);
             _tabControl.TabPages.Add(_encryptionTab);
+            _tabControl.TabPages.Add(_priorityTab);
             _tabControl.TabPages.Add(_logFormatTab);
 
             // Add controls to form
@@ -224,10 +275,21 @@ namespace EasySaveV3._0.Views
             UpdateButtonsState();
         }
 
+        private void LoadPriorityExtensions()
+        {
+            _priorityList.Items.Clear();
+            foreach (var extension in _settingsController.GetPriorityExtensions())
+            {
+                _priorityList.Items.Add(extension);
+            }
+            UpdateButtonsState();
+        }
+
         private void UpdateButtonsState()
         {
             _removeBusinessSoftwareButton.Enabled = _businessSoftwareList.Items.Count > 0 && _businessSoftwareList.SelectedItems.Count > 0;
             _removeEncryptionButton.Enabled = _encryptionList.Items.Count > 0 && _encryptionList.SelectedItems.Count > 0;
+            _removePriorityButton.Enabled = _priorityList.Items.Count > 0 && _priorityList.SelectedItems.Count > 0;
         }
 
         private void OnAddBusinessSoftwareClick(object? sender, EventArgs e)
@@ -269,6 +331,27 @@ namespace EasySaveV3._0.Views
             {
                 _settingsController.RemoveEncryptionExtension(_encryptionList.SelectedItems[0].Text);
                 LoadEncryptionExtensions();
+            }
+        }
+
+        private void OnAddPriorityClick(object? sender, EventArgs e)
+        {
+            using (var dialog = new InputDialog(_languageManager.GetTranslation("settings.priority.add")))
+            {
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    _settingsController.AddPriorityExtension(dialog.InputText);
+                    LoadPriorityExtensions();
+                }
+            }
+        }
+
+        private void OnRemovePriorityClick(object? sender, EventArgs e)
+        {
+            if (_priorityList.SelectedItems.Count > 0)
+            {
+                _settingsController.RemovePriorityExtension(_priorityList.SelectedItems[0].Text);
+                LoadPriorityExtensions();
             }
         }
 
