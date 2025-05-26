@@ -26,6 +26,7 @@ namespace EasySaveV2._0.Controllers
         private DateTime _lastProcessCheck;
         private const int PROCESS_CACHE_DURATION_SECONDS = 5;
 
+
         /// <summary>
         /// Gets the singleton instance of SettingsController.
         /// </summary>
@@ -361,10 +362,11 @@ namespace EasySaveV2._0.Controllers
         public bool IsBusinessSoftwareRunning()
         {
             UpdateProcessCache();
-            return _settings.BusinessSoftware.Any(software => 
-                _processCache.TryGetValue(software, out var processes) && 
+            return _settings.BusinessSoftware.Any(software =>
+                _processCache.TryGetValue(software, out var processes) &&
                 processes.Length > 0);
         }
+
 
         /// <summary>
         /// Gets the name of the currently running business software.

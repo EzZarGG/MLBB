@@ -21,6 +21,7 @@ namespace EasySaveV2._0.Managers
     /// </summary>
     public class BackupManager
     {
+        private readonly LanguageManager _languageManager;
         // Configuration constants
         private const int MAX_BACKUPS = 5;  // Maximum number of backup jobs allowed
         private const int BUFFER_SIZE = 8192;  // 8KB buffer size for file operations
@@ -48,6 +49,7 @@ namespace EasySaveV2._0.Managers
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
 
+        public event EventHandler<string>? BusinessSoftwareDetected;
         /// <summary>
         /// Initializes a new instance of the BackupManager class.
         /// Sets up file paths, loads existing backups and states, and initializes controllers.
@@ -58,7 +60,10 @@ namespace EasySaveV2._0.Managers
             _stateFile = Path.Combine(AppContext.BaseDirectory, "states.json");
             _backups = new List<Backup>();
             _jobStates = new Dictionary<string, StateModel>();
+            _languageManager = LanguageManager.Instance;
+
             _jsonOptions = new JsonSerializerOptions
+
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -535,7 +540,34 @@ namespace EasySaveV2._0.Managers
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
         public async Task ExecuteJob(string name)
         {
+            // 1) Récupère et vérifie le job
             var backup = GetJob(name);
+            if (backup == null)
+                throw new InvalidOperationException($"Backup job '{name}' not found");
+
+            // 2) Si un logiciel métier tourne, on log et on met en pause
+            if (BusinessSoftwareManager.IsRunning())
+            {
+                BusinessSoftwareDetected?.Invoke(this, name);
+
+                var stopEntry = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = name,
+                    BackupType = backup.Type,
+                    Message = _languageManager.GetTranslation("message.backupStoppedBusiness"),
+                    LogType = "INFO",
+                    ActionType = "BACKUP_STOPPED"
+                };
+                _logger.AddLogEntry(stopEntry);
+
+                UpdateJobState(name, state =>
+                {
+                    state.Status = "Paused";
+                    state.ProgressPercentage = 0; // ou  state.ProgressPercentage = state.ProgressPercentage; 
+                });
+                return;
+            }
             if (backup == null)
             {
                 throw new InvalidOperationException($"Backup job '{name}' not found");
