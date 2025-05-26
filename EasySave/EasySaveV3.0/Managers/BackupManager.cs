@@ -528,6 +528,62 @@ namespace EasySaveV3._0.Managers
         }
 
         /// <summary>
+        /// Checks if there are any priority files remaining in any backup job.
+        /// </summary>
+        /// <returns>True if there are priority files remaining in any job, false otherwise</returns>
+        private bool HasPriorityFilesRemaining()
+        {
+            var priorityExtensions = Config.GetPriorityExtensions();
+            
+            // Check all backup jobs
+            foreach (var backup in _backups)
+            {
+                // Skip jobs that are not active
+                var state = GetJobState(backup.Name);
+                if (state == null || state.Status != "Active")
+                    continue;
+
+                // Get all files in the source directory
+                var files = Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories);
+                
+                // Check if any remaining files have priority extensions
+                var hasPriorityFiles = files.Any(f => 
+                {
+                    var extension = Path.GetExtension(f).ToLower();
+                    return priorityExtensions.Contains(extension);
+                });
+
+                if (hasPriorityFiles)
+                    return true;
+            }
+            
+            return false;
+        }
+
+        /// <summary>
+        /// Gets the list of files that need to be processed for a backup job,
+        /// respecting the priority of files across all jobs.
+        /// </summary>
+        /// <param name="backup">The backup job to process</param>
+        /// <returns>List of files to process, ordered by priority</returns>
+        private async Task<List<string>> GetFilesToProcessAsync(Backup backup)
+        {
+            var files = await Task.Run(() => Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories));
+            var priorityExtensions = Config.GetPriorityExtensions();
+            
+            // Sort files by priority
+            var sortedFiles = files.OrderByDescending(f => priorityExtensions.Contains(Path.GetExtension(f).ToLower())).ToList();
+            
+            // If there are priority files in any job, filter out non-priority files
+            if (HasPriorityFilesRemaining())
+            {
+                sortedFiles = sortedFiles.Where(f => priorityExtensions.Contains(Path.GetExtension(f).ToLower())).ToList();
+            }
+            
+            return sortedFiles;
+        }
+
+        /// <summary>
         /// Executes a backup job, copying and optionally encrypting files.
         /// Handles differential backups, progress tracking, and error management.
         /// </summary>
@@ -554,13 +610,35 @@ namespace EasySaveV3._0.Managers
             var totalEncryptionTime = 0L;
             var hasErrors = false;
             var errorMessages = new List<string>();
+            var processedFilesOrder = new List<string>(); // Pour garder l'ordre des fichiers traités
 
             try
             {
-                // Get all files to process
-                var files = await Task.Run(() => Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories));
-                totalFiles = files.Length;
-                totalBytes = files.Sum(f => new FileInfo(f).Length);
+                // Get files to process, respecting priority across all jobs
+                var sortedFiles = await GetFilesToProcessAsync(backup);
+                
+                totalFiles = sortedFiles.Count;
+                totalBytes = sortedFiles.Sum(f => new FileInfo(f).Length);
+
+                // Log initial file list
+                var initialLogEntry = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = name,
+                    BackupType = backup.Type,
+                    SourcePath = backup.SourcePath,
+                    TargetPath = backup.TargetPath,
+                    Message = $"Starting backup with {totalFiles} files. File list:\n" + 
+                             string.Join("\n", sortedFiles.Select(f => 
+                             {
+                                 var extension = Path.GetExtension(f).ToLower();
+                                 var isPriority = Config.GetPriorityExtensions().Contains(extension);
+                                 return $"- {Path.GetFileName(f)} ({(isPriority ? "Priority" : "Non-priority")})";
+                             })),
+                    LogType = "INFO",
+                    ActionType = "BACKUP_START"
+                };
+                _logger.AddLogEntry(initialLogEntry);
 
                 // Update initial state to Active
                 UpdateJobState(name, state =>
@@ -576,7 +654,7 @@ namespace EasySaveV3._0.Managers
                 });
 
                 // Process each file
-                foreach (var sourceFile in files)
+                foreach (var sourceFile in sortedFiles)
                 {
                     // Check for cancellation
                     if (cts.Token.IsCancellationRequested)
@@ -628,6 +706,7 @@ namespace EasySaveV3._0.Managers
                             totalTransferTime += stopwatch.ElapsedMilliseconds;
                             bytesTransferred += sourceInfo.Length;
                             filesProcessed++;
+                            processedFilesOrder.Add(sourceFile); // Ajouter le fichier à l'ordre de traitement
 
                             // Update progress after each file
                             var progress = (int)((filesProcessed * 100.0) / totalFiles);
@@ -640,6 +719,26 @@ namespace EasySaveV3._0.Managers
                                 state.CurrentSourceFile = sourceFile;
                                 state.CurrentTargetFile = targetFile;
                             });
+
+                            // After processing each file, check if we need to update the file list
+                            if (filesProcessed % 10 == 0)
+                            {
+                                var updatedFiles = await GetFilesToProcessAsync(backup);
+                                if (updatedFiles.Count > sortedFiles.Count)
+                                {
+                                    sortedFiles = updatedFiles;
+                                    totalFiles = sortedFiles.Count;
+                                    totalBytes = sortedFiles.Sum(f => new FileInfo(f).Length);
+                                    
+                                    UpdateJobState(name, state =>
+                                    {
+                                        state.TotalFilesCount = totalFiles;
+                                        state.TotalFilesSize = totalBytes;
+                                        state.FilesRemaining = totalFiles - filesProcessed;
+                                        state.BytesRemaining = totalBytes - bytesTransferred;
+                                    });
+                                }
+                            }
                         }
                         catch (OperationCanceledException)
                         {
@@ -698,43 +797,8 @@ namespace EasySaveV3._0.Managers
                     state.CurrentTargetFile = string.Empty;
                 });
 
-                // Do not send final progress event if backup completed normally
-                if (hasErrors)
-                {
-                    // Send progress event only in case of error
-                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                        name,
-                        backup.SourcePath,
-                        backup.TargetPath,
-                        0,
-                        (int)(filesProcessed * 100.0 / totalFiles),  // Keep the last real percentage
-                        bytesTransferred,
-                        totalBytes,
-                        filesProcessed,
-                        totalFiles,
-                        TimeSpan.Zero,
-                        false
-                    ));
-                }
-                else {
-                    // Send final progress event with completed status and 100% progress
-                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                        name,
-                        backup.SourcePath,
-                        backup.TargetPath,
-                        0,
-                        100, // Ensure progress is 100% on completion
-                        totalBytes,
-                        totalBytes,
-                        totalFiles,
-                        totalFiles,
-                        TimeSpan.Zero,
-                        true // Indicate success
-                    ));
-                }
-
-                // Create final log entry
-                var logEntry = new LogEntry
+                // Create final log entry with file processing order
+                var finalLogEntry = new LogEntry
                 {
                     Timestamp = startTime,
                     BackupName = name,
@@ -744,14 +808,21 @@ namespace EasySaveV3._0.Managers
                     FileSize = totalBytes,
                     TransferTime = totalTransferTime,
                     EncryptionTime = backup.Encrypt ? totalEncryptionTime : -1,
-                    Message = hasErrors 
-                        ? $"Backup completed with errors: {string.Join("; ", errorMessages)}"
+                    Message = (hasErrors 
+                        ? $"Backup completed with errors: {string.Join("; ", errorMessages)}\n"
                         : $"Backup completed successfully. Processed {filesProcessed} files ({FormatFileSize(bytesTransferred)}) in {totalTransferTime}ms" + 
-                          (backup.Encrypt ? $" (Encryption time: {totalEncryptionTime}ms)" : ""),
+                          (backup.Encrypt ? $" (Encryption time: {totalEncryptionTime}ms)" : "") + "\n") +
+                        "Files processed in order:\n" +
+                        string.Join("\n", processedFilesOrder.Select((f, index) => 
+                        {
+                            var extension = Path.GetExtension(f).ToLower();
+                            var isPriority = Config.GetPriorityExtensions().Contains(extension);
+                            return $"{index + 1}. {Path.GetFileName(f)} ({(isPriority ? "Priority" : "Non-priority")})";
+                        })),
                     LogType = hasErrors ? "ERROR" : "INFO",
                     ActionType = "BACKUP_EXECUTION"
                 };
-                _logger.AddLogEntry(logEntry);
+                _logger.AddLogEntry(finalLogEntry);
             }
             catch (OperationCanceledException)
             {

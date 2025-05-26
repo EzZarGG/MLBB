@@ -105,6 +105,13 @@ namespace EasySaveV3._0
             /// Extensions can be specified with or without the leading dot.
             /// </summary>
             public List<string> EncryptionExtensions { get; set; } = new();
+
+            /// <summary>
+            /// List of file extensions that have priority during backup.
+            /// Files with these extensions will be processed before non-priority files.
+            /// Extensions can be specified with or without the leading dot.
+            /// </summary>
+            public List<string> PriorityExtensions { get; set; } = new();
         }
 
         /// <summary>
@@ -188,6 +195,36 @@ namespace EasySaveV3._0
                        .EncryptionExtensions
                        .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
                        .ToHashSet();
+        }
+
+        /// <summary>
+        /// Gets the list of file extensions that have priority during backup.
+        /// Normalizes extensions to lowercase and ensures they start with a dot.
+        /// </summary>
+        /// <returns>Set of normalized priority file extensions</returns>
+        public static HashSet<string> GetPriorityExtensions()
+        {
+            return LoadSettings()
+                       .PriorityExtensions
+                       .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
+                       .ToHashSet();
+        }
+
+        /// <summary>
+        /// Checks if a file has priority based on its extension.
+        /// </summary>
+        /// <param name="filePath">Path to the file</param>
+        /// <returns>True if the file has priority, false otherwise</returns>
+        /// <exception cref="ArgumentException">Thrown when file path is invalid.</exception>
+        public static bool IsPriorityFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentException("File path cannot be empty.");
+            }
+
+            var extension = Path.GetExtension(filePath).ToLower();
+            return GetPriorityExtensions().Contains(extension);
         }
     }
 }
