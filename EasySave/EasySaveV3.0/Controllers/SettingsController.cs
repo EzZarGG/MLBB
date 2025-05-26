@@ -468,6 +468,103 @@ namespace EasySaveV3._0.Controllers
             public LogFormat LogFormat { get; set; } = LogFormat.JSON;
             public List<string> BusinessSoftware { get; set; } = new List<string>();
             public List<string> EncryptionExtensions { get; set; } = new List<string>();
+            public List<string> PriorityExtensions { get; set; } = new List<string>();
+        }
+
+        /// <summary>
+        /// Gets the list of priority extensions.
+        /// </summary>
+        /// <returns>List of file extensions with priority</returns>
+        public List<string> GetPriorityExtensions()
+        {
+            return new List<string>(_settings.PriorityExtensions);
+        }
+
+        /// <summary>
+        /// Adds a priority extension to the list.
+        /// </summary>
+        /// <param name="extension">File extension to add</param>
+        /// <exception cref="ArgumentException">Thrown when extension is invalid.</exception>
+        public void AddPriorityExtension(string extension)
+        {
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                throw new ArgumentException(_languageManager.GetTranslation("error.extensionEmpty"));
+            }
+
+            extension = extension.Trim().ToLower();
+            if (!extension.StartsWith("."))
+            {
+                extension = "." + extension;
+            }
+
+            if (!_settings.PriorityExtensions.Contains(extension))
+            {
+                _settings.PriorityExtensions.Add(extension);
+                SaveSettings();
+            }
+        }
+
+        /// <summary>
+        /// Removes a priority extension from the list.
+        /// </summary>
+        /// <param name="extension">File extension to remove</param>
+        /// <exception cref="ArgumentException">Thrown when extension is invalid.</exception>
+        public void RemovePriorityExtension(string extension)
+        {
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                throw new ArgumentException(_languageManager.GetTranslation("error.extensionEmpty"));
+            }
+
+            extension = extension.Trim().ToLower();
+            if (!extension.StartsWith("."))
+            {
+                extension = "." + extension;
+            }
+
+            if (_settings.PriorityExtensions.Remove(extension))
+            {
+                SaveSettings();
+            }
+        }
+
+        /// <summary>
+        /// Sets the list of priority extensions.
+        /// </summary>
+        /// <param name="extensions">List of file extensions</param>
+        /// <exception cref="ArgumentNullException">Thrown when extensions list is null.</exception>
+        public void SetPriorityExtensions(List<string> extensions)
+        {
+            if (extensions == null)
+            {
+                throw new ArgumentNullException(nameof(extensions), _languageManager.GetTranslation("error.extensionsListNull"));
+            }
+
+            _settings.PriorityExtensions = extensions
+                .Where(e => !string.IsNullOrWhiteSpace(e))
+                .Select(e => e.Trim().ToLower())
+                .Select(e => e.StartsWith(".") ? e : "." + e)
+                .Distinct()
+                .ToList();
+            SaveSettings();
+        }
+
+        /// <summary>
+        /// Checks if a file has priority based on its extension.
+        /// </summary>
+        /// <param name="filePath">Path to the file</param>
+        /// <returns>True if the file has priority, false otherwise</returns>
+        /// <exception cref="ArgumentException">Thrown when file path is invalid.</exception>
+        public bool IsPriorityFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+            {
+                throw new ArgumentException(_languageManager.GetTranslation("error.filePathEmpty"));
+            }
+
+            var extension = Path.GetExtension(filePath).ToLower();
+            return _settings.PriorityExtensions.Contains(extension);
         }
     }
 }
