@@ -1030,15 +1030,18 @@ namespace EasySaveV2._0
         {
             try
             {
-                _updateTimer.Stop();
-                _backupController.FileProgressChanged -= OnFileProgressChanged;
-                _backupController.EncryptionProgressChanged -= OnEncryptionProgressChanged;
-                _languageManager.LanguageChanged -= OnLanguageChanged;
-                _languageManager.TranslationsReloaded -= OnTranslationsReloaded;
-
-                if (_backupController is IDisposable disposable)
+                _updateTimer?.Stop();
+                if (_backupController != null)
                 {
-                    disposable.Dispose();
+                    _backupController.FileProgressChanged -= OnFileProgressChanged;
+                    _backupController.EncryptionProgressChanged -= OnEncryptionProgressChanged;
+                    if (_backupController is IDisposable disposable)
+                        disposable.Dispose();
+                }
+                if (_languageManager != null)
+                {
+                    _languageManager.LanguageChanged -= OnLanguageChanged;
+                    _languageManager.TranslationsReloaded -= OnTranslationsReloaded;
                 }
             }
             catch (Exception ex)

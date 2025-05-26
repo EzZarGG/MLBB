@@ -52,7 +52,7 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                _settingsFile = Path.Combine(AppContext.BaseDirectory, "settings.json");
+                _settingsFile = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
                 _jsonOptions = new JsonSerializerOptions
                 {
                     WriteIndented = true,

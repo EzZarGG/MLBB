@@ -217,7 +217,8 @@ namespace EasySaveV2._0.Views
         private void LoadEncryptionExtensions()
         {
             _encryptionList.Items.Clear();
-            foreach (var extension in _settingsController.GetEncryptionExtensions())
+            var extensions = _settingsController.GetEncryptionExtensions();
+            foreach (var extension in extensions)
             {
                 _encryptionList.Items.Add(extension);
             }
