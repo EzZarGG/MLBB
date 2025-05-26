@@ -201,7 +201,25 @@ namespace EasySaveV2._0
         /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
         public static string GetCryptoSoftPath()
         {
-            return LoadSettings().CryptoSoftPath ?? string.Empty;
+            var path = LoadSettings().CryptoSoftPath;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            // Vérifier si le chemin existe
+            if (!File.Exists(path))
+            {
+                // Essayer de trouver le fichier dans le dossier de l'application
+                var appPath = Path.Combine(AppContext.BaseDirectory, Path.GetFileName(path));
+                if (File.Exists(appPath))
+                {
+                    return appPath;
+                }
+                return string.Empty;
+            }
+
+            return path;
         }
     }
 }

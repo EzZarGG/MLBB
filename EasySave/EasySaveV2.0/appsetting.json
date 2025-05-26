@@ -3,5 +3,5 @@
   "BusinessSoftware": [ "Excel", "Word" ],
   "EncryptionKey": "MaSuperClef1234",
   "EncryptionExtensions": [ ".txt", ".pdf", ".docx" ],
-  "CryptoSoftPath": "C:/Users/ecres/source/repos/MLBB/EasySave/CryptoConsole/bin/Debug/net8.0/CryptoConsole.exe"
+  "CryptoSoftPath": "C:\\Users\\ecres\\source\\repos\\MLBB\\EasySave\\CryptoConsole\\bin\\Debug\\net8.0\\win-x64\\publish\\CryptoConsole.exe"
 }
