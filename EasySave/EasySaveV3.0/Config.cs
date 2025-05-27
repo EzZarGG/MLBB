@@ -204,8 +204,7 @@ namespace EasySaveV3._0
         /// <returns>Set of normalized priority file extensions</returns>
         public static HashSet<string> GetPriorityExtensions()
         {
-            return LoadSettings()
-                       .PriorityExtensions
+            return Controllers.SettingsController.Instance.GetPriorityExtensions()
                        .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
                        .ToHashSet();
         }
