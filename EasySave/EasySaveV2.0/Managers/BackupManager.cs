@@ -584,7 +584,7 @@ namespace EasySaveV2._0.Managers
                 foreach (var sourceFile in files)
                 {
                     // Check for cancellation
-                    if (cts.Token.IsCancellationRequested)
+                    if (_jobCancellationTokens.TryGetValue(name, out var cts) && cts.Token.IsCancellationRequested)
                     {
                         UpdateJobState(name, state => 
                         {
