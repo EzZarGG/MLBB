@@ -40,8 +40,20 @@ The purpose of EasySave is to offer a reliable and straightforward backup soluti
 - **Enhanced Logging Options**: Choose between JSON and XML formats for log files
 - **Improved Configuration**: Added format selection for logging preferences
 
+#### v2.0.0
+- **All features from v1.1.0**
+- **Graphical User Interface**: Modern Windows Forms interface
+- **Real-time Progress**: Visual progress tracking for backup operations
+- **Advanced Encryption**: Integration with CryptoSoft for file encryption
+- **Business Software Protection**: Automatic pause during business software usage
+- **Enhanced Configuration**: JSON-based configuration with encryption settings
+- **Improved Error Handling**: Detailed error reporting and logging
+- **Multi-threaded Operations**: Parallel backup execution support
+
 ### Getting Started
-Refer to the User Guide for detailed instructions on how to use EasySaveV1.
+Refer to the User Guide for detailed instructions on how to use 
+EasySave v1.0.
+Refer to the User Guide V2 for detailed instructions on how to use EasySave v2.0.
 
 ---
 
@@ -85,5 +97,15 @@ L'objectif d'EasySave est d'offrir une solution de sauvegarde fiable et simple q
 - **Options de journalisation améliorées** : Choisissez entre les formats JSON et XML pour les fichiers journaux
 - **Configuration améliorée** : Ajout de la sélection du format pour les préférences de journalisation
 
+#### v2.0.0
+- **Toutes les fonctionnalités de v1.1.0**
+- **Interface Graphique** : Interface moderne Windows Forms
+- **Progression en Temps Réel** : Suivi visuel des opérations de sauvegarde
+- **Chiffrement Avancé** : Intégration avec CryptoSoft pour le chiffrement des fichiers
+- **Protection des Logiciels Métier** : Pause automatique pendant l'utilisation des logiciels métier
+- **Configuration Améliorée** : Configuration basée sur JSON avec paramètres de chiffrement
+- **Gestion des Erreurs Améliorée** : Rapports d'erreurs et journalisation détaillés
+- **Opérations Multi-threads** : Support de l'exécution parallèle des sauvegardes
+
 ### Démarrage
-Consultez le Guide d'Utilisateur pour des instructions détaillées sur l'utilisation d'EasySaveV1.
+Consultez le Guide d'Utilisateur pour des instructions détaillées sur l'utilisation d'EasySaveV2.
