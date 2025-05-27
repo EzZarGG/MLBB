@@ -1,0 +1,7 @@
+{
+  "LogFormat": "JSON",
+  "BusinessSoftware": [  ],
+  "EncryptionKey": "MaSuperClef1234",
+  "EncryptionExtensions": [ ],
+  "CryptoSoftPath": "../../CryptoConsole/bin/Debug/net8.0-windows/CryptoConsole.exe"
+}

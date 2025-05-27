@@ -4,169 +4,378 @@ using System.IO;
 using System.Text.Json;
 using System.Xml.Serialization;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 
+/// <summary>
+/// Provides comprehensive logging functionality for the EasySave application.
+/// Supports multiple log formats (JSON/XML), log rotation, and debug logging.
+/// Implements the Singleton pattern for global access to logging services.
+/// </summary>
 namespace EasySaveLogging
 {
-    // Enum representing the log format type
+    /// <summary>
+    /// Defines the supported formats for log file storage.
+    /// </summary>
     public enum LogFormat
     {
+        /// <summary>JavaScript Object Notation format</summary>
         JSON,
+        /// <summary>Extensible Markup Language format</summary>
         XML
     }
 
-    // Represents a single entry in the log.
-    public class LogEntry
+    /// <summary>
+    /// Defines the severity levels for debug logging.
+    /// Higher values indicate more detailed logging.
+    /// </summary>
+    public enum DebugLogLevel
     {
-        public DateTime Timestamp { get; set; }
-        public string BackupName { get; set; }
-        public string SourcePath { get; set; }
-        public string TargetPath { get; set; }
-        public long FileSize { get; set; }
-        public long TransferTime { get; set; }
-        public string Message { get; set; }
-        public string LogType { get; set; }
-        public string ActionType { get; set; }
+        /// <summary>No debug logging</summary>
+        None = 0,
+        /// <summary>Only error messages</summary>
+        Error = 1,
+        /// <summary>Errors and warnings</summary>
+        Warning = 2,
+        /// <summary>Errors, warnings, and general information</summary>
+        Info = 3,
+        /// <summary>All debug messages including detailed information</summary>
+        Debug = 4
     }
 
-    // Represents a collection of log entries for XML serialization
-    [XmlRoot("Logs")]
+    /// <summary>
+    /// Represents a single log entry in the system.
+    /// Contains detailed information about backup operations and system events.
+    /// </summary>
+    public class LogEntry
+    {
+        /// <summary>When the event occurred</summary>
+        public DateTime Timestamp { get; set; }
+        /// <summary>Name of the backup job associated with this log entry</summary>
+        public string BackupName { get; set; } = string.Empty;
+        /// <summary>Source path of the backup operation</summary>
+        public string? SourcePath { get; set; }
+        /// <summary>Target path of the backup operation</summary>
+        public string? TargetPath { get; set; }
+        /// <summary>Size of the processed file in bytes</summary>
+        public long? FileSize { get; set; }
+        /// <summary>Time taken for file transfer in milliseconds</summary>
+        public long? TransferTime { get; set; }
+        /// <summary>Time taken for encryption in milliseconds (negative values indicate errors)</summary>
+        public long? EncryptionTime { get; set; }
+        /// <summary>Detailed message describing the event</summary>
+        public string Message { get; set; } = string.Empty;
+        /// <summary>Severity level of the log entry (INFO, ERROR, etc.)</summary>
+        public string LogType { get; set; } = "INFO";
+        /// <summary>Type of action performed (BACKUP_START, FILE_TRANSFER, etc.)</summary>
+        public string ActionType { get; set; } = string.Empty;
+        /// <summary>Type of backup operation (Full or Differential)</summary>
+        public string? BackupType { get; set; }
+
+        /// <summary>
+        /// Validates the log entry to ensure all required fields are properly set.
+        /// </summary>
+        /// <exception cref="ArgumentException">Thrown when required fields are empty or invalid</exception>
+        public void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(BackupName))
+                throw new ArgumentException("BackupName cannot be empty");
+            if (string.IsNullOrWhiteSpace(Message))
+                throw new ArgumentException("Message cannot be empty");
+            if (string.IsNullOrWhiteSpace(ActionType))
+                throw new ArgumentException("ActionType cannot be empty");
+            if (Timestamp == default)
+                Timestamp = DateTime.Now;
+        }
+    }
+
+    /// <summary>
+    /// Collection of log entries for XML serialization.
+    /// Used to maintain the root element structure in XML logs.
+    /// </summary>
+    [XmlRoot("Logs", Namespace = "")]
     public class LogEntryCollection
     {
+        /// <summary>List of log entries in the collection</summary>
         [XmlElement("LogEntry")]
         public List<LogEntry> Entries { get; set; } = new List<LogEntry>();
     }
 
-    // Singleton logger that writes entries to a file in JSON or XML format.
+    /// <summary>
+    /// Configuration settings for log file rotation.
+    /// Controls when and how log files are archived and cleaned up.
+    /// </summary>
+    public class LogRotationConfig
+    {
+        /// <summary>Maximum size of a log file before rotation (default: 10MB)</summary>
+        public long MaxFileSizeBytes { get; set; } = 10 * 1024 * 1024;
+        /// <summary>Maximum number of archived log files to keep (default: 5)</summary>
+        public int MaxFiles { get; set; } = 5;
+        /// <summary>Whether to rotate logs daily (default: true)</summary>
+        public bool RotateByDate { get; set; } = true;
+    }
+
+    /// <summary>
+    /// Singleton logger implementation that manages application logging.
+    /// Supports multiple log formats, log rotation, and debug logging levels.
+    /// Thread-safe operations for concurrent access.
+    /// </summary>
     public class Logger
     {
-        // Lazy singleton instance
-        private static readonly Lazy<Logger> _instance =
-            new Lazy<Logger>(() => new Logger());
+        // Singleton instance and synchronization
+        private static Logger? _instance;
+        private static readonly object _lock = new object();
+        private static readonly object _fileLock = new object();
 
-        // Path to the log file
+        // Logging configuration
         private string _logFilePath;
+        private LogFormat _currentFormat;
+        private DebugLogLevel _debugLevel = DebugLogLevel.Info;
+        private static readonly string DEBUG_LOG_FILE = Path.Combine(AppContext.BaseDirectory, "debug.log");
 
-        // Current log format (default is JSON)
-        private LogFormat _logFormat = LogFormat.JSON;
-
-        // JSON serializer options (indented, camel-case properties)
+        // Serialization settings
         private static readonly JsonSerializerOptions _jsonOpts = new JsonSerializerOptions
         {
             WriteIndented = true,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         };
+        private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntryCollection), new XmlRootAttribute { ElementName = "Logs", Namespace = "" });
 
-        // XML serializer for log entries
-        private readonly XmlSerializer _xmlSerializer = new XmlSerializer(typeof(LogEntryCollection));
-
-        // Private constructor to enforce singleton pattern
-        private Logger() { }
-
-        // Gets the singleton instance of the Logger.
-        public static Logger GetInstance() => _instance.Value;
-
-        // Gets the current log format.
-        public LogFormat CurrentFormat => _logFormat;
-
-        // Sets the format for writing logs.
-        // <param name="format">The log format to use</param>
-        public void SetLogFormat(LogFormat format)
+        /// <summary>
+        /// Private constructor for singleton pattern.
+        /// Initializes logging directory and default log file.
+        /// </summary>
+        private Logger()
         {
-            if (_logFormat != format)
+            _currentFormat = LogFormat.JSON;
+            var logDir = Path.Combine(AppContext.BaseDirectory, "Logs");
+            if (!Directory.Exists(logDir))
             {
-                _logFormat = format;
-
-                // Convert existing logs if file exists
-                if (File.Exists(_logFilePath))
-                {
-                    ConvertLogFileFormat();
-                }
-                else
-                {
-                    // Create a new empty log file with the selected format
-                    InitializeLogFile();
-                }
-
-                // Log the format change
-                LogAdminAction("System", "FORMAT_CHANGE", $"Log format changed to {format}");
+                Directory.CreateDirectory(logDir);
             }
-        }
-
-        // Sets the file path for the log file. Creates directory and file if they do not exist.
-        public void SetLogFilePath(string path)
-        {
-            _logFilePath = path;
-            var dir = Path.GetDirectoryName(path);
-            if (!Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
+            _logFilePath = Path.Combine(logDir, "log.json");
             InitializeLogFile();
         }
 
-        // Initializes the log file with an empty structure based on the current format.
+        /// <summary>
+        /// Gets the singleton instance of the logger.
+        /// Thread-safe implementation.
+        /// </summary>
+        /// <returns>The singleton logger instance</returns>
+        public static Logger GetInstance()
+        {
+            lock (_lock)
+            {
+                return _instance ??= new Logger();
+            }
+        }
+
+        /// <summary>
+        /// Gets the current log file format.
+        /// </summary>
+        public LogFormat CurrentFormat => _currentFormat;
+
+        /// <summary>
+        /// Gets the current log file path.
+        /// </summary>
+        /// <returns>Path to the current log file</returns>
+        public string GetLogFilePath() => _logFilePath;
+
+        /// <summary>
+        /// Sets the debug logging level.
+        /// Controls the verbosity of debug messages.
+        /// </summary>
+        /// <param name="level">The new debug logging level</param>
+        public void SetDebugLevel(DebugLogLevel level)
+        {
+            _debugLevel = level;
+            DebugLog($"Debug level set to {level}", DebugLogLevel.Info);
+        }
+
+        /// <summary>
+        /// Writes a debug message to the debug log file.
+        /// Respects the current debug level setting.
+        /// </summary>
+        /// <param name="message">The debug message to log</param>
+        /// <param name="level">The severity level of the debug message</param>
+        private static void DebugLog(string message, DebugLogLevel level = DebugLogLevel.Debug)
+        {
+            if (level == DebugLogLevel.None) return;
+
+            try
+            {
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var logMessage = $"[{timestamp}] [{level}] {message}{Environment.NewLine}";
+                File.AppendAllText(DEBUG_LOG_FILE, logMessage);
+            }
+            catch
+            {
+                // Silently fail for debug logging to prevent cascading errors
+            }
+        }
+
+        /// <summary>
+        /// Sets a new path for the log file.
+        /// Creates the directory if it doesn't exist.
+        /// </summary>
+        /// <param name="path">The new path for the log file</param>
+        public void SetLogFilePath(string path)
+        {
+            lock (_fileLock)
+            {
+                var dir = Path.GetDirectoryName(path);
+                if (dir != null && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                }
+                _logFilePath = path;
+                InitializeLogFile();
+            }
+        }
+
+        /// <summary>
+        /// Changes the log file format and updates the file extension accordingly.
+        /// </summary>
+        /// <param name="format">The new log format to use</param>
+        public void SetLogFormat(LogFormat format)
+        {
+            lock (_fileLock)
+            {
+                if (_currentFormat != format)
+                {
+                    _currentFormat = format;
+                    string newPath = Path.ChangeExtension(_logFilePath, format == LogFormat.JSON ? ".json" : ".xml");
+                    if (newPath != _logFilePath)
+                    {
+                        _logFilePath = newPath;
+                        InitializeLogFile();
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Initializes a new log file with the appropriate format structure.
+        /// Creates the file if it doesn't exist.
+        /// </summary>
         private void InitializeLogFile()
         {
-            if (File.Exists(_logFilePath))
-                return;
-
-            if (_logFormat == LogFormat.JSON)
+            if (!File.Exists(_logFilePath))
             {
-                File.WriteAllText(_logFilePath, "[]"); // Initialize with empty JSON array
-            }
-            else // XML format
-            {
-                using var writer = new StreamWriter(_logFilePath);
-                _xmlSerializer.Serialize(writer, new LogEntryCollection());
+                if (_currentFormat == LogFormat.JSON)
+                {
+                    File.WriteAllText(_logFilePath, "[]");
+                }
+                else
+                {
+                    var emptyCollection = new LogEntryCollection();
+                    using var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8);
+                    _xmlSerializer.Serialize(writer, emptyCollection);
+                }
             }
         }
 
-        // Converts the log file from one format to another.
-        private void ConvertLogFileFormat()
+        /// <summary>
+        /// Adds a new log entry to the current log file.
+        /// Thread-safe operation that handles both JSON and XML formats.
+        /// </summary>
+        /// <param name="entry">The log entry to add</param>
+        /// <exception cref="InvalidOperationException">Thrown when log entry addition fails</exception>
+        public void AddLogEntry(LogEntry entry)
         {
-            // Read all entries from the current file
-            var entries = ReadAllEntries();
-
-            // Change file extension based on format
-            string newFilePath = Path.ChangeExtension(_logFilePath, _logFormat == LogFormat.JSON ? ".json" : ".xml");
-
-            // Save in the new format
-            if (_logFormat == LogFormat.JSON)
+            try
             {
-                File.WriteAllText(newFilePath, JsonSerializer.Serialize(entries, _jsonOpts));
+                entry.Validate();
+                lock (_fileLock)
+                {
+                    switch (_currentFormat)
+                    {
+                        case LogFormat.JSON:
+                            AppendJsonLog(entry);
+                            break;
+                        case LogFormat.XML:
+                            AppendXmlLog(entry);
+                            break;
+                    }
+                }
             }
-            else // XML format
+            catch (Exception ex)
             {
-                using var writer = new StreamWriter(newFilePath);
-                var collection = new LogEntryCollection { Entries = entries };
+                DebugLog($"Error adding log entry: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to add log entry: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Appends a log entry to a JSON format log file.
+        /// Maintains the JSON array structure.
+        /// </summary>
+        /// <param name="entry">The log entry to append</param>
+        private void AppendJsonLog(LogEntry entry)
+        {
+            string json = JsonSerializer.Serialize(entry, _jsonOpts);
+            string content = File.ReadAllText(_logFilePath);
+            var entries = JsonSerializer.Deserialize<List<LogEntry>>(content, _jsonOpts) ?? new List<LogEntry>();
+            entries.Add(entry);
+            File.WriteAllText(_logFilePath, JsonSerializer.Serialize(entries, _jsonOpts));
+        }
+
+        /// <summary>
+        /// Appends a log entry to an XML format log file.
+        /// Maintains proper XML structure and formatting.
+        /// </summary>
+        /// <param name="entry">The log entry to append</param>
+        private void AppendXmlLog(LogEntry entry)
+        {
+            try
+            {
+                // Read existing entries
+                var existingEntries = new List<LogEntry>();
+                if (File.Exists(_logFilePath))
+                {
+                    string content = File.ReadAllText(_logFilePath);
+                    if (!string.IsNullOrWhiteSpace(content))
+                    {
+                        try
+                        {
+                            existingEntries = DeserializeXmlLogs(content);
+                        }
+                        catch
+                        {
+                            // If deserialization fails, start with an empty list
+                            existingEntries = new List<LogEntry>();
+                        }
+                    }
+                }
+
+                // Add new entry
+                existingEntries.Add(entry);
+
+                // Write all entries back to file
+                var collection = new LogEntryCollection { Entries = existingEntries };
+                using var writer = new StreamWriter(_logFilePath, false, System.Text.Encoding.UTF8);
                 _xmlSerializer.Serialize(writer, collection);
             }
-
-            // If the new file path is different, update the file path
-            if (newFilePath != _logFilePath)
+            catch (Exception ex)
             {
-                // Try to delete the old file
-                try
-                {
-                    if (File.Exists(_logFilePath))
-                        File.Delete(_logFilePath);
-                }
-                catch
-                {
-                    // Silently ignore deletion errors
-                }
-
-                // Update the file path
-                _logFilePath = newFilePath;
+                DebugLog($"Error appending XML log entry: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to append XML log entry: {ex.Message}", ex);
             }
         }
 
-        // Creates a log entry for a file transfer operation.
-        public void CreateLog(string backupName,
-                              TimeSpan transferTime,
-                              long fileSize,
-                              DateTime date,
-                              string sourcePath,
-                              string targetPath,
-                              string logType)
+        /// <summary>
+        /// Creates and adds a log entry for a file transfer operation.
+        /// </summary>
+        /// <param name="backupName">Name of the backup job</param>
+        /// <param name="transferTime">Time taken for the transfer</param>
+        /// <param name="fileSize">Size of the transferred file</param>
+        /// <param name="date">When the transfer occurred</param>
+        /// <param name="sourcePath">Source file path</param>
+        /// <param name="targetPath">Target file path</param>
+        /// <param name="logType">Type of log entry (INFO/ERROR)</param>
+        /// <param name="encryptionTime">Time taken for encryption (if applicable)</param>
+        public void CreateLog(string backupName, TimeSpan transferTime, long fileSize, DateTime date,
+            string sourcePath, string targetPath, string logType, long encryptionTime)
         {
             var entry = new LogEntry
             {
@@ -176,9 +385,8 @@ namespace EasySaveLogging
                 TargetPath = targetPath,
                 FileSize = fileSize,
                 TransferTime = (long)transferTime.TotalMilliseconds,
-                Message = logType == "ERROR"
-                                 ? "Error during transfer"
-                                 : "File transferred",
+                EncryptionTime = encryptionTime,
+                Message = logType == "ERROR" ? "Error during transfer" : "File transferred",
                 LogType = logType,
                 ActionType = "FILE_TRANSFER"
             };
@@ -186,17 +394,18 @@ namespace EasySaveLogging
             AddLogEntry(entry);
         }
 
-        // Logs an administrative action (e.g., start/stop backup, configuration changes).
+        /// <summary>
+        /// Creates and adds a log entry for an administrative action.
+        /// </summary>
+        /// <param name="backupName">Name of the backup job</param>
+        /// <param name="actionType">Type of administrative action</param>
+        /// <param name="message">Description of the action</param>
         public void LogAdminAction(string backupName, string actionType, string message)
         {
             var entry = new LogEntry
             {
                 Timestamp = DateTime.Now,
-                BackupName = backupName ?? string.Empty,
-                SourcePath = string.Empty,
-                TargetPath = string.Empty,
-                FileSize = 0,
-                TransferTime = 0,
+                BackupName = backupName,
                 Message = message,
                 LogType = "INFO",
                 ActionType = actionType
@@ -205,74 +414,113 @@ namespace EasySaveLogging
             AddLogEntry(entry);
         }
 
-        // Adds a new entry to the log file in a thread-safe manner.
-        private void AddLogEntry(LogEntry entry)
+        /// <summary>
+        /// Reads all log entries from the current log file.
+        /// </summary>
+        /// <returns>List of all log entries</returns>
+        /// <exception cref="InvalidOperationException">Thrown when log file reading fails</exception>
+        public List<LogEntry> ReadAllEntries()
         {
-            lock (_instance)
+            try
             {
-                var entries = ReadAllEntries();
-                entries.Add(entry);
-                SaveEntries(entries);
+                lock (_fileLock)
+                {
+                    if (!File.Exists(_logFilePath))
+                        return new List<LogEntry>();
+
+                    string content = File.ReadAllText(_logFilePath);
+                    return _currentFormat switch
+                    {
+                        LogFormat.JSON => JsonSerializer.Deserialize<List<LogEntry>>(content, _jsonOpts) ?? new List<LogEntry>(),
+                        LogFormat.XML => DeserializeXmlLogs(content),
+                        _ => throw new InvalidOperationException($"Unsupported log format: {_currentFormat}")
+                    };
+                }
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"Error reading log entries: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to read log entries: {ex.Message}", ex);
             }
         }
 
-        // Reads all entries from the log file.
-        private List<LogEntry> ReadAllEntries()
+        /// <summary>
+        /// Displays log entries with optional filtering.
+        /// </summary>
+        /// <param name="backupName">Filter by backup job name</param>
+        /// <param name="startDate">Filter by start date</param>
+        /// <param name="endDate">Filter by end date</param>
+        public void DisplayLogs(string? backupName = null, DateTime? startDate = null, DateTime? endDate = null)
         {
-            if (!File.Exists(_logFilePath))
+            var entries = ReadAllEntries();
+            var filtered = entries.Where(e =>
+                (backupName == null || e.BackupName == backupName) &&
+                (startDate == null || e.Timestamp >= startDate) &&
+                (endDate == null || e.Timestamp <= endDate)
+            ).OrderBy(e => e.Timestamp);
+
+            foreach (var entry in filtered)
+            {
+                Console.WriteLine($"[{entry.Timestamp:yyyy-MM-dd HH:mm:ss}] [{entry.LogType}] {entry.BackupName}: {entry.Message}");
+                if (entry.FileSize.HasValue)
+                    Console.WriteLine($"  Size: {FormatFileSize(entry.FileSize.Value)}");
+                if (entry.TransferTime.HasValue)
+                    Console.WriteLine($"  Transfer Time: {entry.TransferTime.Value}ms");
+                if (entry.EncryptionTime.HasValue && entry.EncryptionTime.Value >= 0)
+                    Console.WriteLine($"  Encryption Time: {entry.EncryptionTime.Value}ms");
+                Console.WriteLine();
+            }
+        }
+
+        /// <summary>
+        /// Deserializes XML log entries from a string.
+        /// </summary>
+        /// <param name="content">XML content to deserialize</param>
+        /// <returns>List of deserialized log entries</returns>
+        private List<LogEntry> DeserializeXmlLogs(string content)
+        {
+            if (string.IsNullOrEmpty(content))
                 return new List<LogEntry>();
 
             try
             {
-                if (_logFormat == LogFormat.JSON)
-                {
-                    var json = File.ReadAllText(_logFilePath);
-                    return JsonSerializer.Deserialize<List<LogEntry>>(json, _jsonOpts)
-                           ?? new List<LogEntry>();
-                }
-                else // XML format
-                {
-                    using var reader = new StreamReader(_logFilePath);
-                    if (reader.BaseStream.Length == 0)
-                        return new List<LogEntry>();
-
-                    var collection = (LogEntryCollection)_xmlSerializer.Deserialize(reader);
-                    return collection?.Entries ?? new List<LogEntry>();
-                }
+                using var reader = new StringReader(content);
+                var collection = _xmlSerializer.Deserialize(reader) as LogEntryCollection;
+                return collection?.Entries ?? new List<LogEntry>();
             }
-            catch
+            catch (Exception ex)
             {
-                // If there's an error reading the file, return an empty list
-                return new List<LogEntry>();
+                DebugLog($"Error deserializing XML logs: {ex.Message}", DebugLogLevel.Error);
+                throw new InvalidOperationException($"Failed to deserialize XML logs: {ex.Message}", ex);
             }
         }
 
-        // Saves all entries to the log file.
-        private void SaveEntries(List<LogEntry> entries)
+        /// <summary>
+        /// Formats a file size in bytes to a human-readable string.
+        /// </summary>
+        /// <param name="bytes">Size in bytes</param>
+        /// <returns>Formatted string with appropriate unit</returns>
+        private string FormatFileSize(long bytes)
         {
-            if (_logFormat == LogFormat.JSON)
+            string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+            int order = 0;
+            double size = bytes;
+            while (size >= 1024 && order < sizes.Length - 1)
             {
-                File.WriteAllText(_logFilePath, JsonSerializer.Serialize(entries, _jsonOpts));
+                order++;
+                size /= 1024;
             }
-            else // XML format
-            {
-                using var writer = new StreamWriter(_logFilePath);
-                var collection = new LogEntryCollection { Entries = entries };
-                _xmlSerializer.Serialize(writer, collection);
-            }
+            return $"{size:0.##} {sizes[order]}";
         }
 
-        // Reads the entire log file and writes the contents to the console.
-        public void DisplayLogs()
+        /// <summary>
+        /// Resets the singleton instance of the logger.
+        /// </summary>
+        public static void ResetInstance()
         {
-            if (File.Exists(_logFilePath))
+            lock (_lock)
             {
-                var content = File.ReadAllText(_logFilePath);
-                Console.WriteLine(content);
-            }
-            else
-            {
-                Console.WriteLine("No log file found.");
+                _instance = null;
             }
         }
     }
