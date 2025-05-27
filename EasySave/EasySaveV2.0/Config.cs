@@ -205,11 +205,6 @@ namespace EasySaveV2._0
             var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
             var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
             
-            Console.WriteLine($"BaseDirectory: {baseDir}");
-            Console.WriteLine($"Solution directory: {solutionDir}");
-            Console.WriteLine($"CryptoConsole path: {cryptoConsolePath}");
-            Console.WriteLine($"File exists: {File.Exists(cryptoConsolePath)}");
-            
             return cryptoConsolePath;
         }
     }
