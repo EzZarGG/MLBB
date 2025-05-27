@@ -53,7 +53,7 @@ namespace EasySaveV2._0.Controllers
         {
             try
             {
-                _settingsFile = Path.Combine(AppContext.BaseDirectory, "settings.json");
+                _settingsFile = Path.Combine(AppContext.BaseDirectory, "appsetting.json");
                 _jsonOptions = new JsonSerializerOptions
                 {
                     WriteIndented = true,
@@ -472,6 +472,7 @@ namespace EasySaveV2._0.Controllers
             public LogFormat LogFormat { get; set; } = LogFormat.JSON;
             public List<string> BusinessSoftware { get; set; } = new List<string>();
             public List<string> EncryptionExtensions { get; set; } = new List<string>();
+            public string CryptoSoftPath { get; set; } = string.Empty;
         }
     }
 }

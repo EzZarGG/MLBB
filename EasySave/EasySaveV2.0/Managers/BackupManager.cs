@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using EasySaveLogging;
 using System.Threading;
+using System.Xml.Linq;
 
 namespace EasySaveV2._0.Managers
 {
@@ -39,6 +40,7 @@ namespace EasySaveV2._0.Managers
         private readonly LogController _logController;  // Handles logging operations
         private readonly EncryptionKey _encryptionKey;  // Manages encryption keys
         private readonly Logger _logger;               // Main logging service
+        private readonly SettingsController _settingsController;  // Manages settings including encryption
 
         // Thread synchronization primitives
         private readonly object _stateLock = new();     // Lock for state modifications
@@ -50,6 +52,8 @@ namespace EasySaveV2._0.Managers
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
 
         public event EventHandler<string>? BusinessSoftwareDetected;
+        private readonly string _cryptoSoftPath;
+
         /// <summary>
         /// Initializes a new instance of the BackupManager class.
         /// Sets up file paths, loads existing backups and states, and initializes controllers.
@@ -71,6 +75,12 @@ namespace EasySaveV2._0.Managers
             _logController = LogController.Instance;
             _encryptionKey = new EncryptionKey();
             _logger = Logger.GetInstance();
+            _settingsController = SettingsController.Instance;
+            _cryptoSoftPath = Config.GetCryptoSoftPath();
+            if (string.IsNullOrWhiteSpace(_cryptoSoftPath) || !File.Exists(_cryptoSoftPath))
+            {
+                throw new Exception($"CryptoSoftPath is invalid or file does not exist: '{_cryptoSoftPath}'");
+            }
             LoadBackups();
             LoadOrInitializeStates();
         }
@@ -435,13 +445,13 @@ namespace EasySaveV2._0.Managers
         }
 
         /// <summary>
-        /// Decrypts a file using AES encryption.
-        /// Tracks and reports decryption progress.
+        /// Encrypts a file using AES encryption.
+        /// Tracks and reports encryption progress.
         /// </summary>
-        /// <param name="sourceFile">Path to the encrypted file</param>
-        /// <param name="targetFile">Path where the decrypted file will be saved</param>
+        /// <param name="sourceFile">Path to the file to encrypt</param>
+        /// <param name="targetFile">Path where the encrypted file will be saved</param>
         /// <param name="backupName">Name of the backup job for progress tracking</param>
-        private async Task DecryptFileAsync(string sourceFile, string targetFile, string backupName)
+        private async Task EncryptFileAsync(string sourceFile, string targetFile, string backupName)
         {
             using (var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
             using (var targetStream = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
@@ -490,46 +500,24 @@ namespace EasySaveV2._0.Managers
         /// <param name="sourceFile">Path to the file to encrypt</param>
         /// <param name="targetFile">Path where the encrypted file will be saved</param>
         /// <param name="backupName">Name of the backup job for progress tracking</param>
-        private async Task EncryptFileAsync(string sourceFile, string targetFile, string backupName)
+        private async Task EncryptFileWithCryptoSoftAsync(string sourceFile, string targetFile)
         {
-            using (var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
-            using (var targetStream = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
-            using (var aes = Aes.Create())
+            var psi = new ProcessStartInfo
             {
-                aes.Key = _encryptionKey.Key;
-                aes.IV = _encryptionKey.IV;
-
-                // Write IV to the beginning of the file
-                await targetStream.WriteAsync(aes.IV, 0, aes.IV.Length);
-
-                using (var cryptoStream = new CryptoStream(targetStream, aes.CreateEncryptor(), CryptoStreamMode.Write))
-                {
-                    var buffer = new byte[BUFFER_SIZE];
-                    var totalBytes = sourceStream.Length;
-                    var bytesRead = 0L;
-                    int read;
-
-                    while ((read = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                    {
-                        await cryptoStream.WriteAsync(buffer, 0, read);
-                        bytesRead += read;
-
-                        var progressPercentage = (int)((bytesRead * 100.0) / totalBytes);
-                        EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                            backupName,
-                            sourceFile,
-                            progressPercentage
-                        ));
-                    }
-                }
+                FileName = _cryptoSoftPath,
+                Arguments = $"encrypt \"{sourceFile}\" \"{targetFile}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            await process.WaitForExitAsync();
+            if (process.ExitCode < 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                throw new Exception($"CryptoSoft error: {error}");
             }
-
-            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                backupName,
-                sourceFile,
-                100,
-                true
-            ));
         }
 
         /// <summary>
@@ -646,18 +634,8 @@ namespace EasySaveV2._0.Managers
                         try
                         {
                             // Copy and optionally encrypt the file
-                            if (backup.Encrypt)
-                            {
-                                await EncryptFileAsync(sourceFile, targetFile, name);
-                                totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                            }
-                            else
-                            {
-                                await Task.Run(() => File.Copy(sourceFile, targetFile, true), cts.Token);
-                            }
-
-                            stopwatch.Stop();
-                            totalTransferTime += stopwatch.ElapsedMilliseconds;
+                            await ProcessFileAsync(sourceFile, targetFile, name, backup.Encrypt);
+                            totalEncryptionTime += stopwatch.ElapsedMilliseconds;
                             bytesTransferred += sourceInfo.Length;
                             filesProcessed++;
 
@@ -920,18 +898,8 @@ namespace EasySaveV2._0.Managers
                     try
                     {
                         // Copy and optionally decrypt the file
-                        if (backup.Encrypt)
-                        {
-                            await DecryptFileAsync(sourceFile, targetFile, name);
-                            totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                        }
-                        else
-                        {
-                            await Task.Run(() => File.Copy(sourceFile, targetFile, true));
-                        }
-
-                        stopwatch.Stop();
-                        totalTransferTime += stopwatch.ElapsedMilliseconds;
+                        await ProcessFileAsync(sourceFile, targetFile, name, backup.Encrypt);
+                        totalEncryptionTime += stopwatch.ElapsedMilliseconds;
                         bytesTransferred += sourceInfo.Length;
                         filesProcessed++;
 
@@ -1086,6 +1054,39 @@ namespace EasySaveV2._0.Managers
         public void DisplayLogs()
         {
             _logger.DisplayLogs();
+        }
+
+        private async Task ProcessFileAsync(string sourceFile, string targetFile, string backupName, bool isEncrypted)
+        {
+            try
+            {
+                // Vérifier si le fichier doit être crypté
+                bool shouldEncrypt = _settingsController.ShouldEncryptFile(sourceFile);
+
+                if (shouldEncrypt)
+                {
+                    await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
+                }
+                else
+                {
+                    await Task.Run(() => File.Copy(sourceFile, targetFile, true));
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorLogEntry = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = backupName,
+                    SourcePath = sourceFile,
+                    TargetPath = targetFile,
+                    Message = $"Operation failed: {ex.Message}",
+                    LogType = "ERROR",
+                    ActionType = "CRYPTOGRAPHY"
+                };
+                _logger.AddLogEntry(errorLogEntry);
+                throw;
+            }
         }
     }
 }
