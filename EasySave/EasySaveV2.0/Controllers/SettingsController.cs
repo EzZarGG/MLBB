@@ -26,6 +26,7 @@ namespace EasySaveV2._0.Controllers
         private DateTime _lastProcessCheck;
         private const int PROCESS_CACHE_DURATION_SECONDS = 5;
 
+
         /// <summary>
         /// Gets the singleton instance of SettingsController.
         /// </summary>
@@ -81,8 +82,9 @@ namespace EasySaveV2._0.Controllers
                 if (File.Exists(_settingsFile))
                 {
                     var json = File.ReadAllText(_settingsFile);
-                    var loadedSettings = JsonSerializer.Deserialize<Settings>(json, _jsonOptions);
-                    
+                    var loadedSettings = JsonSerializer.Deserialize<Settings>(json, _jsonOptions)
+                                 ?? throw new InvalidOperationException("error.settingsDeserializationFailed");
+
                     if (loadedSettings == null)
                     {
                         throw new InvalidOperationException(_languageManager.GetTranslation("error.settingsDeserializationFailed"));
@@ -90,6 +92,7 @@ namespace EasySaveV2._0.Controllers
 
                     ValidateSettings(loadedSettings);
                     _settings = loadedSettings;
+                    BusinessSoftwareManager.Initialize(_settings.BusinessSoftware);
                 }
                 else
                 {
@@ -160,6 +163,7 @@ namespace EasySaveV2._0.Controllers
                 }
 
                 var json = JsonSerializer.Serialize(_settings, _jsonOptions);
+                BusinessSoftwareManager.Initialize(_settings.BusinessSoftware);
                 File.WriteAllText(_settingsFile, json);
             }
             catch (Exception ex)
@@ -361,10 +365,11 @@ namespace EasySaveV2._0.Controllers
         public bool IsBusinessSoftwareRunning()
         {
             UpdateProcessCache();
-            return _settings.BusinessSoftware.Any(software => 
-                _processCache.TryGetValue(software, out var processes) && 
+            return _settings.BusinessSoftware.Any(software =>
+                _processCache.TryGetValue(software, out var processes) &&
                 processes.Length > 0);
         }
+
 
         /// <summary>
         /// Gets the name of the currently running business software.

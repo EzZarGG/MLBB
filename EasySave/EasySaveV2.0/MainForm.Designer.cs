@@ -109,6 +109,14 @@
             // 
             // MainForm
             // 
+            _backupController.BusinessSoftwareDetected += (s, jobName) =>
+            {
+                MessageBox.Show(
+                  _languageManager.GetTranslation("message.businessSoftwareDetectedMidJob", jobName),
+                  _languageManager.GetTranslation("warning.title"),
+                  MessageBoxButtons.OK, MessageBoxIcon.Warning
+                );
+            };
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1280, 800);
