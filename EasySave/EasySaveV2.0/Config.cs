@@ -201,7 +201,16 @@ namespace EasySaveV2._0
         /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
         public static string GetCryptoSoftPath()
         {
-            return LoadSettings().CryptoSoftPath ?? string.Empty;
+            var baseDir = AppContext.BaseDirectory;
+            var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
+            var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
+            
+            Console.WriteLine($"BaseDirectory: {baseDir}");
+            Console.WriteLine($"Solution directory: {solutionDir}");
+            Console.WriteLine($"CryptoConsole path: {cryptoConsolePath}");
+            Console.WriteLine($"File exists: {File.Exists(cryptoConsolePath)}");
+            
+            return cryptoConsolePath;
         }
     }
 }
