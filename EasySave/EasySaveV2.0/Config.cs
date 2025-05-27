@@ -32,7 +32,7 @@ namespace EasySaveV2._0
         /// <summary>
         /// Gets the path to the application settings file.
         /// </summary>
-        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsetting.json");
 
         /// <summary>
         /// Gets the directory path for log files.
@@ -105,6 +105,11 @@ namespace EasySaveV2._0
             /// Extensions can be specified with or without the leading dot.
             /// </summary>
             public List<string> EncryptionExtensions { get; set; } = new();
+
+            /// <summary>
+            /// Path to the CryptoSoft executable for XOR encryption.
+            /// </summary>
+            public string CryptoSoftPath { get; set; }
         }
 
         /// <summary>
@@ -188,6 +193,19 @@ namespace EasySaveV2._0
                        .EncryptionExtensions
                        .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
                        .ToHashSet();
+        }
+
+        /// <summary>
+        /// Gets the path to the CryptoSoft executable from application settings.
+        /// </summary>
+        /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
+        public static string GetCryptoSoftPath()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
+            var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
+            
+            return cryptoConsolePath;
         }
     }
 }
