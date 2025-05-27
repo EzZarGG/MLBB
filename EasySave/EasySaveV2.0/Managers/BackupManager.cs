@@ -300,6 +300,7 @@ namespace EasySaveV2._0.Managers
                     ActionType = "BACKUP_START"
                 };
                 _logger.AddLogEntry(logEntry);
+                _logger.LogAdminAction(job.Name, "BACKUP_START", $"Started {job.Type} backup job: {job.Name}");
                 return true;
             }
             catch (Exception ex)
@@ -528,65 +529,41 @@ namespace EasySaveV2._0.Managers
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
         public async Task ExecuteJob(string name)
         {
-            // 1) Retrieve and verify the job
             var backup = GetJob(name);
             if (backup == null)
                 throw new InvalidOperationException($"Backup job '{name}' not found");
 
-            // 2) If a business software is running, log and pause the backup
-            if (BusinessSoftwareManager.IsRunning())
+            // Create initial backup start log
+            var startLogEntry = new LogEntry
             {
-                BusinessSoftwareDetected?.Invoke(this, name);
+                Timestamp = DateTime.Now,
+                BackupName = name,
+                BackupType = backup.Type,
+                SourcePath = backup.SourcePath,
+                TargetPath = backup.TargetPath,
+                Message = $"Starting {backup.Type} backup job: {name}",
+                LogType = "INFO",
+                ActionType = "BACKUP_START"
+            };
+            _logger.AddLogEntry(startLogEntry);
 
-                var stopEntry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = name,
-                    BackupType = backup.Type,
-                    Message = _languageManager.GetTranslation("message.backupStoppedBusiness"),
-                    LogType = "INFO",
-                    ActionType = "BACKUP_STOPPED"
-                };
-                _logger.AddLogEntry(stopEntry);
-
-                UpdateJobState(name, state =>
-                {
-                    state.Status = "Paused";
-                    state.ProgressPercentage = 0;  
-                });
-                return;
-            }
-            if (backup == null)
-            {
-                throw new InvalidOperationException($"Backup job '{name}' not found");
-            }
-
-            // Create a new cancellation token for this job
-            var cts = new CancellationTokenSource();
-            _jobCancellationTokens[name] = cts;
-
-            var startTime = DateTime.Now;
-            var totalFiles = 0;
-            var totalBytes = 0L;
-            var filesProcessed = 0;
-            var bytesTransferred = 0L;
-            var totalTransferTime = 0L;
-            var totalEncryptionTime = 0L;
-            var hasErrors = false;
-            var errorMessages = new List<string>();
+            // Log scan start
+            _logger.LogAdminAction(name, "SCAN_START", $"Scanning source directory: {backup.SourcePath}");
 
             try
             {
                 // Get all files to process
                 var files = await Task.Run(() => Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories));
-                totalFiles = files.Length;
-                totalBytes = files.Sum(f => new FileInfo(f).Length);
+                var totalFiles = files.Length;
+                var totalBytes = files.Sum(f => new FileInfo(f).Length);
 
-                // Update initial state to Active
+                // Log scan complete
+                _logger.LogAdminAction(name, "SCAN_COMPLETE", $"Found {totalFiles} files ({FormatFileSize(totalBytes)}) to backup");
+
+                // Update initial state
                 UpdateJobState(name, state =>
                 {
                     state.Status = "Active";
-                    state.ProgressPercentage = 0;
                     state.TotalFilesCount = totalFiles;
                     state.TotalFilesSize = totalBytes;
                     state.FilesRemaining = totalFiles;
@@ -594,6 +571,14 @@ namespace EasySaveV2._0.Managers
                     state.CurrentSourceFile = backup.SourcePath;
                     state.CurrentTargetFile = backup.TargetPath;
                 });
+
+                var startTime = DateTime.Now;
+                var filesProcessed = 0;
+                var bytesTransferred = 0L;
+                var totalTransferTime = 0L;
+                var totalEncryptionTime = 0L;
+                var hasErrors = false;
+                var errorMessages = new List<string>();
 
                 // Process each file
                 foreach (var sourceFile in files)
@@ -628,6 +613,7 @@ namespace EasySaveV2._0.Managers
                         if (dir != null && !Directory.Exists(dir))
                         {
                             Directory.CreateDirectory(dir);
+                            _logger.LogAdminAction(name, "DIR_CREATE", $"Created directory: {dir}");
                         }
 
                         var stopwatch = Stopwatch.StartNew();
@@ -743,8 +729,8 @@ namespace EasySaveV2._0.Managers
                     ));
                 }
 
-                // Create final log entry
-                var logEntry = new LogEntry
+                // Create final execution log
+                var executionLogEntry = new LogEntry
                 {
                     Timestamp = startTime,
                     BackupName = name,
@@ -759,61 +745,31 @@ namespace EasySaveV2._0.Managers
                         : $"Backup completed successfully. Processed {filesProcessed} files ({FormatFileSize(bytesTransferred)}) in {totalTransferTime}ms" + 
                           (backup.Encrypt ? $" (Encryption time: {totalEncryptionTime}ms)" : ""),
                     LogType = hasErrors ? "ERROR" : "INFO",
-                    ActionType = "BACKUP_EXECUTION"
+                    ActionType = "BACKUP_COMPLETE"
                 };
-                _logger.AddLogEntry(logEntry);
-            }
-            catch (OperationCanceledException)
-            {
-                UpdateJobState(name, state => 
-                {
-                    state.Status = "Paused";
-                    state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
-                });
+                _logger.AddLogEntry(executionLogEntry);
+
+                // Log backup completion
+                _logger.LogAdminAction(name, "BACKUP_COMPLETE", 
+                    $"Completed {backup.Type} backup job: {name} - {totalFiles} files ({FormatFileSize(totalBytes)})");
             }
             catch (Exception ex)
             {
-                // Update state on error
-                UpdateJobState(name, state =>
-                {
-                    state.Status = "Error";
-                    state.ProgressPercentage = 0;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
-                });
-
-                // Report error progress
-                FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                    name,
-                    backup.SourcePath,
-                    backup.TargetPath,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    TimeSpan.Zero,
-                    false
-                ));
-
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
+                    BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
                     Message = $"Backup failed: {ex.Message}",
                     LogType = "ERROR",
-                    ActionType = "BACKUP_EXECUTION"
+                    ActionType = "BACKUP_ERROR"
                 };
                 _logger.AddLogEntry(errorLogEntry);
+                _logger.LogAdminAction(name, "BACKUP_ERROR", $"Critical error during {backup.Type} backup: {ex.Message}");
                 throw;
-            }
-            finally
-            {
-                _jobCancellationTokens.Remove(name);
             }
         }
 
@@ -1034,7 +990,7 @@ namespace EasySaveV2._0.Managers
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     SourcePath = backup.TargetPath,
                     TargetPath = targetPath,
@@ -1043,6 +999,7 @@ namespace EasySaveV2._0.Managers
                     ActionType = "BACKUP_RESTORE"
                 };
                 _logger.AddLogEntry(errorLogEntry);
+                _logger.LogAdminAction(name, "BACKUP_ERROR", $"Critical error during {backup.Type} backup: {ex.Message}");
                 throw;
             }
         }
@@ -1058,33 +1015,78 @@ namespace EasySaveV2._0.Managers
 
         private async Task ProcessFileAsync(string sourceFile, string targetFile, string backupName, bool isEncrypted)
         {
+            var stopwatch = Stopwatch.StartNew();
+            var sourceInfo = new FileInfo(sourceFile);
+            var relativePath = Path.GetRelativePath(Path.GetDirectoryName(sourceFile) ?? "", sourceFile);
+            long encryptionTime = -1;
+            bool shouldEncrypt = _settingsController.ShouldEncryptFile(sourceFile);
+
             try
             {
-                // Vérifier si le fichier doit être crypté
-                bool shouldEncrypt = _settingsController.ShouldEncryptFile(sourceFile);
-
-                if (shouldEncrypt)
-                {
-                    await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
-                }
-                else
-                {
-                    await Task.Run(() => File.Copy(sourceFile, targetFile, true));
-                }
-            }
-            catch (Exception ex)
-            {
-                var errorLogEntry = new LogEntry
+                // Log file transfer start
+                var transferStartLog = new LogEntry
                 {
                     Timestamp = DateTime.Now,
                     BackupName = backupName,
                     SourcePath = sourceFile,
                     TargetPath = targetFile,
-                    Message = $"Operation failed: {ex.Message}",
-                    LogType = "ERROR",
-                    ActionType = "CRYPTOGRAPHY"
+                    FileSize = sourceInfo.Length,
+                    Message = $"Starting transfer of file: {relativePath} ({FormatFileSize(sourceInfo.Length)})",
+                    LogType = "INFO",
+                    ActionType = "FILE_TRANSFER_START"
                 };
-                _logger.AddLogEntry(errorLogEntry);
+                _logger.AddLogEntry(transferStartLog);
+
+                if (shouldEncrypt)
+                {
+                    var encryptionStopwatch = Stopwatch.StartNew();
+                    await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
+                    encryptionStopwatch.Stop();
+                    encryptionTime = encryptionStopwatch.ElapsedMilliseconds;
+                }
+                else
+                {
+                    await Task.Run(() => File.Copy(sourceFile, targetFile, true));
+                }
+
+                stopwatch.Stop();
+
+                // Log successful transfer
+                var transferCompleteLog = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = backupName,
+                    SourcePath = sourceFile,
+                    TargetPath = targetFile,
+                    FileSize = sourceInfo.Length,
+                    TransferTime = stopwatch.ElapsedMilliseconds,
+                    EncryptionTime = encryptionTime,
+                    Message = $"Completed transfer of {relativePath} in {stopwatch.Elapsed.TotalSeconds:F2}s ({FormatFileSize(sourceInfo.Length)})" + 
+                     (shouldEncrypt ? $" (Encryption time: {encryptionTime}ms)" : ""),
+                    LogType = "INFO",
+                    ActionType = "FILE_TRANSFER_COMPLETE"
+                };
+                _logger.AddLogEntry(transferCompleteLog);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                // Log transfer error
+                var errorLog = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = backupName,
+                    SourcePath = sourceFile,
+                    TargetPath = targetFile,
+                    FileSize = sourceInfo.Length,
+                    TransferTime = stopwatch.ElapsedMilliseconds,
+                    EncryptionTime = encryptionTime,
+                    Message = $"Error transferring {relativePath}: {ex.Message}" + 
+                     (shouldEncrypt ? " (During encryption)" : ""),
+                    LogType = "ERROR",
+                    ActionType = "FILE_TRANSFER_ERROR"
+                };
+                _logger.AddLogEntry(errorLog);
                 throw;
             }
         }
