@@ -540,12 +540,12 @@ namespace EasySaveV2._0.Managers
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
         public async Task ExecuteJob(string name)
         {
-            // 1) Récupère et vérifie le job
+            // 1) Retrieve and verify the job
             var backup = GetJob(name);
             if (backup == null)
                 throw new InvalidOperationException($"Backup job '{name}' not found");
 
-            // 2) Si un logiciel métier tourne, on log et on met en pause
+            // 2) If a business software is running, log and pause the backup
             if (BusinessSoftwareManager.IsRunning())
             {
                 BusinessSoftwareDetected?.Invoke(this, name);
@@ -564,7 +564,7 @@ namespace EasySaveV2._0.Managers
                 UpdateJobState(name, state =>
                 {
                     state.Status = "Paused";
-                    state.ProgressPercentage = 0; // ou  state.ProgressPercentage = state.ProgressPercentage; 
+                    state.ProgressPercentage = 0;  
                 });
                 return;
             }

@@ -7,14 +7,14 @@ using System.Linq;
 namespace EasySaveV2._0.Managers
 {
     /// <summary>
-    /// Gère la liste des noms de process métier et détecte leur exécution.
+    /// Manages the list of business process names and detects if they are running.
     /// </summary>
     public static class BusinessSoftwareManager
     {
         private static List<string> _businessNames = new List<string>();
 
         /// <summary>
-        /// Initialise avec une collection de noms de process (peuvent contenir ou non l'extension .exe).
+        /// Initializes with a collection of process names (may or may not include the .exe extension).
         /// </summary>
         public static void Initialize(IEnumerable<string> processNames)
         {
@@ -29,7 +29,7 @@ namespace EasySaveV2._0.Managers
         }
 
         /// <summary>
-        /// Retourne true si au moins un des processus métier tourne actuellement.
+        /// Returns true if at least one of the business processes is currently running.
         /// </summary>
         public static bool IsRunning()
         {
@@ -43,11 +43,9 @@ namespace EasySaveV2._0.Managers
             }
             catch
             {
-                // Impossible de lister les processus : on considère qu'aucun n'est détecté
+                // Unable to list processes: consider that none are detected
                 return false;
             }
-
-       
 
             foreach (var proc in processes)
             {
@@ -58,7 +56,7 @@ namespace EasySaveV2._0.Managers
                 }
                 catch
                 {
-                    // Process inatteignable, on l'ignore
+                    // Unreachable process, ignore it
                 }
             }
 
