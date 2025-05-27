@@ -92,7 +92,7 @@ namespace EasySaveV2._0
             /// Format for log files (JSON or XML).
             /// Defaults to JSON if not specified.
             /// </summary>
-            public string LogFormat { get; set; } = "JSON";
+            public LogFormat LogFormat { get; set; } = LogFormat.JSON;
 
             /// <summary>
             /// Encryption key for securing backup files.
@@ -151,7 +151,7 @@ namespace EasySaveV2._0
         public static LogFormat GetLogFormat()
         {
             var settings = LoadSettings();
-            return settings.LogFormat.ToUpper() == "XML" ? LogFormat.XML : LogFormat.JSON;
+            return settings.LogFormat;
         }
 
         /// <summary>
@@ -161,7 +161,7 @@ namespace EasySaveV2._0
         public static void SetLogFormat(LogFormat format)
         {
             var settings = LoadSettings();
-            settings.LogFormat = format.ToString();
+            settings.LogFormat = format;
             SaveSettings(settings);
         }
 
