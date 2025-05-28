@@ -208,35 +208,5 @@ namespace EasySaveV3._0
                        .Select(e => e.StartsWith(".") ? e.ToLower() : "." + e.ToLower())
                        .ToHashSet();
         }
-
-        /// <summary>
-        /// Checks if a file has priority based on its extension.
-        /// </summary>
-        /// <param name="filePath">Path to the file</param>
-        /// <returns>True if the file has priority, false otherwise</returns>
-        /// <exception cref="ArgumentException">Thrown when file path is invalid.</exception>
-        public static bool IsPriorityFile(string filePath)
-        {
-            if (string.IsNullOrWhiteSpace(filePath))
-            {
-                throw new ArgumentException("File path cannot be empty.");
-            }
-
-            var extension = Path.GetExtension(filePath).ToLower();
-            return GetPriorityExtensions().Contains(extension);
-        }
-
-        /// <summary>
-        /// Gets the path to the CryptoSoft executable from application settings.
-        /// </summary>
-        /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
-        public static string GetCryptoSoftPath()
-        {
-            var baseDir = AppContext.BaseDirectory;
-            var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
-            var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
-            
-            return cryptoConsolePath;
-        }
     }
 }
