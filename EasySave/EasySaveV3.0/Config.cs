@@ -225,5 +225,18 @@ namespace EasySaveV3._0
             var extension = Path.GetExtension(filePath).ToLower();
             return GetPriorityExtensions().Contains(extension);
         }
+
+        /// <summary>
+        /// Gets the path to the CryptoSoft executable from application settings.
+        /// </summary>
+        /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
+        public static string GetCryptoSoftPath()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
+            var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
+            
+            return cryptoConsolePath;
+        }
     }
 }
