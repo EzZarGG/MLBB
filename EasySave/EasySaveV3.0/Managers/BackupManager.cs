@@ -24,7 +24,7 @@ namespace EasySaveV3._0.Managers
     {
         // Configuration constants
         private readonly LanguageManager _languageManager;
-        private const int MAX_BACKUPS = 5;  // Maximum number of backup jobs allowed
+        // Configuration constants
         private const int BUFFER_SIZE = 8192;  // 8KB buffer size for file operations
 
         // File paths for persistent storage
@@ -40,6 +40,7 @@ namespace EasySaveV3._0.Managers
         private readonly LogController _logController;  // Handles logging operations
         private readonly EncryptionKey _encryptionKey;  // Manages encryption keys
         private readonly Logger _logger;               // Main logging service
+        private readonly SettingsController _settingsController;  // Manages settings including encryption
 
         // Thread synchronization primitives
         private readonly object _stateLock = new();     // Lock for state modifications
@@ -49,6 +50,9 @@ namespace EasySaveV3._0.Managers
         // Progress tracking events
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
+
+        public event EventHandler<string>? BusinessSoftwareDetected;
+        private readonly string _cryptoSoftPath;
 
         /// <summary>
         /// Initializes a new instance of the BackupManager class.
@@ -60,7 +64,10 @@ namespace EasySaveV3._0.Managers
             _stateFile = Path.Combine(AppContext.BaseDirectory, "states.json");
             _backups = new List<Backup>();
             _jobStates = new Dictionary<string, StateModel>();
+            _languageManager = LanguageManager.Instance;
+
             _jsonOptions = new JsonSerializerOptions
+
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -68,6 +75,12 @@ namespace EasySaveV3._0.Managers
             _logController = LogController.Instance;
             _encryptionKey = new EncryptionKey();
             _logger = Logger.GetInstance();
+            _settingsController = SettingsController.Instance;
+            _cryptoSoftPath = Config.GetCryptoSoftPath();
+            if (string.IsNullOrWhiteSpace(_cryptoSoftPath) || !File.Exists(_cryptoSoftPath))
+            {
+                throw new Exception($"CryptoSoftPath is invalid or file does not exist: '{_cryptoSoftPath}'");
+            }
             LoadBackups();
             LoadOrInitializeStates();
         }
@@ -258,13 +271,7 @@ namespace EasySaveV3._0.Managers
 
             try
             {
-                if (_backups.Count >= MAX_BACKUPS)
-                {
-                    var existingBackup = GetJob(job.Name);
-                    _logController.LogBackupError(job.Name, existingBackup?.Type ?? "Unknown", "Maximum number of backup jobs reached");
-                    return false;
-                }
-
+         
                 if (_backups.Any(b => b.Name == job.Name))
                 {
                     var existingBackup = GetJob(job.Name);
