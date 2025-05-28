@@ -24,7 +24,6 @@ namespace EasySaveV2._0.Managers
     {
         private readonly LanguageManager _languageManager;
         // Configuration constants
-        private const int MAX_BACKUPS = 5;  // Maximum number of backup jobs allowed
         private const int BUFFER_SIZE = 8192;  // 8KB buffer size for file operations
 
         // File paths for persistent storage
@@ -271,13 +270,6 @@ namespace EasySaveV2._0.Managers
 
             try
             {
-                if (_backups.Count >= MAX_BACKUPS)
-                {
-                    var existingBackup = GetJob(job.Name);
-                    _logController.LogBackupError(job.Name, existingBackup?.Type ?? "Unknown", "Maximum number of backup jobs reached");
-                    return false;
-                }
-
                 if (_backups.Any(b => b.Name == job.Name))
                 {
                     var existingBackup = GetJob(job.Name);
