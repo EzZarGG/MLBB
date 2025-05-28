@@ -198,6 +198,19 @@ namespace EasySaveV3._0
         }
 
         /// <summary>
+        /// Gets the path to the CryptoSoft executable from application settings.
+        /// </summary>
+        /// <returns>Path to CryptoSoft executable, or empty string if not set</returns>
+        public static string GetCryptoSoftPath()
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var solutionDir = Path.GetFullPath(Path.Combine(baseDir, "../../../..")); // Remonter jusqu'au dossier EasySave
+            var cryptoConsolePath = Path.Combine(solutionDir, "CryptoConsole", "bin", "Debug", "net8.0-windows", "CryptoConsole.exe");
+
+            return cryptoConsolePath;
+        }
+
+        /// <summary>
         /// Gets the list of file extensions that have priority during backup.
         /// Normalizes extensions to lowercase and ensures they start with a dot.
         /// </summary>
