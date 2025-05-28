@@ -1036,6 +1036,9 @@ namespace EasySaveV3._0
                 _languageManager.LanguageChanged -= OnLanguageChanged;
                 _languageManager.TranslationsReloaded -= OnTranslationsReloaded;
 
+                // Clear priority extensions
+                _settingsController.SetPriorityExtensions(new List<string>());
+
                 if (_backupController is IDisposable disposable)
                 {
                     disposable.Dispose();

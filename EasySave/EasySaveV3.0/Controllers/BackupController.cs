@@ -551,8 +551,6 @@ namespace EasySaveV3._0.Controllers
                 state.CurrentSourceFile = backup.SourcePath;
                 state.CurrentTargetFile = backup.TargetPath;
 
-                _logController.LogBackupStart(backup.Name, backup.Type, "Backup started", backup.SourcePath, backup.TargetPath);
-
                 // Lancer la sauvegarde via le BackupManager
                 await _backupManager.ExecuteJob(backup.Name);
 

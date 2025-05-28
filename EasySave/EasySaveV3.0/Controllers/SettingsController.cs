@@ -144,6 +144,21 @@ namespace EasySaveV3._0.Controllers
                     .Distinct()
                     .ToList();
             }
+
+            // Validate priority extensions
+            if (settings.PriorityExtensions == null)
+            {
+                settings.PriorityExtensions = new List<string>();
+            }
+            else
+            {
+                settings.PriorityExtensions = settings.PriorityExtensions
+                    .Where(e => !string.IsNullOrWhiteSpace(e))
+                    .Select(e => e.Trim().ToLower())
+                    .Select(e => e.StartsWith(".") ? e : "." + e)
+                    .Distinct()
+                    .ToList();
+            }
         }
 
         /// <summary>

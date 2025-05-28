@@ -21,17 +21,15 @@ namespace EasySaveV3._0.Controllers
         private const long PERFORMANCE_WARNING_THRESHOLD_MS = 5000; // 5 seconds
 
         // Action Types
-        private static class ActionTypes
+        public static class ActionTypes
         {
             public const string BACKUP_CREATED = "BACKUP_CREATED";
-            public const string BACKUP_UPDATED = "BACKUP_UPDATED";
-            public const string BACKUP_DELETED = "BACKUP_DELETED";
             public const string BACKUP_STARTED = "BACKUP_STARTED";
-            public const string BACKUP_PAUSED = "BACKUP_PAUSED";
-            public const string BACKUP_RESUMED = "BACKUP_RESUMED";
-            public const string BACKUP_STOPPED = "BACKUP_STOPPED";
             public const string BACKUP_COMPLETED = "BACKUP_COMPLETED";
             public const string BACKUP_ERROR = "BACKUP_ERROR";
+            public const string BACKUP_DELETE = "BACKUP_DELETE";
+            public const string BACKUP_EDIT = "BACKUP_EDIT";
+            public const string BACKUP_RESTORE = "BACKUP_RESTORE";
             public const string FILE_COPY = "FILE_COPY";
             public const string FILE_ENCRYPT = "FILE_ENCRYPT";
             public const string FILE_DECRYPT = "FILE_DECRYPT";
@@ -175,22 +173,21 @@ namespace EasySaveV3._0.Controllers
         /// </summary>
         private string MapMessageToActionType(string message)
         {
-            return message switch
-            {
-                "Backup started" => ActionTypes.BACKUP_STARTED,
-                "Backup paused" => ActionTypes.BACKUP_PAUSED,
-                "Backup resumed" => ActionTypes.BACKUP_RESUMED,
-                "Backup completed" => ActionTypes.BACKUP_COMPLETED,
-                "Backup stopped" => ActionTypes.BACKUP_STOPPED,
-                "Backup job created" => ActionTypes.BACKUP_CREATED,
-                "Backup job deleted" => ActionTypes.BACKUP_DELETED,
-                "Backup updated" => ActionTypes.BACKUP_UPDATED,
-                "File copied" => ActionTypes.FILE_COPY,
-                "File encrypted" => ActionTypes.FILE_ENCRYPT,
-                "File decrypted" => ActionTypes.FILE_DECRYPT,
-                "File skipped" => ActionTypes.FILE_SKIPPED,
-                _ => ActionTypes.BACKUP_UPDATED
-            };
+            if (message.StartsWith("Backup job created"))
+                return ActionTypes.BACKUP_CREATED;
+            if (message.StartsWith("Starting backup with"))
+                return ActionTypes.BACKUP_STARTED;
+            if (message.StartsWith("Backup completed successfully"))
+                return ActionTypes.BACKUP_COMPLETED;
+            if (message.StartsWith("Backup failed") || message.StartsWith("Backup completed with errors"))
+                return ActionTypes.BACKUP_ERROR;
+            if (message.StartsWith("Backup job deleted"))
+                return ActionTypes.BACKUP_DELETE;
+            if (message.StartsWith("Backup job edited"))
+                return ActionTypes.BACKUP_EDIT;
+            if (message.StartsWith("Restore"))
+                return ActionTypes.BACKUP_RESTORE;
+            return ActionTypes.BACKUP_ERROR;
         }
 
         /// <summary>
@@ -490,50 +487,61 @@ namespace EasySaveV3._0.Controllers
         /// <param name="newBackup">Updated backup configuration</param>
         public void LogBackupUpdate(string backupName, Backup oldBackup, Backup newBackup)
         {
-            try
+            var changes = new List<string>();
+            var actionType = ActionTypes.BACKUP_EDIT;
+
+            if (oldBackup.SourcePath != newBackup.SourcePath)
             {
-                var changes = new List<string>();
-                var actionType = ActionTypes.BACKUP_UPDATED;
-
-                if (oldBackup.SourcePath != newBackup.SourcePath)
-                {
-                    changes.Add(_languageManager.GetTranslation("message.sourcePathChanged", oldBackup.SourcePath, newBackup.SourcePath));
-                    actionType = ActionTypes.BACKUP_UPDATED_SOURCE;
-                }
-
-                if (oldBackup.TargetPath != newBackup.TargetPath)
-                {
-                    changes.Add(_languageManager.GetTranslation("message.targetPathChanged", oldBackup.TargetPath, newBackup.TargetPath));
-                    actionType = actionType == ActionTypes.BACKUP_UPDATED_SOURCE ? 
-                        ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TARGET;
-                }
-
-                if (newBackup.Type != oldBackup.Type)
-                {
-                    changes.Add(_languageManager.GetTranslation("message.backupTypeChanged", oldBackup.Type, newBackup.Type));
-                    actionType = actionType != ActionTypes.BACKUP_UPDATED ? 
-                        ActionTypes.BACKUP_UPDATED_MULTIPLE : ActionTypes.BACKUP_UPDATED_TYPE;
-                }
-
-                var message = changes.Count > 0 
-                    ? $"Backup updated - {string.Join(", ", changes)}"
-                    : "Backup configuration reviewed (no changes)";
-
-                var entry = CreateLogEntry(
-                    backupName,
-                    newBackup.Type,
-                    newBackup.SourcePath,
-                    newBackup.TargetPath,
-                    message,
-                    "INFO",
-                    actionType
-                );
-                _logger.AddLogEntry(entry);
+                changes.Add(_languageManager.GetTranslation("message.sourcePathChanged", oldBackup.SourcePath, newBackup.SourcePath));
             }
-            catch (Exception)
+
+            if (oldBackup.TargetPath != newBackup.TargetPath)
             {
-                // Ignore logging errors to prevent cascading failures
+                changes.Add(_languageManager.GetTranslation("message.targetPathChanged", oldBackup.TargetPath, newBackup.TargetPath));
             }
+
+            if (oldBackup.Type != newBackup.Type)
+            {
+                changes.Add(_languageManager.GetTranslation("message.backupTypeChanged", oldBackup.Type, newBackup.Type));
+            }
+
+            var message = changes.Count > 0
+                ? $"Backup job edited: {string.Join(", ", changes)}"
+                : "Backup job edited";
+
+            var logEntry = new LogEntry
+            {
+                Timestamp = DateTime.Now,
+                BackupName = newBackup.Name,
+                BackupType = newBackup.Type,
+                SourcePath = newBackup.SourcePath,
+                TargetPath = newBackup.TargetPath,
+                Message = message,
+                LogType = "INFO",
+                ActionType = actionType
+            };
+
+            _logger.AddLogEntry(logEntry);
+        }
+
+        public void LogBackupUpdate(string backupName, string backupType, string sourcePath, string targetPath)
+        {
+            var actionType = ActionTypes.BACKUP_EDIT;
+            var message = $"Backup job edited";
+            
+            var logEntry = new LogEntry
+            {
+                Timestamp = DateTime.Now,
+                BackupName = backupName,
+                BackupType = backupType,
+                SourcePath = sourcePath,
+                TargetPath = targetPath,
+                Message = message,
+                LogType = "INFO",
+                ActionType = actionType
+            };
+            
+            _logger.AddLogEntry(logEntry);
         }
     }
 }
