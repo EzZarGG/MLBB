@@ -32,7 +32,7 @@ namespace EasySaveV3._0.Controllers
         private readonly string _stateFile;
         private readonly JsonSerializerOptions _jsonOptions;
         private bool _isInitialized;
-
+        public event EventHandler<string>? BusinessSoftwareDetected;
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
 
@@ -51,6 +51,11 @@ namespace EasySaveV3._0.Controllers
                 _backupStates = new Dictionary<string, StateModel>();
                 _stateFile = Path.Combine(AppContext.BaseDirectory, "backup_states.json");
                 _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+
+                _backupManager.BusinessSoftwareDetected += (sender, jobName) =>
+                {
+                    BusinessSoftwareDetected?.Invoke(this, jobName);
+                };
 
                 if (_backupManager == null || _settingsController == null || _logController == null || _languageManager == null)
                 {

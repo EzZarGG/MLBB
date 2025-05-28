@@ -10,6 +10,7 @@ using System.Diagnostics;
 using System.Security.Cryptography;
 using EasySaveLogging;
 using System.Threading;
+using System.Xml.Linq;
 
 namespace EasySaveV3._0.Managers
 {
@@ -22,6 +23,7 @@ namespace EasySaveV3._0.Managers
     public class BackupManager
     {
         // Configuration constants
+        private readonly LanguageManager _languageManager;
         private const int MAX_BACKUPS = 5;  // Maximum number of backup jobs allowed
         private const int BUFFER_SIZE = 8192;  // 8KB buffer size for file operations
 
