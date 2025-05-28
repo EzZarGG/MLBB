@@ -10,6 +10,7 @@ using System.Windows.Forms;
 using EasySaveLogging;
 using System.IO;
 using System.Threading.Tasks;
+using System.Threading;
 
 namespace EasySaveV3._0
 {
@@ -742,11 +743,21 @@ namespace EasySaveV3._0
                 );
             }
         }
-
+       
         private async void ExecuteJob()
         {
             try
             {
+
+                if (_backupController.IsCryptoSoftRunning())
+                {
+                    MessageBox.Show(
+                        _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning"),
+                        _languageManager.GetTranslation("menu.title"),
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning
+                    );
+                    return;
+                }
                 var selectedItems = _backupListView.SelectedItems;
                 if (selectedItems.Count == 0)
                 {
@@ -821,6 +832,15 @@ namespace EasySaveV3._0
         {
             try
             {
+                if (_backupController.IsCryptoSoftRunning())
+                {
+                    MessageBox.Show(
+                        _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning"),
+                        _languageManager.GetTranslation("menu.title"),
+                        MessageBoxButtons.OK, MessageBoxIcon.Warning
+                    );
+                    return;
+                }
                 if (_backupListView.Items.Count == 0)
                 {
                     MessageBox.Show(

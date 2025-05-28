@@ -112,6 +112,24 @@ namespace EasySaveV3._0.Controllers
                 throw new ArgumentException(_languageManager.GetTranslation("error.samePaths"));
         }
 
+        public bool IsCryptoSoftRunning()
+        {
+            const string mutexName = @"Global\CryptoConsole_MonoInstance";
+            try
+            {
+                // Tenter d’ouvrir le mutex créé par CryptoSoft
+                Mutex.OpenExisting(mutexName);
+                // Si on y parvient, CryptoSoft tourne déjà
+                return true;
+            }
+            catch (WaitHandleCannotBeOpenedException)
+            {
+                // Le mutex n’existe pas → pas d’instance active
+                return false;
+            }
+        }
+
+
         /// <summary>
         /// Creates a new backup job.
         /// </summary>
@@ -251,6 +269,15 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                // 1) Vérification mono-instance CryptoSoft
+                       if (IsCryptoSoftRunning())
+                           {
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                                   /* ex. "CryptoSoft est déjà en cours d’exécution sur cette machine." */
+                               );
+                           }
+                       // 2) Vérification business software existant
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
@@ -473,6 +500,10 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
@@ -504,6 +535,10 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
