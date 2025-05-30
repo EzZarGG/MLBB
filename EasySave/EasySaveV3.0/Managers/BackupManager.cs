@@ -797,7 +797,7 @@ namespace EasySaveV3._0.Managers
                 // Create final log entry with file processing order
                 var finalLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
@@ -858,7 +858,7 @@ namespace EasySaveV3._0.Managers
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
@@ -1057,7 +1057,7 @@ namespace EasySaveV3._0.Managers
                 // Create final log entry
                 var logEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.TargetPath,
@@ -1102,7 +1102,7 @@ namespace EasySaveV3._0.Managers
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     SourcePath = backup.TargetPath,
                     TargetPath = targetPath,
