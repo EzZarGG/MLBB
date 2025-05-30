@@ -19,6 +19,9 @@ namespace EasySaveV3._0.Views
         private System.Windows.Forms.Button cancelButton;
         private System.Windows.Forms.ColumnHeader businessSoftwareColumn;
         private System.Windows.Forms.ColumnHeader encryptionColumn;
+        private System.Windows.Forms.TabPage transfersTab;
+        private System.Windows.Forms.Label maxLargeFileLabel;
+        private System.Windows.Forms.NumericUpDown maxLargeFileNumeric;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -190,8 +193,15 @@ namespace EasySaveV3._0.Views
             this.businessSoftwareTab.ResumeLayout(false);
             this.encryptionTab.ResumeLayout(false);
             this.ResumeLayout(false);
+
+            this.transfersTab.Tag = "settings.tab.transfers";
+            this.transfersTab.Text = "Transferts";
+            this.transfersTab.UseVisualStyleBackColor = true;
+            this.transfersTab.Padding = new System.Windows.Forms.Padding(10);
+
+
         }
 
-        #endregion
-    }
+    #endregion
+}
 }

@@ -26,6 +26,7 @@ namespace EasySaveV3._0.Controllers
         private readonly Dictionary<string, Process[]> _processCache;
         private DateTime _lastProcessCheck;
         private const int PROCESS_CACHE_DURATION_SECONDS = 5;
+        public int MaxLargeFileSizeKB => _settings.MaxLargeFileSizeKB;
 
         /// <summary>
         /// Gets the singleton instance of SettingsController.
@@ -143,6 +144,11 @@ namespace EasySaveV3._0.Controllers
                     .Select(e => e.StartsWith(".") ? e : "." + e)
                     .Distinct()
                     .ToList();
+            }
+            if (settings.MaxLargeFileSizeKB <= 0)
+            {
+                // On remet la valeur par défaut si jamais mal configuré
+                settings.MaxLargeFileSizeKB = 1024;
             }
         }
 
@@ -469,6 +475,8 @@ namespace EasySaveV3._0.Controllers
             public List<string> BusinessSoftware { get; set; } = new List<string>();
             public List<string> EncryptionExtensions { get; set; } = new List<string>();
             public List<string> PriorityExtensions { get; set; } = new List<string>();
+
+            public int MaxLargeFileSizeKB { get; set; } = 1024;
         }
 
         /// <summary>
@@ -503,6 +511,15 @@ namespace EasySaveV3._0.Controllers
                 _settings.PriorityExtensions.Add(extension);
                 SaveSettings();
             }
+        }
+
+        public void SetMaxLargeFileSizeKB(int value)
+        {
+            if (value <= 0)
+                throw new ArgumentException("La valeur doit être strictement positive", nameof(value));
+
+            _settings.MaxLargeFileSizeKB = value;
+            SaveSettings();
         }
 
         /// <summary>
