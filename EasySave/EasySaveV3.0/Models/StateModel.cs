@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text.Json;
+using System.Collections.Generic;
 
 namespace EasySaveV3._0.Models
 {
@@ -69,6 +70,12 @@ namespace EasySaveV3._0.Models
         /// Range: 0-100.
         /// </summary>
         public int ProgressPercentage { get; set; }
+
+        /// <summary>
+        /// Set of files that have been processed in this backup job.
+        /// Used to track which files have been backed up.
+        /// </summary>
+        public HashSet<string> ProcessedFiles { get; set; } = new HashSet<string>();
 
         /// <summary>
         /// Creates a new state model with initial values for a backup job.

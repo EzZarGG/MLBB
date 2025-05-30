@@ -291,7 +291,7 @@ namespace EasySaveV3._0.Managers
                     TargetPath = job.TargetPath,
                     Message = "Backup job created",
                     LogType = "INFO",
-                    ActionType = "BACKUP_START"
+                    ActionType = "BACKUP_CREATED"
                 };
                 _logger.AddLogEntry(logEntry);
                 return true;
@@ -439,155 +439,182 @@ namespace EasySaveV3._0.Managers
         }
 
         /// <summary>
-        /// Decrypts a file using AES encryption.
-        /// Tracks and reports decryption progress.
-        /// </summary>
-        /// <param name="sourceFile">Path to the encrypted file</param>
-        /// <param name="targetFile">Path where the decrypted file will be saved</param>
-        /// <param name="backupName">Name of the backup job for progress tracking</param>
-        private async Task DecryptFileAsync(string sourceFile, string targetFile, string backupName)
-        {
-            using (var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
-            using (var targetStream = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
-            using (var aes = Aes.Create())
-            {
-                // Read IV from the beginning of the file
-                var iv = new byte[aes.BlockSize / 8];
-                await sourceStream.ReadAsync(iv, 0, iv.Length);
-                aes.IV = iv;
-                aes.Key = _encryptionKey.Key;
-
-                using (var cryptoStream = new CryptoStream(sourceStream, aes.CreateDecryptor(), CryptoStreamMode.Read))
-                {
-                    var buffer = new byte[BUFFER_SIZE];
-                    var totalBytes = sourceStream.Length - iv.Length;
-                    var bytesRead = 0L;
-                    int read;
-
-                    while ((read = await cryptoStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                    {
-                        await targetStream.WriteAsync(buffer, 0, read);
-                        bytesRead += read;
-
-                        var progressPercentage = (int)((bytesRead * 100.0) / totalBytes);
-                        EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                            backupName,
-                            sourceFile,
-                            progressPercentage
-                        ));
-                    }
-                }
-            }
-
-            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                backupName,
-                sourceFile,
-                100,
-                true
-            ));
-        }
-
-        /// <summary>
-        /// Encrypts a file using AES encryption.
-        /// Tracks and reports encryption progress.
+        /// Encrypts a file using XOR encryption via CryptoSoft.
         /// </summary>
         /// <param name="sourceFile">Path to the file to encrypt</param>
         /// <param name="targetFile">Path where the encrypted file will be saved</param>
-        /// <param name="backupName">Name of the backup job for progress tracking</param>
-        private async Task EncryptFileAsync(string sourceFile, string targetFile, string backupName)
+        private async Task EncryptFileWithCryptoSoftAsync(string sourceFile, string targetFile)
         {
-            using (var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read))
-            using (var targetStream = new FileStream(targetFile, FileMode.Create, FileAccess.Write))
-            using (var aes = Aes.Create())
+            var psi = new ProcessStartInfo
             {
-                aes.Key = _encryptionKey.Key;
-                aes.IV = _encryptionKey.IV;
-
-                // Write IV to the beginning of the file
-                await targetStream.WriteAsync(aes.IV, 0, aes.IV.Length);
-
-                using (var cryptoStream = new CryptoStream(targetStream, aes.CreateEncryptor(), CryptoStreamMode.Write))
-                {
-                    var buffer = new byte[BUFFER_SIZE];
-                    var totalBytes = sourceStream.Length;
-                    var bytesRead = 0L;
-                    int read;
-
-                    while ((read = await sourceStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
-                    {
-                        await cryptoStream.WriteAsync(buffer, 0, read);
-                        bytesRead += read;
-
-                        var progressPercentage = (int)((bytesRead * 100.0) / totalBytes);
-                        EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                            backupName,
-                            sourceFile,
-                            progressPercentage
-                        ));
-                    }
-                }
+                FileName = _cryptoSoftPath,
+                Arguments = $"encrypt \"{sourceFile}\" \"{targetFile}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            await process.WaitForExitAsync();
+            if (process.ExitCode < 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                throw new Exception($"CryptoSoft error: {error}");
             }
-
-            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                backupName,
-                sourceFile,
-                100,
-                true
-            ));
         }
 
         /// <summary>
-        /// Checks if there are any priority files remaining in any backup job.
+        /// Decrypts a file using XOR decryption via CryptoSoft.
         /// </summary>
-        /// <returns>True if there are priority files remaining in any job, false otherwise</returns>
-        private bool HasPriorityFilesRemaining()
+        /// <param name="sourceFile">Path to the encrypted file</param>
+        /// <param name="targetFile">Path where the decrypted file will be saved</param>
+        private async Task DecryptFileWithCryptoSoftAsync(string sourceFile, string targetFile)
         {
-            var priorityExtensions = Config.GetPriorityExtensions();
-            
-            // Check all backup jobs
-            foreach (var backup in _backups)
+            var psi = new ProcessStartInfo
             {
-                // Skip jobs that are not active
-                var state = GetJobState(backup.Name);
-                if (state == null || state.Status != "Active")
-                    continue;
+                FileName = _cryptoSoftPath,
+                Arguments = $"decrypt \"{sourceFile}\" \"{targetFile}\"",
+                UseShellExecute = false,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                CreateNoWindow = true
+            };
+            using var process = Process.Start(psi);
+            await process.WaitForExitAsync();
+            if (process.ExitCode < 0)
+            {
+                var error = await process.StandardError.ReadToEndAsync();
+                throw new Exception($"CryptoSoft error: {error}");
+            }
+        }
 
-                // Get all files in the source directory
-                var files = Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories);
-                
-                // Check if any remaining files have priority extensions
-                var hasPriorityFiles = files.Any(f => 
+        private async Task CopyFileAsync(string sourceFile, string targetFile, string backupName)
+        {
+            var backup = GetJob(backupName);
+            if (backup == null)
+                throw new InvalidOperationException($"Backup job '{backupName}' not found");
+
+            var fileExtension = Path.GetExtension(sourceFile).ToLower();
+            var encryptionExtensions = _settingsController.GetEncryptionExtensions();
+            bool shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
+
+            if (shouldEncrypt)
+            {
+                // Notify encryption start
+                EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0));
+
+                try
                 {
-                    var extension = Path.GetExtension(f).ToLower();
-                    return priorityExtensions.Contains(extension);
+                    _logger.AddLogEntry(new LogEntry
+                    {
+                        Timestamp = DateTime.Now,
+                        BackupName = backupName,
+                        SourcePath = sourceFile,
+                        TargetPath = targetFile,
+                        Message = $"Starting encryption of file: {sourceFile}",
+                        LogType = "INFO",
+                        ActionType = "ENCRYPTION_START"
+                    });
+
+                    await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
+                    
+                    _logger.AddLogEntry(new LogEntry
+                    {
+                        Timestamp = DateTime.Now,
+                        BackupName = backupName,
+                        SourcePath = sourceFile,
+                        TargetPath = targetFile,
+                        Message = $"Completed encryption of file: {sourceFile}",
+                        LogType = "INFO",
+                        ActionType = "ENCRYPTION_COMPLETE"
+                    });
+
+                    // Notify encryption complete
+                    EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 100, true));
+                }
+                catch (Exception ex)
+                {
+                    _logger.AddLogEntry(new LogEntry
+                    {
+                        Timestamp = DateTime.Now,
+                        BackupName = backupName,
+                        SourcePath = sourceFile,
+                        TargetPath = targetFile,
+                        Message = $"Encryption error for file {sourceFile}: {ex.Message}",
+                        LogType = "ERROR",
+                        ActionType = "ENCRYPTION_ERROR"
+                    });
+
+                    // Notify encryption error
+                    EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0, true, true, ex.Message));
+                    throw;
+                }
+            }
+            else
+            {
+                _logger.AddLogEntry(new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = backupName,
+                    SourcePath = sourceFile,
+                    TargetPath = targetFile,
+                    Message = $"Skipping encryption for file: {sourceFile}",
+                    LogType = "INFO",
+                    ActionType = "ENCRYPTION_SKIP"
                 });
 
-                if (hasPriorityFiles)
-                    return true;
+                await Task.Run(() => File.Copy(sourceFile, targetFile, true));
             }
+        }
+
+        /// <summary>
+        /// Checks if there are any priority files remaining in the current backup job.
+        /// </summary>
+        /// <param name="backup">The backup job to check</param>
+        /// <returns>True if there are priority files remaining in this job, false otherwise</returns>
+        private bool HasPriorityFilesRemaining(Backup backup)
+        {
+            var priorityExtensions = Config.GetPriorityExtensions();
+            var state = GetJobState(backup.Name);
             
-            return false;
+            // Skip if job is not active
+            if (state == null || state.Status != "Active")
+                return false;
+
+            // Get all files in the source directory
+            var files = Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories);
+            
+            // Get the list of already processed files from the state
+            var processedFiles = state.ProcessedFiles ?? new HashSet<string>();
+            
+            // Check if any remaining files have priority extensions
+            var hasPriorityFiles = files.Any(f => 
+            {
+                // Skip already processed files
+                if (processedFiles.Contains(f))
+                    return false;
+                    
+                var extension = Path.GetExtension(f).ToLower();
+                return priorityExtensions.Contains(extension);
+            });
+
+            return hasPriorityFiles;
         }
 
         /// <summary>
         /// Gets the list of files that need to be processed for a backup job,
-        /// respecting the priority of files across all jobs.
+        /// respecting the priority of files.
         /// </summary>
         /// <param name="backup">The backup job to process</param>
         /// <returns>List of files to process, ordered by priority</returns>
         private async Task<List<string>> GetFilesToProcessAsync(Backup backup)
         {
+            // Get all files in the source directory
             var files = await Task.Run(() => Directory.GetFiles(backup.SourcePath, "*.*", SearchOption.AllDirectories));
             var priorityExtensions = Config.GetPriorityExtensions();
             
-            // Sort files by priority
+            // Sort files by priority - priority files first, then non-priority files
             var sortedFiles = files.OrderByDescending(f => priorityExtensions.Contains(Path.GetExtension(f).ToLower())).ToList();
-            
-            // If there are priority files in any job, filter out non-priority files
-            if (HasPriorityFilesRemaining())
-            {
-                sortedFiles = sortedFiles.Where(f => priorityExtensions.Contains(Path.GetExtension(f).ToLower())).ToList();
-            }
             
             return sortedFiles;
         }
@@ -602,9 +629,7 @@ namespace EasySaveV3._0.Managers
         {
             var backup = GetJob(name);
             if (backup == null)
-            {
                 throw new InvalidOperationException($"Backup job '{name}' not found");
-            }
 
             // Create a new cancellation token for this job
             var cts = new CancellationTokenSource();
@@ -629,25 +654,19 @@ namespace EasySaveV3._0.Managers
                 totalFiles = sortedFiles.Count;
                 totalBytes = sortedFiles.Sum(f => new FileInfo(f).Length);
 
-                // Log initial file list
-                var initialLogEntry = new LogEntry
+                // Log the start of file processing
+                var fileList = string.Join("\n", sortedFiles.Select(f => $"- {Path.GetFileName(f)} ({(Config.GetPriorityExtensions().Contains(Path.GetExtension(f).ToLower()) ? "Priority" : "Non-priority")})"));
+                _logger.AddLogEntry(new LogEntry
                 {
                     Timestamp = DateTime.Now,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
-                    Message = $"Starting backup with {totalFiles} files. File list:\n" + 
-                             string.Join("\n", sortedFiles.Select(f => 
-                             {
-                                 var extension = Path.GetExtension(f).ToLower();
-                                 var isPriority = Config.GetPriorityExtensions().Contains(extension);
-                                 return $"- {Path.GetFileName(f)} ({(isPriority ? "Priority" : "Non-priority")})";
-                             })),
+                    Message = $"Starting backup with {totalFiles} files in priority order:\n{fileList}",
                     LogType = "INFO",
-                    ActionType = "BACKUP_START"
-                };
-                _logger.AddLogEntry(initialLogEntry);
+                    ActionType = "BACKUP_STARTED"
+                });
 
                 // Update initial state to Active
                 UpdateJobState(name, state =>
@@ -695,27 +714,18 @@ namespace EasySaveV3._0.Managers
                         if (dir != null && !Directory.Exists(dir))
                         {
                             Directory.CreateDirectory(dir);
+                            _logger.LogAdminAction(name, "DIR_CREATE", $"Created directory: {dir}");
                         }
 
                         var stopwatch = Stopwatch.StartNew();
                         try
                         {
                             // Copy and optionally encrypt the file
-                            if (backup.Encrypt)
-                            {
-                                await EncryptFileAsync(sourceFile, targetFile, name);
-                                totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                            }
-                            else
-                            {
-                                await Task.Run(() => File.Copy(sourceFile, targetFile, true), cts.Token);
-                            }
-
-                            stopwatch.Stop();
-                            totalTransferTime += stopwatch.ElapsedMilliseconds;
+                            await CopyFileAsync(sourceFile, targetFile, name);
+                            totalEncryptionTime += stopwatch.ElapsedMilliseconds;
                             bytesTransferred += sourceInfo.Length;
+                            processedFilesOrder.Add(sourceFile);
                             filesProcessed++;
-                            processedFilesOrder.Add(sourceFile); // Ajouter le fichier à l'ordre de traitement
 
                             // Update progress after each file
                             var progress = (int)((filesProcessed * 100.0) / totalFiles);
@@ -809,7 +819,7 @@ namespace EasySaveV3._0.Managers
                 // Create final log entry with file processing order
                 var finalLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
@@ -829,7 +839,7 @@ namespace EasySaveV3._0.Managers
                             return $"{index + 1}. {Path.GetFileName(f)} ({(isPriority ? "Priority" : "Non-priority")})";
                         })),
                     LogType = hasErrors ? "ERROR" : "INFO",
-                    ActionType = "BACKUP_EXECUTION"
+                    ActionType = hasErrors ? "BACKUP_ERROR" : "BACKUP_COMPLETED"
                 };
                 _logger.AddLogEntry(finalLogEntry);
             }
@@ -870,13 +880,13 @@ namespace EasySaveV3._0.Managers
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
                     Message = $"Backup failed: {ex.Message}",
                     LogType = "ERROR",
-                    ActionType = "BACKUP_EXECUTION"
+                    ActionType = "BACKUP_ERROR"
                 };
                 _logger.AddLogEntry(errorLogEntry);
                 throw;
@@ -968,18 +978,8 @@ namespace EasySaveV3._0.Managers
                     try
                     {
                         // Copy and optionally decrypt the file
-                        if (backup.Encrypt)
-                        {
-                            await DecryptFileAsync(sourceFile, targetFile, name);
-                            totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                        }
-                        else
-                        {
-                            await Task.Run(() => File.Copy(sourceFile, targetFile, true));
-                        }
-
-                        stopwatch.Stop();
-                        totalTransferTime += stopwatch.ElapsedMilliseconds;
+                        await CopyFileAsync(sourceFile, targetFile, name);
+                        totalEncryptionTime += stopwatch.ElapsedMilliseconds;
                         bytesTransferred += sourceInfo.Length;
                         filesProcessed++;
 
@@ -1069,7 +1069,7 @@ namespace EasySaveV3._0.Managers
                 // Create final log entry
                 var logEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.TargetPath,
@@ -1114,7 +1114,7 @@ namespace EasySaveV3._0.Managers
                 // Create error log entry
                 var errorLogEntry = new LogEntry
                 {
-                    Timestamp = startTime,
+                    Timestamp = DateTime.Now,
                     BackupName = name,
                     SourcePath = backup.TargetPath,
                     TargetPath = targetPath,

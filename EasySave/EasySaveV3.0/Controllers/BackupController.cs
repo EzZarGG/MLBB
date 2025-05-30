@@ -139,7 +139,8 @@ namespace EasySaveV3._0.Controllers
                     Name = name,
                     SourcePath = sourcePath,
                     TargetPath = destinationPath,
-                    Type = type
+                    Type = type,
+                    Encrypt = true  // Enable encryption by default
                 };
 
                 if (!_backupManager.AddJob(backup))
@@ -550,8 +551,6 @@ namespace EasySaveV3._0.Controllers
                 state.BytesRemaining = 0;
                 state.CurrentSourceFile = backup.SourcePath;
                 state.CurrentTargetFile = backup.TargetPath;
-
-                _logController.LogBackupStart(backup.Name, backup.Type, "Backup started", backup.SourcePath, backup.TargetPath);
 
                 // Lancer la sauvegarde via le BackupManager
                 await _backupManager.ExecuteJob(backup.Name);

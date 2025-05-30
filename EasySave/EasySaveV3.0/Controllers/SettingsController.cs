@@ -64,6 +64,16 @@ namespace EasySaveV3._0.Controllers
                 _lastProcessCheck = DateTime.MinValue;
 
                 LoadSettings();
+
+                // Add common extensions to encryption list if not already present
+                var defaultExtensions = new[] { ".txt", ".docx", ".pdf", ".xlsx", ".pptx", ".doc", ".xls", ".ppt" };
+                foreach (var extension in defaultExtensions)
+                {
+                    if (!_settings.EncryptionExtensions.Contains(extension))
+                    {
+                        AddEncryptionExtension(extension);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -138,6 +148,21 @@ namespace EasySaveV3._0.Controllers
             else
             {
                 settings.EncryptionExtensions = settings.EncryptionExtensions
+                    .Where(e => !string.IsNullOrWhiteSpace(e))
+                    .Select(e => e.Trim().ToLower())
+                    .Select(e => e.StartsWith(".") ? e : "." + e)
+                    .Distinct()
+                    .ToList();
+            }
+
+            // Validate priority extensions
+            if (settings.PriorityExtensions == null)
+            {
+                settings.PriorityExtensions = new List<string>();
+            }
+            else
+            {
+                settings.PriorityExtensions = settings.PriorityExtensions
                     .Where(e => !string.IsNullOrWhiteSpace(e))
                     .Select(e => e.Trim().ToLower())
                     .Select(e => e.StartsWith(".") ? e : "." + e)

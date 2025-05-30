@@ -32,7 +32,7 @@ namespace EasySaveV3._0
         /// <summary>
         /// Gets the path to the application settings file.
         /// </summary>
-        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsettings.json");
+        public static string AppSettingsFilePath => Path.Combine(AppContext.BaseDirectory, "appsetting.json");
 
         /// <summary>
         /// Gets the directory path for log files.
