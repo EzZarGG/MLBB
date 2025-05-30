@@ -83,7 +83,7 @@ namespace EasySaveV3._0.Managers
             _settingsController = SettingsController.Instance;
 
             // Valeur n Ko paramétrable
-            _maxLargeFileSizeBytes = _settingsController.MaxLargeFileSizeKB * 1024L;
+            _maxLargeFileSizeBytes = _settingsController.MaxLargeFileSizeKB * 1000L;
             _largeFileSemaphore = new SemaphoreSlim(1, 1);
             _cryptoSoftPath = Config.GetCryptoSoftPath();
             if (string.IsNullOrWhiteSpace(_cryptoSoftPath) || !File.Exists(_cryptoSoftPath))
