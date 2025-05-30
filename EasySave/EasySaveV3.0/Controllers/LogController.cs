@@ -39,6 +39,10 @@ namespace EasySaveV3._0.Controllers
             public const string BACKUP_UPDATED_TYPE = "BACKUP_UPDATED_TYPE";
             public const string BACKUP_UPDATED_MULTIPLE = "BACKUP_UPDATED_MULTIPLE";
             public const string PERFORMANCE_WARNING = "PERFORMANCE_WARNING";
+            public const string ENCRYPTION_START = "ENCRYPTION_START";
+            public const string ENCRYPTION_COMPLETE = "ENCRYPTION_COMPLETE";
+            public const string ENCRYPTION_ERROR = "ENCRYPTION_ERROR";
+            public const string ENCRYPTION_SKIP = "ENCRYPTION_SKIP";
         }
 
         // Singleton instance
@@ -155,7 +159,7 @@ namespace EasySaveV3._0.Controllers
                 BackupType = backupType,
                 SourcePath = sourcePath,
                 TargetPath = targetPath,
-                Message = message,
+                Message = _languageManager.GetTranslation(message),
                 LogType = logType,
                 ActionType = actionType
             };
@@ -173,20 +177,29 @@ namespace EasySaveV3._0.Controllers
         /// </summary>
         private string MapMessageToActionType(string message)
         {
-            if (message.StartsWith("Backup job created"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupCreated")))
                 return ActionTypes.BACKUP_CREATED;
-            if (message.StartsWith("Starting backup with"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupStarted")))
                 return ActionTypes.BACKUP_STARTED;
-            if (message.StartsWith("Backup completed successfully"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupCompleted")))
                 return ActionTypes.BACKUP_COMPLETED;
-            if (message.StartsWith("Backup failed") || message.StartsWith("Backup completed with errors"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupFailed")) || 
+                message.StartsWith(_languageManager.GetTranslation("message.backupError")))
                 return ActionTypes.BACKUP_ERROR;
-            if (message.StartsWith("Backup job deleted"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupDeleted")))
                 return ActionTypes.BACKUP_DELETE;
-            if (message.StartsWith("Backup job edited"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.backupEdited")))
                 return ActionTypes.BACKUP_EDIT;
-            if (message.StartsWith("Restore"))
+            if (message.StartsWith(_languageManager.GetTranslation("message.restore")))
                 return ActionTypes.BACKUP_RESTORE;
+            if (message.StartsWith(_languageManager.GetTranslation("message.encryptionStart")))
+                return ActionTypes.ENCRYPTION_START;
+            if (message.StartsWith(_languageManager.GetTranslation("message.encryptionComplete")))
+                return ActionTypes.ENCRYPTION_COMPLETE;
+            if (message.StartsWith(_languageManager.GetTranslation("message.encryptionError")))
+                return ActionTypes.ENCRYPTION_ERROR;
+            if (message.StartsWith(_languageManager.GetTranslation("message.encryptionSkip")))
+                return ActionTypes.ENCRYPTION_SKIP;
             return ActionTypes.BACKUP_ERROR;
         }
 
@@ -250,7 +263,7 @@ namespace EasySaveV3._0.Controllers
                     backupType,
                     sourcePath,
                     targetPath,
-                    _languageManager.GetTranslation(message),
+                    message,
                     "INFO",
                     actionType
                 );
@@ -301,7 +314,7 @@ namespace EasySaveV3._0.Controllers
                     backupType,
                     sourcePath,
                     targetPath,
-                    _languageManager.GetTranslation(message),
+                    message,
                     "INFO",
                     actionType
                 );
@@ -456,7 +469,7 @@ namespace EasySaveV3._0.Controllers
         }
 
         /// <summary>
-        /// Logs when a file is skipped during backup (e.g., in differential backup when file hasn't changed).
+        /// Logs when a file is skipped during backup.
         /// </summary>
         public void LogFileSkipped(string backupName, string backupType, string sourcePath, string targetPath, string reason)
         {
@@ -506,8 +519,8 @@ namespace EasySaveV3._0.Controllers
             }
 
             var message = changes.Count > 0
-                ? $"Backup job edited: {string.Join(", ", changes)}"
-                : "Backup job edited";
+                ? _languageManager.GetTranslation("message.backupEditedWithChanges", string.Join(", ", changes))
+                : _languageManager.GetTranslation("message.backupEdited");
 
             var logEntry = new LogEntry
             {

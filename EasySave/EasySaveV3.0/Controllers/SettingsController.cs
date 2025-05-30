@@ -64,6 +64,16 @@ namespace EasySaveV3._0.Controllers
                 _lastProcessCheck = DateTime.MinValue;
 
                 LoadSettings();
+
+                // Add common extensions to encryption list if not already present
+                var defaultExtensions = new[] { ".txt", ".docx", ".pdf", ".xlsx", ".pptx", ".doc", ".xls", ".ppt" };
+                foreach (var extension in defaultExtensions)
+                {
+                    if (!_settings.EncryptionExtensions.Contains(extension))
+                    {
+                        AddEncryptionExtension(extension);
+                    }
+                }
             }
             catch (Exception ex)
             {

@@ -139,7 +139,8 @@ namespace EasySaveV3._0.Controllers
                     Name = name,
                     SourcePath = sourcePath,
                     TargetPath = destinationPath,
-                    Type = type
+                    Type = type,
+                    Encrypt = true  // Enable encryption by default
                 };
 
                 if (!_backupManager.AddJob(backup))
