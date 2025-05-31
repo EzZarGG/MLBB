@@ -1,4 +1,4 @@
-namespace EasySaveV3._0.Views
+﻿namespace EasySaveV3._0.Views
 {
     partial class SettingsForm : System.Windows.Forms.Form
     {
@@ -19,6 +19,9 @@ namespace EasySaveV3._0.Views
         private System.Windows.Forms.Button cancelButton;
         private System.Windows.Forms.ColumnHeader businessSoftwareColumn;
         private System.Windows.Forms.ColumnHeader encryptionColumn;
+        private System.Windows.Forms.TabPage transfersTab;
+        private System.Windows.Forms.Label maxLargeFileLabel;
+        private System.Windows.Forms.NumericUpDown maxLargeFileNumeric;
 
         /// <summary>
         /// Clean up any resources being used.
@@ -55,6 +58,11 @@ namespace EasySaveV3._0.Views
             this.removeEncryptionButton = new System.Windows.Forms.Button();
             this.saveButton = new System.Windows.Forms.Button();
             this.cancelButton = new System.Windows.Forms.Button();
+            this.transfersTab = new System.Windows.Forms.TabPage();
+            this.maxLargeFileLabel = new System.Windows.Forms.Label();
+            this.maxLargeFileNumeric = new System.Windows.Forms.NumericUpDown();
+
+            ((System.ComponentModel.ISupportInitialize)(this.maxLargeFileNumeric)).BeginInit();
 
             // Form properties
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
@@ -190,8 +198,55 @@ namespace EasySaveV3._0.Views
             this.businessSoftwareTab.ResumeLayout(false);
             this.encryptionTab.ResumeLayout(false);
             this.ResumeLayout(false);
+
+            this.transfersTab.Tag = "settings.tab.transfers";
+            this.transfersTab.Text = "Transferts";
+            this.transfersTab.UseVisualStyleBackColor = true;
+            this.transfersTab.Padding = new System.Windows.Forms.Padding(10);
+
+            // *** Configuration de l'onglet Transferts ***
+            this.transfersTab.Tag = "settings.tab.transfers";
+            this.transfersTab.Text = "Transferts";
+            this.transfersTab.UseVisualStyleBackColor = true;
+            this.transfersTab.Padding = new System.Windows.Forms.Padding(10);
+
+            // Label
+            this.maxLargeFileLabel.AutoSize = true;
+            this.maxLargeFileLabel.Location = new System.Drawing.Point(10, 15);
+            this.maxLargeFileLabel.Name = "maxLargeFileLabel";
+            this.maxLargeFileLabel.Size = new System.Drawing.Size(180, 23);
+            this.maxLargeFileLabel.TabIndex = 0;
+            this.maxLargeFileLabel.Text = "Seuil « gros fichiers » (Ko) :";
+
+            // NumericUpDown
+            this.maxLargeFileNumeric.Location = new System.Drawing.Point(200, 12);
+            this.maxLargeFileNumeric.Name = "maxLargeFileNumeric";
+            this.maxLargeFileNumeric.Size = new System.Drawing.Size(120, 23);
+            this.maxLargeFileNumeric.TabIndex = 1;
+            this.maxLargeFileNumeric.DecimalPlaces = 0;
+            this.maxLargeFileNumeric.Minimum = 1;
+            this.maxLargeFileNumeric.Maximum = 1024 * 1024;  // jusqu'à 1 048 576 Ko
+            this.maxLargeFileNumeric.Increment = 10;
+
+            // Ajout des contrôles dans l'onglet Transferts
+            this.transfersTab.Controls.Add(this.maxLargeFileLabel);
+            this.transfersTab.Controls.Add(this.maxLargeFileNumeric);
+
+            // Ajout de l'onglet Transferts au TabControl
+            this.tabControl.TabPages.Add(this.transfersTab);
+
+            // *** EndInit pour le NumericUpDown ***
+            ((System.ComponentModel.ISupportInitialize)(this.maxLargeFileNumeric)).EndInit();
+
+            // — Vos appels existants à ResumeLayout (tabControl, form, etc.) —
+            this.tabControl.ResumeLayout(false);
+            this.businessSoftwareTab.ResumeLayout(false);
+            this.encryptionTab.ResumeLayout(false);
+            this.ResumeLayout(false);
+
+
         }
 
-        #endregion
-    }
+    #endregion
+}
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Collections.Generic;
@@ -6,6 +6,7 @@ using EasySaveV3._0.Controllers;
 using EasySaveV3._0.Managers;
 using EasySaveV3._0.Models;
 using EasySaveLogging;
+using System.Runtime;
 
 namespace EasySaveV3._0.Views
 {
@@ -33,7 +34,10 @@ namespace EasySaveV3._0.Views
         private ColumnHeader _encryptionColumn = new();
         private ColumnHeader _priorityColumn = new();
         private ComboBox _logFormatComboBox = new();
-
+        private readonly SettingsController _settings = SettingsController.Instance;
+        private TabPage _transfersTab = new();
+        private Label _maxLargeFileLabel = new();
+        private NumericUpDown _maxLargeFileNumeric = new();
         public SettingsForm(LanguageManager languageManager, SettingsController settingsController)
         {
             _languageManager = languageManager;
@@ -46,6 +50,7 @@ namespace EasySaveV3._0.Views
             LoadSettings();
             UpdateFormTexts();
         }
+       
 
         private void SetupEventHandlers()
         {
@@ -64,8 +69,9 @@ namespace EasySaveV3._0.Views
             LoadBusinessSoftware();
             LoadEncryptionExtensions();
             LoadPriorityExtensions();
-            var currentFormat = _settingsController.GetCurrentLogFormat();
-            _logFormatComboBox.SelectedItem = currentFormat;
+            
+            _maxLargeFileNumeric.Value = _settingsController.MaxLargeFileSizeKB;
+            _logFormatComboBox.SelectedItem = _settingsController.GetCurrentLogFormat();
         }
 
         private void InitializeUI()
@@ -194,6 +200,28 @@ namespace EasySaveV3._0.Views
                 Height = 30
             };
 
+            // ─── Onglet Transferts ───────────────────────────────────────
+            _transfersTab = new TabPage(_languageManager.GetTranslation("settings.tab.transfers"))
+            {
+                Padding = new Padding(10),
+                UseVisualStyleBackColor = true
+            };
+
+            _maxLargeFileLabel = new Label
+            {
+                AutoSize = true,
+                Location = new Point(10, 20),
+                Text = _languageManager.GetTranslation("settings.transfers.maxLargeFileSizeKB")
+            };
+
+            _maxLargeFileNumeric = new NumericUpDown
+            {
+                Location = new Point(230, 18),
+                Minimum = 1,
+                Maximum = 1024 * 1024, // jusqu’à 1 Go en Ko
+                Width = 80,
+                DecimalPlaces = 0
+            };
             // Create button panels
             var businessSoftwareButtonPanel = new FlowLayoutPanel
             {
@@ -242,12 +270,18 @@ namespace EasySaveV3._0.Views
             _priorityTab.Controls.Add(priorityButtonPanel);
 
             _logFormatTab.Controls.Add(_logFormatComboBox);
-
+            _transfersTab.Controls.Add(_maxLargeFileLabel);
+            _transfersTab.Controls.Add(_maxLargeFileNumeric);
             // Add tabs to control
             _tabControl.TabPages.Add(_businessSoftwareTab);
             _tabControl.TabPages.Add(_encryptionTab);
             _tabControl.TabPages.Add(_priorityTab);
             _tabControl.TabPages.Add(_logFormatTab);
+            _tabControl.TabPages.Add(_transfersTab);
+
+
+         
+
 
             // Add controls to form
             Controls.Clear();
@@ -360,7 +394,9 @@ namespace EasySaveV3._0.Views
             if (_logFormatComboBox.SelectedItem is LogFormat selectedFormat)
             {
                 _settingsController.SetLogFormat(selectedFormat);
+                
             }
+            _settingsController.SetMaxLargeFileSizeKB((int)_maxLargeFileNumeric.Value);
             DialogResult = DialogResult.OK;
             Close();
         }
