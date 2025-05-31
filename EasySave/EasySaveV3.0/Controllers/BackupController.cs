@@ -115,19 +115,22 @@ namespace EasySaveV3._0.Controllers
         public bool IsCryptoSoftRunning()
         {
             const string mutexName = @"Global\CryptoConsole_MonoInstance";
-            try
+
+            // Tenter d’ouvrir le mutex sans exception : 
+            // si TryOpenExisting renvoie true, cela signifie que CryptoSoft est déjà lancé 
+            if (Mutex.TryOpenExisting(mutexName, out Mutex? existingMutex))
             {
-                // Tenter d’ouvrir le mutex créé par CryptoSoft
-                Mutex.OpenExisting(mutexName);
-                // Si on y parvient, CryptoSoft tourne déjà
+                // On libère immédiatement le handle qu’on a récupéré
+                existingMutex.Dispose();
                 return true;
             }
-            catch (WaitHandleCannotBeOpenedException)
+            else
             {
-                // Le mutex n’existe pas → pas d’instance active
+                // Aucune instance existante n’a créé ce mutex
                 return false;
             }
         }
+
 
 
         /// <summary>
