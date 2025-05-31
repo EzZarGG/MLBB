@@ -65,6 +65,16 @@ namespace EasySaveV3._0.Controllers
                 _lastProcessCheck = DateTime.MinValue;
 
                 LoadSettings();
+
+                // Add common extensions to encryption list if not already present
+                var defaultExtensions = new[] { ".txt", ".docx", ".pdf", ".xlsx", ".pptx", ".doc", ".xls", ".ppt" };
+                foreach (var extension in defaultExtensions)
+                {
+                    if (!_settings.EncryptionExtensions.Contains(extension))
+                    {
+                        AddEncryptionExtension(extension);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -147,8 +157,22 @@ namespace EasySaveV3._0.Controllers
             }
             if (settings.MaxLargeFileSizeKB <= 0)
             {
-                // On remet la valeur par défaut si jamais mal configuré
+                // On remet la valeur par dï¿½faut si jamais mal configurï¿½
                 settings.MaxLargeFileSizeKB = 1024;
+
+            // Validate priority extensions
+            if (settings.PriorityExtensions == null)
+            {
+                settings.PriorityExtensions = new List<string>();
+            }
+            else
+            {
+                settings.PriorityExtensions = settings.PriorityExtensions
+                    .Where(e => !string.IsNullOrWhiteSpace(e))
+                    .Select(e => e.Trim().ToLower())
+                    .Select(e => e.StartsWith(".") ? e : "." + e)
+                    .Distinct()
+                    .ToList();
             }
         }
 
@@ -516,7 +540,7 @@ namespace EasySaveV3._0.Controllers
         public void SetMaxLargeFileSizeKB(int value)
         {
             if (value <= 0)
-                throw new ArgumentException("La valeur doit être strictement positive", nameof(value));
+                throw new ArgumentException("La valeur doit ï¿½tre strictement positive", nameof(value));
 
             _settings.MaxLargeFileSizeKB = value;
             SaveSettings();
