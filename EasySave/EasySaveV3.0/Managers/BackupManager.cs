@@ -664,6 +664,7 @@ namespace EasySaveV3._0.Managers
             var totalEncryptionTime = 0L;
             var hasErrors = false;
             var errorMessages = new List<string>();
+            var processedFilesOrder = new List<string>(); 
 
             try
             {
@@ -784,7 +785,7 @@ namespace EasySaveV3._0.Managers
                             }
                             catch (OperationCanceledException)
                             {
-                                sw.Stop();
+                                stopwatch.Stop();
                                 UpdateJobState(name, state =>
                                 {
                                     state.Status = "Paused";
@@ -794,7 +795,7 @@ namespace EasySaveV3._0.Managers
                             }
                             catch (Exception ex)
                             {
-                                sw.Stop();
+                                stopwatch.Stop();
                                 hasErrors = true;
                                 errorMessages.Add($"Error copying file {sourceFile}: {ex.Message}");
 
@@ -803,7 +804,7 @@ namespace EasySaveV3._0.Managers
                                     (int)(filesProcessed * 100.0 / totalFiles),
                                     bytesTransferred, totalBytes,
                                     filesProcessed, totalFiles,
-                                    sw.Elapsed, false
+                                    stopwatch.Elapsed, false
                                 ));
                                 if (backup.Encrypt)
                                 {

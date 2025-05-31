@@ -157,8 +157,8 @@ namespace EasySaveV3._0.Controllers
             }
             if (settings.MaxLargeFileSizeKB <= 0)
             {
-                // On remet la valeur par d�faut si jamais mal configur�
                 settings.MaxLargeFileSizeKB = 1024;
+            }
 
             // Validate priority extensions
             if (settings.PriorityExtensions == null)
@@ -540,7 +540,7 @@ namespace EasySaveV3._0.Controllers
         public void SetMaxLargeFileSizeKB(int value)
         {
             if (value <= 0)
-                throw new ArgumentException("La valeur doit �tre strictement positive", nameof(value));
+                throw new ArgumentException("La valeur doit être strictement positive", nameof(value));
 
             _settings.MaxLargeFileSizeKB = value;
             SaveSettings();
