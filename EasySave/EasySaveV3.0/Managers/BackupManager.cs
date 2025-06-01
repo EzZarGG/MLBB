@@ -47,13 +47,14 @@ namespace EasySaveV3._0.Managers
 
         // Thread synchronization primitives
         private readonly object _stateLock = new();     // Lock for state modifications
+        private readonly SemaphoreSlim _largeFileSemaphore = new SemaphoreSlim(1, 1);  // Lock for large file operations
+        private long _maxLargeFileSizeBytes;  // Maximum file size before using large file semaphore
+        private readonly string _cryptoSoftPath;  // Path to CryptoSoft executable
 
         // Progress tracking events
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
-
-        public event EventHandler<string>? BusinessSoftwareDetected;
-        private readonly string _cryptoSoftPath;
+        public event EventHandler<string>? BusinessSoftwareDetected;  // Fired when business software is detected during backup
 
         // Add thread pool configuration
         private static readonly SemaphoreSlim _priorityThreadPool;
@@ -112,7 +113,6 @@ namespace EasySaveV3._0.Managers
             _languageManager = LanguageManager.Instance; 
 
             _jsonOptions = new JsonSerializerOptions
-
             {
                 WriteIndented = true,
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
@@ -121,9 +121,8 @@ namespace EasySaveV3._0.Managers
             _logger = Logger.GetInstance();
             _settingsController = SettingsController.Instance;
 
-            // Valeur n Ko paramétrable
-            _maxLargeFileSizeBytes = _settingsController.MaxLargeFileSizeKB * 1000L;
-            _largeFileSemaphore = new SemaphoreSlim(1, 1);
+            // Set large file size limit from settings
+            _maxLargeFileSizeBytes = _settingsController.MaxLargeFileSizeKB * 1024L;  // Convert KB to bytes
             _cryptoSoftPath = Config.GetCryptoSoftPath();
             if (string.IsNullOrWhiteSpace(_cryptoSoftPath) || !File.Exists(_cryptoSoftPath))
             {
@@ -822,20 +821,22 @@ namespace EasySaveV3._0.Managers
         /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
         public async Task ExecuteJob(string name, CancellationToken cancellationToken = default)
         {
-            var backup = GetJob(name);
-            if (backup == null)
-                throw new InvalidOperationException($"Backup job '{name}' not found");
-
-            // Create and register backup resources
-            var resources = new BackupResources();
-            if (!_activeBackups.TryAdd(name, resources))
-            {
-                resources.Dispose();
-                throw new InvalidOperationException($"Backup job '{name}' is already running");
-            }
-
+            Backup? backup = null;  // Declare backup variable outside try block
             try
             {
+                CheckForBusinessSoftware(name);  // Check for business software before starting backup
+                backup = GetJob(name);
+                if (backup == null)
+                    throw new InvalidOperationException($"Backup job '{name}' not found");
+
+                // Create and register backup resources
+                var resources = new BackupResources();
+                if (!_activeBackups.TryAdd(name, resources))
+                {
+                    resources.Dispose();
+                    throw new InvalidOperationException($"Backup job '{name}' is already running");
+                }
+
                 resources.Stopwatch.Start();
                 var startTime = DateTime.Now;
                 var totalFiles = 0;
@@ -1059,9 +1060,9 @@ namespace EasySaveV3._0.Managers
                 {
                     Timestamp = DateTime.Now,
                     BackupName = name,
-                    BackupType = backup.Type,
-                    SourcePath = backup.SourcePath,
-                    TargetPath = backup.TargetPath,
+                    BackupType = backup?.Type ?? "Unknown",  // Use null-conditional operator
+                    SourcePath = backup?.SourcePath ?? string.Empty,  // Use null-conditional operator
+                    TargetPath = backup?.TargetPath ?? string.Empty,  // Use null-conditional operator
                     Message = "Backup operation cancelled by user",
                     LogType = "INFO",
                     ActionType = "BACKUP_CANCELLED"
@@ -1083,9 +1084,9 @@ namespace EasySaveV3._0.Managers
                 {
                     Timestamp = DateTime.Now,
                     BackupName = name,
-                    BackupType = backup.Type,
-                    SourcePath = backup.SourcePath,
-                    TargetPath = backup.TargetPath,
+                    BackupType = backup?.Type ?? "Unknown",  // Use null-conditional operator
+                    SourcePath = backup?.SourcePath ?? string.Empty,  // Use null-conditional operator
+                    TargetPath = backup?.TargetPath ?? string.Empty,  // Use null-conditional operator
                     Message = $"Backup failed: {ex.Message}",
                     LogType = "ERROR",
                     ActionType = "BACKUP_ERROR"
@@ -1101,7 +1102,6 @@ namespace EasySaveV3._0.Managers
                 }
             }
         }
-
 
         /// <summary>
         /// Formats a file size in bytes to a human-readable string.
@@ -1141,6 +1141,15 @@ namespace EasySaveV3._0.Managers
         public int GetActiveBackupCount()
         {
             return _activeBackups.Count;
+        }
+
+        // Add method to check for business software and raise event
+        private void CheckForBusinessSoftware(string jobName)
+        {
+            if (_settingsController.IsBusinessSoftwareRunning())
+            {
+                BusinessSoftwareDetected?.Invoke(this, jobName);
+            }
         }
     }
 }

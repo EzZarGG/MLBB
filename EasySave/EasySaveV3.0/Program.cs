@@ -5,6 +5,7 @@ using EasySaveLogging;
 using EasySaveV3._0.Managers;
 using EasySaveV3._0.Views;
 using EasySaveV3._0.Models;
+using System.Diagnostics;
 
 namespace EasySaveV3._0
 {
@@ -25,17 +26,33 @@ namespace EasySaveV3._0
         {
             try
             {
+                // Add debug logging
+                Debug.WriteLine("Starting EasySave application...");
+                
                 // Application configuration
+                Debug.WriteLine("Configuring application...");
                 ConfigureApplication();
+                Debug.WriteLine("Application configured successfully");
 
                 // Critical components initialization
+                Debug.WriteLine("Initializing components...");
                 InitializeComponents();
+                Debug.WriteLine("Components initialized successfully");
 
                 // User interface startup
+                Debug.WriteLine("Starting user interface...");
                 StartUserInterface();
+                Debug.WriteLine("User interface started successfully");
             }
             catch (Exception ex)
             {
+                Debug.WriteLine($"Critical error in Main: {ex}");
+                Debug.WriteLine($"Stack trace: {ex.StackTrace}");
+                if (ex.InnerException != null)
+                {
+                    Debug.WriteLine($"Inner exception: {ex.InnerException}");
+                    Debug.WriteLine($"Inner exception stack trace: {ex.InnerException.StackTrace}");
+                }
                 HandleCriticalError(ex);
             }
         }
@@ -218,9 +235,23 @@ namespace EasySaveV3._0
         {
             try
             {
+                var errorMessage = new System.Text.StringBuilder();
+                errorMessage.AppendLine("A critical error occurred during application startup:");
+                errorMessage.AppendLine($"Error: {ex.Message}");
+                errorMessage.AppendLine($"Type: {ex.GetType().Name}");
+                errorMessage.AppendLine($"Stack Trace: {ex.StackTrace}");
+                
+                if (ex.InnerException != null)
+                {
+                    errorMessage.AppendLine("\nInner Exception:");
+                    errorMessage.AppendLine($"Error: {ex.InnerException.Message}");
+                    errorMessage.AppendLine($"Type: {ex.InnerException.GetType().Name}");
+                    errorMessage.AppendLine($"Stack Trace: {ex.InnerException.StackTrace}");
+                }
+
                 MessageBox.Show(
-                    _languageManager.GetTranslation("error.startupFailed").Replace("{0}", ex.Message),
-                    _languageManager.GetTranslation("error.title"),
+                    errorMessage.ToString(),
+                    "Critical Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );
@@ -228,8 +259,8 @@ namespace EasySaveV3._0
             catch
             {
                 MessageBox.Show(
-                    "Failed to start the application. Please check the logs for details.",
-                    "Startup Error",
+                    "A critical error occurred during startup. Please check the application logs for details.",
+                    "Critical Error",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error
                 );

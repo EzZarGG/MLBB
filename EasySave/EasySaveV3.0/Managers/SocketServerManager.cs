@@ -257,8 +257,8 @@ namespace EasySaveV3._0.Managers
                 {
                     case "GET_STATUS":
                         Log("Processing GET_STATUS command");
-                        var backups = _backupController.GetBackups();
-                        var statuses = backups.Select(b => new JobStatus
+                        var backups = await Task.Run(() => _backupController.GetBackups());
+                        var statuses = backups.Select(b => new BackupJobStatus
                         {
                             Name = b.Name,
                             Status = _backupController.GetBackupState(b.Name)?.Status ?? "Unknown",
@@ -320,7 +320,7 @@ namespace EasySaveV3._0.Managers
         public string? JobName { get; set; }
     }
 
-    public class JobStatus
+    public class BackupJobStatus
     {
         public string Name { get; set; } = string.Empty;
         public string Status { get; set; } = string.Empty;

@@ -13,7 +13,6 @@ namespace EasySaveV3._0.Views
         private readonly ListView _logListView;
         private readonly ComboBox _severityFilter;
         private readonly Button _refreshButton;
-        private readonly Button _clearFiltersButton;
         private readonly Button _openLogFileButton;
         private readonly Logger _logger;
         private readonly LanguageManager _languageManager;
@@ -76,24 +75,9 @@ namespace EasySaveV3._0.Views
             };
             _refreshButton.Click += RefreshButton_Click;
 
-            _clearFiltersButton = new Button
-            {
-                Location = new Point(610, 22),
-                Width = 180,
-                Height = 40,
-                Text = _languageManager.GetTranslation("logs.clearFilters"),
-                Font = new Font(this.Font.FontFamily, 10),
-                Image = SystemIcons.Error.ToBitmap(),
-                ImageAlign = ContentAlignment.MiddleLeft,
-                TextImageRelation = TextImageRelation.ImageBeforeText,
-                Padding = new Padding(8, 0, 8, 0),
-                FlatStyle = FlatStyle.System
-            };
-            _clearFiltersButton.Click += ClearFiltersButton_Click;
-
             _openLogFileButton = new Button
             {
-                Location = new Point(800, 22),
+                Location = new Point(610, 22),
                 Width = 180,
                 Height = 40,
                 Text = _languageManager.GetTranslation("logs.openFile"),
@@ -108,7 +92,7 @@ namespace EasySaveV3._0.Views
 
             filterPanel.Controls.AddRange(new Control[] { 
                 severityLabel, _severityFilter,
-                _refreshButton, _clearFiltersButton, _openLogFileButton 
+                _refreshButton, _openLogFileButton 
             });
 
             _logListView = new ListView
@@ -206,12 +190,6 @@ namespace EasySaveV3._0.Views
 
         private void RefreshButton_Click(object sender, EventArgs e)
         {
-            LoadLogs();
-        }
-
-        private void ClearFiltersButton_Click(object sender, EventArgs e)
-        {
-            _severityFilter.SelectedIndex = 0;
             LoadLogs();
         }
 

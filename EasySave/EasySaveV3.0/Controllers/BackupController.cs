@@ -46,13 +46,6 @@ namespace EasySaveV3._0.Controllers
                 _languageManager = LanguageManager.Instance;
                 _logger = Logger.GetInstance();
                 _backupStates = new Dictionary<string, StateModel>();
-                _stateFile = Path.Combine(AppContext.BaseDirectory, "backup_states.json");
-                _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
-
-                _backupManager.BusinessSoftwareDetected += (sender, jobName) =>
-                {
-                    BusinessSoftwareDetected?.Invoke(this, jobName);
-                };
 
                 if (_backupManager == null || _settingsController == null || _logController == null || _languageManager == null)
                 {
@@ -464,78 +457,7 @@ namespace EasySaveV3._0.Controllers
         /// <returns>A tuple containing active threads, max total threads, max priority threads, and max normal threads</returns>
         public (int ActiveThreads, int MaxTotalThreads, int MaxPriorityThreads, int MaxNormalThreads) GetThreadPoolStats()
         {
-            try
-            {
-                // Update initial state via BackupManager
-                var state = GetBackupState(backup.Name);
-                if (state == null)
-                {
-                    state = StateModel.CreateInitialState(backup.Name);
-                }
-
-                // Update initial state
-                state.Status = "Active";
-                state.ProgressPercentage = 0;
-                state.LastActionTime = DateTime.Now;
-                state.TotalFilesCount = 0;
-                state.FilesRemaining = 0;
-                state.TotalFilesSize = 0;
-                state.BytesRemaining = 0;
-                state.CurrentSourceFile = backup.SourcePath;
-                state.CurrentTargetFile = backup.TargetPath;
-
-                // Start backup via BackupManager
-                await _backupManager.ExecuteJob(backup.Name);
-
-                // Get final state updated by BackupManager
-                state = GetBackupState(backup.Name);
-                if (state != null)
-                {
-                    state.Status = "Completed";
-                    state.ProgressPercentage = 100;
-                    state.LastActionTime = DateTime.Now;
-                    state.FilesRemaining = 0;
-                    state.BytesRemaining = 0;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
-
-                    // Save final state
-                    _backupManager.UpdateJobState(backup.Name, s => 
-                    {
-                        s.Status = "Completed";
-                        s.ProgressPercentage = 100;
-                        s.LastActionTime = DateTime.Now;
-                        s.FilesRemaining = 0;
-                        s.BytesRemaining = 0;
-                        s.CurrentSourceFile = string.Empty;
-                        s.CurrentTargetFile = string.Empty;
-                    });
-                }
-            }
-            catch (Exception ex)
-            {
-                _logController.LogBackupError(backup.Name, backup.Type, ex.Message, backup.SourcePath, backup.TargetPath);
-                var state = GetBackupState(backup.Name);
-                if (state != null)
-                {
-                    state.Status = "Error";
-                    state.ProgressPercentage = 0;
-                    state.LastActionTime = DateTime.Now;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
-
-                    // Save error state
-                    _backupManager.UpdateJobState(backup.Name, s => 
-                    {
-                        s.Status = "Error";
-                        s.ProgressPercentage = 0;
-                        s.LastActionTime = DateTime.Now;
-                        s.CurrentSourceFile = string.Empty;
-                        s.CurrentTargetFile = string.Empty;
-                    });
-                }
-                throw;
-            }
+            return _backupManager.GetThreadPoolStats();
         }
 
         /// <summary>
