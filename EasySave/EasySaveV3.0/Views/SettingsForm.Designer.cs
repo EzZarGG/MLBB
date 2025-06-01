@@ -200,13 +200,13 @@
             this.ResumeLayout(false);
 
             this.transfersTab.Tag = "settings.tab.transfers";
-            this.transfersTab.Text = "Transferts";
+            this.transfersTab.Text = "Transfers";
             this.transfersTab.UseVisualStyleBackColor = true;
             this.transfersTab.Padding = new System.Windows.Forms.Padding(10);
 
-            // *** Configuration de l'onglet Transferts ***
+            // *** Transfers Tab Configuration ***
             this.transfersTab.Tag = "settings.tab.transfers";
-            this.transfersTab.Text = "Transferts";
+            this.transfersTab.Text = "Transfers";
             this.transfersTab.UseVisualStyleBackColor = true;
             this.transfersTab.Padding = new System.Windows.Forms.Padding(10);
 
@@ -216,7 +216,7 @@
             this.maxLargeFileLabel.Name = "maxLargeFileLabel";
             this.maxLargeFileLabel.Size = new System.Drawing.Size(180, 23);
             this.maxLargeFileLabel.TabIndex = 0;
-            this.maxLargeFileLabel.Text = "Seuil « gros fichiers » (Ko) :";
+            this.maxLargeFileLabel.Text = "Large file threshold (KB):";
 
             // NumericUpDown
             this.maxLargeFileNumeric.Location = new System.Drawing.Point(200, 12);
@@ -225,25 +225,24 @@
             this.maxLargeFileNumeric.TabIndex = 1;
             this.maxLargeFileNumeric.DecimalPlaces = 0;
             this.maxLargeFileNumeric.Minimum = 1;
-            this.maxLargeFileNumeric.Maximum = 1024 * 1024;  // jusqu'à 1 048 576 Ko
+            this.maxLargeFileNumeric.Maximum = 1024 * 1024;  // up to 1,048,576 KB
             this.maxLargeFileNumeric.Increment = 10;
 
-            // Ajout des contrôles dans l'onglet Transferts
+            // Add controls to Transfers tab
             this.transfersTab.Controls.Add(this.maxLargeFileLabel);
             this.transfersTab.Controls.Add(this.maxLargeFileNumeric);
 
-            // Ajout de l'onglet Transferts au TabControl
+            // Add Transfers tab to TabControl
             this.tabControl.TabPages.Add(this.transfersTab);
 
-            // *** EndInit pour le NumericUpDown ***
+            // *** EndInit for NumericUpDown ***
             ((System.ComponentModel.ISupportInitialize)(this.maxLargeFileNumeric)).EndInit();
 
-            // — Vos appels existants à ResumeLayout (tabControl, form, etc.) —
+            // — Existing ResumeLayout calls (tabControl, form, etc.) —
             this.tabControl.ResumeLayout(false);
             this.businessSoftwareTab.ResumeLayout(false);
             this.encryptionTab.ResumeLayout(false);
             this.ResumeLayout(false);
-
 
         }
 
