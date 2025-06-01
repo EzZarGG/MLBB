@@ -12,7 +12,6 @@ using System.Text;
 using System.Diagnostics;
 using System.Threading;
 using System.Text.Json;
-using EasySaveV3._0.Models;
 
 namespace EasySaveV3._0.Controllers
 {
@@ -26,6 +25,7 @@ namespace EasySaveV3._0.Controllers
         private readonly SettingsController _settingsController;
         private readonly LogController _logController;
         private readonly LanguageManager _languageManager;
+        private readonly Logger _logger;
         private readonly Dictionary<string, StateModel> _backupStates;
         private bool _isDisposed;
         private readonly object _stateLock = new object();
@@ -48,6 +48,7 @@ namespace EasySaveV3._0.Controllers
                 _settingsController = SettingsController.Instance;
                 _logController = LogController.Instance;
                 _languageManager = LanguageManager.Instance;
+                _logger = Logger.GetInstance();
                 _backupStates = new Dictionary<string, StateModel>();
                 _stateFile = Path.Combine(AppContext.BaseDirectory, "backup_states.json");
                 _jsonOptions = new JsonSerializerOptions { WriteIndented = true };
@@ -116,22 +117,16 @@ namespace EasySaveV3._0.Controllers
         {
             const string mutexName = @"Global\CryptoConsole_MonoInstance";
 
-            // Tenter d’ouvrir le mutex sans exception : 
-            // si TryOpenExisting renvoie true, cela signifie que CryptoSoft est déjà lancé 
             if (Mutex.TryOpenExisting(mutexName, out Mutex? existingMutex))
             {
-                // On libère immédiatement le handle qu’on a récupéré
                 existingMutex.Dispose();
                 return true;
             }
             else
             {
-                // Aucune instance existante n’a créé ce mutex
                 return false;
             }
         }
-
-
 
         /// <summary>
         /// Creates a new backup job.
@@ -273,15 +268,14 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
-                // 1) Vérification mono-instance CryptoSoft
-                       if (IsCryptoSoftRunning())
-                           {
+                // 1) Check CryptoSoft single instance
+                if (IsCryptoSoftRunning())
+                {
                     throw new InvalidOperationException(
-                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
-                                   /* ex. "CryptoSoft est déjà en cours d’exécution sur cette machine." */
-                               );
-                           }
-                       // 2) Vérification business software existant
+                        _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                    );
+                }
+                // 2) Check for running business software
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
@@ -572,14 +566,14 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
-                // Mettre à jour l'état initial via le BackupManager
+                // Update initial state via BackupManager
                 var state = GetBackupState(backup.Name);
                 if (state == null)
                 {
                     state = StateModel.CreateInitialState(backup.Name);
                 }
 
-                // Mettre à jour l'état initial
+                // Update initial state
                 state.Status = "Active";
                 state.ProgressPercentage = 0;
                 state.LastActionTime = DateTime.Now;
@@ -590,10 +584,10 @@ namespace EasySaveV3._0.Controllers
                 state.CurrentSourceFile = backup.SourcePath;
                 state.CurrentTargetFile = backup.TargetPath;
 
-                // Lancer la sauvegarde via le BackupManager
+                // Start backup via BackupManager
                 await _backupManager.ExecuteJob(backup.Name);
 
-                // Récupérer l'état final mis à jour par le BackupManager
+                // Get final state updated by BackupManager
                 state = GetBackupState(backup.Name);
                 if (state != null)
                 {
@@ -605,7 +599,7 @@ namespace EasySaveV3._0.Controllers
                     state.CurrentSourceFile = string.Empty;
                     state.CurrentTargetFile = string.Empty;
 
-                    // Sauvegarder l'état final
+                    // Save final state
                     _backupManager.UpdateJobState(backup.Name, s => 
                     {
                         s.Status = "Completed";
@@ -630,7 +624,7 @@ namespace EasySaveV3._0.Controllers
                     state.CurrentSourceFile = string.Empty;
                     state.CurrentTargetFile = string.Empty;
 
-                    // Sauvegarder l'état d'erreur
+                    // Save error state
                     _backupManager.UpdateJobState(backup.Name, s => 
                     {
                         s.Status = "Error";
@@ -737,6 +731,116 @@ namespace EasySaveV3._0.Controllers
                         _isInitialized = true;
                     }
                 }
+            }
+        }
+
+        /// <summary>
+        /// Pauses a running backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to pause</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup pause fails</exception>
+        public void PauseBackup(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
+            try
+            {
+                var state = GetBackupState(name);
+                if (state == null)
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
+                if (state.Status != "Active")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotActive"));
+                }
+
+                state.Status = "Paused";
+                state.LastActionTime = DateTime.Now;
+                _logger.LogAdminAction(name, "BACKUP_PAUSED", "Backup job paused");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError(name, "Unknown", ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Resumes a paused backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to resume</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup resume fails</exception>
+        public void ResumeBackup(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
+            try
+            {
+                var state = GetBackupState(name);
+                if (state == null)
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
+                if (state.Status != "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotPaused"));
+                }
+
+                state.Status = "Active";
+                state.LastActionTime = DateTime.Now;
+                _logger.LogAdminAction(name, "BACKUP_RESUMED", "Backup job resumed");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError(name, "Unknown", ex.Message);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Stops a running or paused backup job.
+        /// </summary>
+        /// <param name="name">Name of the backup job to stop</param>
+        /// <exception cref="ArgumentException">Thrown when name is invalid</exception>
+        /// <exception cref="InvalidOperationException">Thrown when backup stop fails</exception>
+        public void StopBackup(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+                throw new ArgumentException(_languageManager.GetTranslation("error.backupNameEmpty"));
+
+            try
+            {
+                var state = GetBackupState(name);
+                if (state == null)
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
+                }
+
+                if (state.Status != "Active" && state.Status != "Paused")
+                {
+                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotRunning"));
+                }
+
+                state.Status = "Stopped";
+                state.LastActionTime = DateTime.Now;
+                state.ProgressPercentage = 0;
+                state.FilesRemaining = 0;
+                state.BytesRemaining = 0;
+                state.CurrentSourceFile = string.Empty;
+                state.CurrentTargetFile = string.Empty;
+                _logger.LogAdminAction(name, "BACKUP_STOPPED", "Backup job stopped");
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError(name, "Unknown", ex.Message);
+                throw;
             }
         }
     }

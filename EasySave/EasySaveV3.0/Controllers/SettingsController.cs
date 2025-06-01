@@ -540,7 +540,7 @@ namespace EasySaveV3._0.Controllers
         public void SetMaxLargeFileSizeKB(int value)
         {
             if (value <= 0)
-                throw new ArgumentException("La valeur doit être strictement positive", nameof(value));
+                throw new ArgumentException("Value must be strictly positive", nameof(value));
 
             _settings.MaxLargeFileSizeKB = value;
             SaveSettings();

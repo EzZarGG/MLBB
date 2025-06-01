@@ -11,6 +11,7 @@ using EasySaveLogging;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Diagnostics;
 
 namespace EasySaveV3._0
 {
@@ -20,6 +21,7 @@ namespace EasySaveV3._0
         private readonly SettingsController _settingsController;
         private readonly LanguageManager _languageManager;
         private readonly Logger _logger;
+        private readonly SocketServerManager _socketServerManager;
         private bool _isInitialized = false;
         private ToolStripMenuItem? _editBackupMenuItem;
         private ToolStripMenuItem? _deleteBackupMenuItem;
@@ -44,6 +46,7 @@ namespace EasySaveV3._0
                 _settingsController = SettingsController.Instance;
                 _backupController = new BackupController();
                 _logger = Logger.GetInstance();
+                _socketServerManager = new SocketServerManager(_backupController);
 
                 // Subscribe to events
                 _backupController.FileProgressChanged += OnFileProgressChanged;
@@ -56,6 +59,9 @@ namespace EasySaveV3._0
                 InitializeUI();
                 InitializeTimer();
 
+                // Start the socket server
+                _ = StartSocketServer();
+
                 // Load initial data
                 LoadInitialData();
 
@@ -65,6 +71,51 @@ namespace EasySaveV3._0
             catch (Exception ex)
             {
                 HandleException(ex);
+            }
+        }
+
+        private void DebugLog(string message)
+        {
+            Debug.WriteLine($"[EasySave Debug] {message}");
+        }
+
+        private async Task StartSocketServer()
+        {
+            try
+            {
+                DebugLog("Attempting to start socket server...");
+                await _socketServerManager.StartServer();
+                DebugLog("Socket server started successfully");
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"Failed to start socket server: {ex.Message}");
+                MessageBox.Show(
+                    _languageManager.GetTranslation("error.socketServerStartFailed").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("error.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        private void StopSocketServer()
+        {
+            try
+            {
+                DebugLog("Attempting to stop socket server...");
+                _socketServerManager.StopServer();
+                DebugLog("Socket server stopped successfully");
+            }
+            catch (Exception ex)
+            {
+                DebugLog($"Error stopping socket server: {ex.Message}");
+                MessageBox.Show(
+                    _languageManager.GetTranslation("error.socketServerStopFailed").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("error.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
 
@@ -315,7 +366,7 @@ namespace EasySaveV3._0
                 this.Icon = SystemIcons.Application;
                 this.StartPosition = FormStartPosition.CenterScreen;
 
-                // Supprimer le ToolStrip de la forme
+                // Remove the ToolStrip from the form
                 if (_toolStrip != null)
                 {
                     this.Controls.Remove(_toolStrip);
@@ -748,9 +799,11 @@ namespace EasySaveV3._0
         {
             try
             {
+                DebugLog("Starting backup job execution...");
 
                 if (_backupController.IsCryptoSoftRunning())
                 {
+                    DebugLog("Cannot start backup: CryptoSoft is already running");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning"),
                         _languageManager.GetTranslation("menu.title"),
@@ -758,9 +811,11 @@ namespace EasySaveV3._0
                     );
                     return;
                 }
+
                 var selectedItems = _backupListView.SelectedItems;
                 if (selectedItems.Count == 0)
                 {
+                    DebugLog("No backups selected for execution");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.noBackupsSelected"),
                         _languageManager.GetTranslation("menu.title"),
@@ -772,6 +827,7 @@ namespace EasySaveV3._0
 
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
+                    DebugLog("Cannot start backup: Business software is running");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.businessSoftwareRunning"),
                         _languageManager.GetTranslation("menu.title"),
@@ -790,6 +846,7 @@ namespace EasySaveV3._0
 
                 if (result == DialogResult.Yes)
                 {
+                    DebugLog($"Starting {selectedItems.Count} selected backups");
                     _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
                     _progressBar.Visible = true;
 
@@ -799,6 +856,7 @@ namespace EasySaveV3._0
 
                     await _backupController.StartSelectedBackups(selectedBackups);
 
+                    DebugLog("Selected backups completed successfully");
                     _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
                     _progressBar.Visible = false;
 
@@ -812,6 +870,7 @@ namespace EasySaveV3._0
             }
             catch (Exception ex)
             {
+                DebugLog($"Error during backup execution: {ex.Message}");
                 _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
                 _progressBar.Visible = false;
 
@@ -832,8 +891,11 @@ namespace EasySaveV3._0
         {
             try
             {
+                DebugLog("Starting all backup jobs...");
+
                 if (_backupController.IsCryptoSoftRunning())
                 {
+                    DebugLog("Cannot start backups: CryptoSoft is already running");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning"),
                         _languageManager.GetTranslation("menu.title"),
@@ -841,8 +903,10 @@ namespace EasySaveV3._0
                     );
                     return;
                 }
+
                 if (_backupListView.Items.Count == 0)
                 {
+                    DebugLog("No backups available to execute");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.noBackups"),
                         _languageManager.GetTranslation("menu.title"),
@@ -854,6 +918,7 @@ namespace EasySaveV3._0
 
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
+                    DebugLog("Cannot start backups: Business software is running");
                     MessageBox.Show(
                         _languageManager.GetTranslation("message.businessSoftwareRunning"),
                         _languageManager.GetTranslation("menu.title"),
@@ -872,11 +937,13 @@ namespace EasySaveV3._0
 
                 if (result == DialogResult.Yes)
                 {
+                    DebugLog("Starting all backups");
                     _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
                     _progressBar.Visible = true;
 
                     await _backupController.StartAllBackups();
 
+                    DebugLog("All backups completed successfully");
                     _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
                     _progressBar.Visible = false;
 
@@ -890,6 +957,7 @@ namespace EasySaveV3._0
             }
             catch (Exception ex)
             {
+                DebugLog($"Error during backup execution: {ex.Message}");
                 _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
                 _progressBar.Visible = false;
 
@@ -956,14 +1024,14 @@ namespace EasySaveV3._0
 
             if (_backupItems.TryGetValue(e.BackupName, out var item))
             {
-                // Mettre à jour l'état du backup
+                // Update backup state
                 var state = new StateModel
                 {
                     Status = e.ProgressPercentage == 100 ? "Completed" : "Active",
                     ProgressPercentage = e.ProgressPercentage
                 };
 
-                // Si l'état est Completed, désactiver le timer pour ce backup
+                // If state is Completed, disable timer for this backup
                 if (state.Status == "Completed")
                 {
                     _updateTimer.Stop();
@@ -971,7 +1039,7 @@ namespace EasySaveV3._0
 
                 UpdateBackupItem(item, state);
 
-                // Mettre à jour la barre de progression
+                // Update progress bar
                 _progressBar.Value = Math.Min(Math.Max(e.ProgressPercentage, 0), 100);
                 _progressBar.Visible = state.Status == "Active";
             }
@@ -997,8 +1065,12 @@ namespace EasySaveV3._0
 
         protected override void OnFormClosing(FormClosingEventArgs e)
         {
+            DebugLog("Form is closing, cleaning up resources...");
             try
             {
+                StopSocketServer();
+                DebugLog("Socket server cleanup completed");
+
                 if (IsBackupRunning())
                 {
                     var result = MessageBox.Show(
@@ -1014,28 +1086,13 @@ namespace EasySaveV3._0
                         return;
                     }
                 }
-                else
-                {
-                    var result = MessageBox.Show(
-                        _languageManager.GetTranslation("message.confirmExit"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.YesNo,
-                        MessageBoxIcon.Question
-                    );
-
-                    if (result == DialogResult.No)
-                    {
-                        e.Cancel = true;
-                        return;
-                    }
-                }
 
                 Cleanup();
                 base.OnFormClosing(e);
             }
             catch (Exception ex)
             {
-                HandleException(ex);
+                DebugLog($"Error during cleanup: {ex.Message}");
             }
         }
 
@@ -1074,10 +1131,11 @@ namespace EasySaveV3._0
         {
             foreach (Control control in controls)
             {
-                if (control.Tag is string key)
-                    control.Text = _languageManager.GetTranslation(key);
-                if (control.HasChildren)
-                    UpdateControlTexts(control.Controls);
+                if (control.Tag is string translationKey)
+                {
+                    control.Text = _languageManager.GetTranslation(translationKey);
+                }
+                UpdateControlTexts(control.Controls);
             }
         }
     }
