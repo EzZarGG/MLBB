@@ -110,13 +110,11 @@ namespace EasySaveV3._0.Managers
                 DebugLog("Stopping socket server...");
                 _isRunning = false;
                 _server.Stop();
-                _logger.LogAdminAction("System", "SOCKET_SERVER_STOP", "Socket server stopped");
                 DebugLog("Socket server stopped successfully");
             }
             catch (Exception ex)
             {
                 DebugLog($"Error stopping socket server: {ex.Message}");
-                _logger.LogAdminAction("System", "SOCKET_SERVER_ERROR", $"Error stopping socket server: {ex.Message}");
                 throw;
             }
         }
@@ -308,7 +306,6 @@ namespace EasySaveV3._0.Managers
             catch (Exception ex)
             {
                 Log($"Error processing command: {ex.Message}");
-                _logger.LogAdminAction("System", "SOCKET_SERVER_ERROR", $"Error processing command: {ex.Message}");
                 return JsonConvert.SerializeObject(new { error = ex.Message });
             }
         }

@@ -14,7 +14,6 @@
 		<PackageReference Include="System.Configuration.ConfigurationManager" Version="6.0.0" />
 	</ItemGroup>
 	<ItemGroup>
-		<!-- Pour que App.config soit copié en sortie sous la forme CryptoConsole.dll.config -->
 		<None Include="App.config">
 			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
 		</None>

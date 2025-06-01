@@ -14,7 +14,11 @@ namespace RemoteConsole
         private bool isConnected = false;
         private System.Windows.Forms.Timer updateTimer;
         private const int CONNECTION_TIMEOUT_MS = 5000;
+        private const int INITIAL_TIMEOUT_MS = 2000;
         private const int BUFFER_SIZE = 8192;
+        private const int MAX_RETRY_ATTEMPTS = 3;
+        private const int RETRY_DELAY_MS = 1000;
+        private const int SERVER_CHECK_TIMEOUT_MS = 1000;  // Timeout pour la vérification du serveur
         private readonly object connectionLock = new object();
         private bool isUpdating = false;
         private int consecutiveErrors = 0;
@@ -110,35 +114,164 @@ namespace RemoteConsole
             Trace.WriteLine($"[RemoteConsole] {message}");
         }
 
-        private async void ConnectButton_Click(object sender, EventArgs e)
+        private async Task<bool> IsServerAvailable()
+        {
+            try
+            {
+                using (var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp))
+                {
+                    socket.ReceiveTimeout = SERVER_CHECK_TIMEOUT_MS;
+                    socket.SendTimeout = SERVER_CHECK_TIMEOUT_MS;
+
+                    var connectTask = socket.ConnectAsync(serverIp, serverPort);
+                    var timeoutTask = Task.Delay(SERVER_CHECK_TIMEOUT_MS);
+                    var completedTask = await Task.WhenAny(connectTask, timeoutTask);
+
+                    if (completedTask == timeoutTask)
+                    {
+                        Log($"Server check timed out after {SERVER_CHECK_TIMEOUT_MS}ms");
+                        return false;
+                    }
+
+                    try
+                    {
+                        await connectTask;
+                        Log("Server is available");
+                        return true;
+                    }
+                    catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused)
+                    {
+                        Log("Server is running but refusing connections");
+                        return false;
+                    }
+                    catch
+                    {
+                        Log("Server check failed");
+                        return false;
+                    }
+                    finally
+                    {
+                        try { socket.Shutdown(SocketShutdown.Both); } catch { }
+                        try { socket.Close(); } catch { }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Log($"Error checking server availability: {ex.Message}");
+                return false;
+            }
+        }
+
+        private async void ConnectButton_Click(object? sender, EventArgs e)
         {
             if (!isConnected)
             {
                 try
                 {
-                    Log($"Attempting to connect to {serverIp}:{serverPort}...");
-                    
-                    lock (connectionLock)
+                    Log("Checking server availability...");
+                    if (!await IsServerAvailable())
                     {
-                        if (isConnected) return;
-
-                        client = new TcpClient();
-                        client.ReceiveTimeout = CONNECTION_TIMEOUT_MS;
-                        client.SendTimeout = CONNECTION_TIMEOUT_MS;
-                        Log("TcpClient created with timeouts set");
+                        MessageBox.Show(
+                            "The server is not available. Please check if:\n" +
+                            "1. The server is running\n" +
+                            "2. The server address and port are correct\n" +
+                            "3. No firewall is blocking the connection\n" +
+                            "4. The server is not overloaded",
+                            "Server Unavailable",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Warning
+                        );
+                        return;
                     }
 
-                    Log("Starting connection attempt...");
-                    var connectTask = client.ConnectAsync(serverIp, serverPort);
-                    if (!Task.WaitAny(new[] { connectTask }, CONNECTION_TIMEOUT_MS).Equals(0))
+                    int retryCount = 0;
+                    while (retryCount < MAX_RETRY_ATTEMPTS)
                     {
-                        Log("Connection attempt timed out");
-                        throw new TimeoutException("Connection attempt timed out");
-                    }
-                    Log("Connection established successfully");
+                        try
+                        {
+                            Log($"Connection attempt {retryCount + 1} of {MAX_RETRY_ATTEMPTS}");
+                            
+                            lock (connectionLock)
+                            {
+                                if (isConnected) return;
 
-                    lock (connectionLock)
+                                client = new TcpClient();
+                                client.ReceiveTimeout = CONNECTION_TIMEOUT_MS;
+                                client.SendTimeout = CONNECTION_TIMEOUT_MS;
+                                Log("TcpClient created with timeouts set");
+                            }
+
+                            Log("Starting connection attempt...");
+                            var connectTask = client.ConnectAsync(serverIp, serverPort);
+                            var mainTimeoutTask = Task.Delay(CONNECTION_TIMEOUT_MS);
+                            var mainCompletedTask = await Task.WhenAny(connectTask, mainTimeoutTask);
+                            
+                            if (mainCompletedTask == mainTimeoutTask)
+                            {
+                                Log($"Connection attempt timed out after {CONNECTION_TIMEOUT_MS}ms");
+                                if (retryCount < MAX_RETRY_ATTEMPTS - 1)
+                                {
+                                    Log($"Retrying in {RETRY_DELAY_MS}ms...");
+                                    await Task.Delay(RETRY_DELAY_MS);
+                                    retryCount++;
+                                    continue;
+                                }
+                                throw new SocketException((int)SocketError.TimedOut);
+                            }
+
+                            try
+                            {
+                                await connectTask;
+                                Log("Connection established successfully");
+                                break;
+                            }
+                            catch (SocketException ex) when (ex.SocketErrorCode == SocketError.ConnectionRefused)
+                            {
+                                Log("Server refused connection");
+                                MessageBox.Show(
+                                    "The server refused the connection. This might indicate that:\n" +
+                                    "1. The server is not properly configured\n" +
+                                    "2. The server is in a paused state\n" +
+                                    "3. The server is overloaded\n" +
+                                    "Please try again in a few moments.",
+                                    "Connection Refused",
+                                    MessageBoxButtons.OK,
+                                    MessageBoxIcon.Warning
+                                );
+                                SafeDisconnect();
+                                return;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Connection attempt {retryCount + 1} failed: {ex.Message}");
+                            if (retryCount < MAX_RETRY_ATTEMPTS - 1)
+                            {
+                                Log($"Retrying in {RETRY_DELAY_MS}ms...");
+                                await Task.Delay(RETRY_DELAY_MS);
+                                retryCount++;
+                                continue;
+                            }
+                            MessageBox.Show(
+                                $"Failed to connect after {MAX_RETRY_ATTEMPTS} attempts: {ex.Message}",
+                                "Connection Error",
+                                MessageBoxButtons.OK,
+                                MessageBoxIcon.Error
+                            );
+                            SafeDisconnect();
+                            return;
+                        }
+                    }
+
+                    // Si on arrive ici, la connexion a réussi
+                    try
                     {
+                        if (!client.Connected)
+                        {
+                            throw new SocketException((int)SocketError.NotConnected);
+                        }
+
                         stream = client.GetStream();
                         isConnected = true;
                         consecutiveErrors = 0;
@@ -150,48 +283,53 @@ namespace RemoteConsole
                         ((Label)Controls.Find("statusLabel", true)[0]).Text = "Connected";
                         EnableControlButtons(true);
                         Log("Connection state initialized");
-                    }
 
-                    updateTimer.Start();
-                    Log("Update timer started");
+                        updateTimer.Start();
+                        Log("Update timer started");
 
-                    try
-                    {
-                        Log("Sending initial status request...");
-                        await Task.Delay(500);
-                        await SendCommand("GET_STATUS");
-                        var response = await ReceiveResponse();
-                        if (!string.IsNullOrEmpty(response))
+                        try
                         {
-                            Log($"Received initial status response: {response}");
-                            UpdateJobList(response);
+                            Log("Sending initial status request...");
+                            await Task.Delay(500);
+                            await SendCommand("GET_STATUS");
+                            var response = await ReceiveResponse();
+                            if (!string.IsNullOrEmpty(response))
+                            {
+                                Log($"Received initial status response: {response}");
+                                UpdateJobList(response);
+                            }
+                            else
+                            {
+                                Log("Received empty initial status response");
+                            }
                         }
-                        else
+                        catch (Exception ex)
                         {
-                            Log("Received empty initial status response");
+                            Log($"Initial status update failed: {ex.Message}");
+                            throw;
                         }
                     }
                     catch (Exception ex)
                     {
-                        Log($"Initial status update failed: {ex.Message}");
+                        Log($"Error during connection setup: {ex.Message}");
+                        MessageBox.Show(
+                            $"Error during connection setup: {ex.Message}",
+                            "Connection Error",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                        SafeDisconnect();
                     }
-                }
-                catch (SocketException ex)
-                {
-                    Log($"Socket error during connection: {ex.Message} (Error code: {ex.SocketErrorCode})");
-                    MessageBox.Show($"Connection failed: {ex.Message}", "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SafeDisconnect();
-                }
-                catch (TimeoutException ex)
-                {
-                    Log($"Timeout during connection: {ex.Message}");
-                    MessageBox.Show($"Connection timed out: {ex.Message}", "Connection Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SafeDisconnect();
                 }
                 catch (Exception ex)
                 {
-                    Log($"Unexpected error during connection: {ex.Message}");
-                    MessageBox.Show($"Connection failed: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Log($"Critical error during connection: {ex.Message}");
+                    MessageBox.Show(
+                        $"Critical error during connection: {ex.Message}",
+                        "Connection Error",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error
+                    );
                     SafeDisconnect();
                 }
             }
@@ -263,7 +401,7 @@ namespace RemoteConsole
             Controls.Find("stopButton", true)[0].Enabled = enable;
         }
 
-        private void UpdateTimer_Tick(object sender, EventArgs e)
+        private void UpdateTimer_Tick(object? sender, EventArgs e)
         {
             if (!isConnected || stream == null || isUpdating) return;
 
@@ -366,19 +504,22 @@ namespace RemoteConsole
                 var data = Encoding.UTF8.GetBytes(json + "\n");
                 Log($"Sending command: {json}");
                 
-                lock (connectionLock)
+                await Task.Run(() =>
                 {
-                    if (stream != null && isConnected)
+                    lock (connectionLock)
                     {
-                        stream.Write(data, 0, data.Length);
-                        stream.Flush();
-                        Log("Command sent successfully");
+                        if (stream != null && isConnected)
+                        {
+                            stream.Write(data, 0, data.Length);
+                            stream.Flush();
+                            Log("Command sent successfully");
+                        }
+                        else
+                        {
+                            throw new IOException("Connection is not available");
+                        }
                     }
-                    else
-                    {
-                        throw new IOException("Connection is not available");
-                    }
-                }
+                });
             }
             catch (Exception ex)
             {
@@ -404,14 +545,17 @@ namespace RemoteConsole
                 int bytesRead;
 
                 Log("Waiting for response...");
-                lock (connectionLock)
+                bytesRead = await Task.Run(() =>
                 {
-                    if (stream == null || !isConnected)
+                    lock (connectionLock)
                     {
-                        throw new IOException("Connection is not available");
+                        if (stream == null || !isConnected)
+                        {
+                            throw new IOException("Connection is not available");
+                        }
+                        return stream.Read(buffer, 0, buffer.Length);
                     }
-                    bytesRead = stream.Read(buffer, 0, buffer.Length);
-                }
+                });
 
                 if (bytesRead == 0)
                 {
@@ -446,21 +590,30 @@ namespace RemoteConsole
             try
             {
                 var jobs = JsonConvert.DeserializeObject<List<JobStatus>>(jsonResponse);
-                var listView = (ListView)Controls.Find("jobListView", true)[0];
+                var listView = Controls.Find("jobListView", true).FirstOrDefault() as ListView;
+                if (listView == null)
+                {
+                    Log("Job list view not found");
+                    return;
+                }
+
                 listView.BeginUpdate();
                 listView.Items.Clear();
 
-                foreach (var job in jobs)
+                if (jobs != null)
                 {
-                    var item = new ListViewItem(new[]
+                    foreach (var job in jobs)
                     {
-                        job.Name,
-                        job.Status,
-                        $"{job.Progress}%",
-                        job.Source,
-                        job.Destination
-                    });
-                    listView.Items.Add(item);
+                        var item = new ListViewItem(new[]
+                        {
+                            job.Name,
+                            job.Status,
+                            $"{job.Progress}%",
+                            job.Source,
+                            job.Destination
+                        });
+                        listView.Items.Add(item);
+                    }
                 }
 
                 listView.EndUpdate();
@@ -471,7 +624,7 @@ namespace RemoteConsole
             }
         }
 
-        private async void PauseButton_Click(object sender, EventArgs e)
+        private async void PauseButton_Click(object? sender, EventArgs e)
         {
             var listView = (ListView)Controls.Find("jobListView", true)[0];
             if (listView.SelectedItems.Count > 0)
@@ -481,7 +634,7 @@ namespace RemoteConsole
             }
         }
 
-        private async void ResumeButton_Click(object sender, EventArgs e)
+        private async void ResumeButton_Click(object? sender, EventArgs e)
         {
             var listView = (ListView)Controls.Find("jobListView", true)[0];
             if (listView.SelectedItems.Count > 0)
@@ -491,7 +644,7 @@ namespace RemoteConsole
             }
         }
 
-        private async void StopButton_Click(object sender, EventArgs e)
+        private async void StopButton_Click(object? sender, EventArgs e)
         {
             var listView = (ListView)Controls.Find("jobListView", true)[0];
             if (listView.SelectedItems.Count > 0)
