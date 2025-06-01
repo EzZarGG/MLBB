@@ -1,4 +1,5 @@
-﻿namespace EasySaveV3._0
+﻿using EasySaveV3._0.Controllers;
+namespace EasySaveV3._0
 {
     partial class MainForm
     {
@@ -128,6 +129,8 @@
             this.ResumeLayout(false);
             this.PerformLayout();
         }
+
+       
 
         #endregion
     }

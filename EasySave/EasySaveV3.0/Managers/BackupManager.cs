@@ -109,7 +109,7 @@ namespace EasySaveV3._0.Managers
             _stateFile = Path.Combine(AppContext.BaseDirectory, "states.json");
             _backups = new List<Backup>();
             _jobStates = new Dictionary<string, StateModel>();
-            _languageManager = LanguageManager.Instance;
+            _languageManager = LanguageManager.Instance; 
 
             _jsonOptions = new JsonSerializerOptions
 
@@ -120,6 +120,10 @@ namespace EasySaveV3._0.Managers
             _logController = LogController.Instance;
             _logger = Logger.GetInstance();
             _settingsController = SettingsController.Instance;
+
+            // Valeur n Ko paramétrable
+            _maxLargeFileSizeBytes = _settingsController.MaxLargeFileSizeKB * 1000L;
+            _largeFileSemaphore = new SemaphoreSlim(1, 1);
             _cryptoSoftPath = Config.GetCryptoSoftPath();
             if (string.IsNullOrWhiteSpace(_cryptoSoftPath) || !File.Exists(_cryptoSoftPath))
             {
@@ -166,7 +170,6 @@ namespace EasySaveV3._0.Managers
                         _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
                     }
 
-                    // Sauvegarder les états
                     SaveStates(_jobStates.Values.ToList());
                 }
             }
@@ -521,81 +524,94 @@ namespace EasySaveV3._0.Managers
 
         private async Task CopyFileAsync(string sourceFile, string targetFile, string backupName)
         {
-            var backup = GetJob(backupName);
-            if (backup == null)
-                throw new InvalidOperationException($"Backup job '{backupName}' not found");
+          var backup = GetJob(backupName);
+          if (backup == null)
+              throw new InvalidOperationException($"Backup job '{backupName}' not found");
 
-            var fileExtension = Path.GetExtension(sourceFile).ToLower();
-            var encryptionExtensions = _settingsController.GetEncryptionExtensions();
-            bool shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
+          // Ensure the target directory exists
+          var targetDir = Path.GetDirectoryName(targetFile);
+          if (targetDir != null && !Directory.Exists(targetDir))
+          {
+              Directory.CreateDirectory(targetDir);
+              _logger.LogAdminAction(backupName, "DIR_CREATE", $"Created directory: {targetDir}");
+          }
 
-            if (shouldEncrypt)
-            {
-                // Notify encryption start
-                EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0));
+          // Determine if this file should be encrypted
+          bool shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
 
-                try
-                {
-                    _logger.AddLogEntry(new LogEntry
-                    {
-                        Timestamp = DateTime.Now,
-                        BackupName = backupName,
-                        SourcePath = sourceFile,
-                        TargetPath = targetFile,
-                        Message = $"Starting encryption of file: {sourceFile}",
-                        LogType = "INFO",
-                        ActionType = "ENCRYPTION_START"
-                    });
+          if (shouldEncrypt)
+          {
+              // Notify UI: encryption started
+              EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0));
 
-                    await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
-                    
-                    _logger.AddLogEntry(new LogEntry
-                    {
-                        Timestamp = DateTime.Now,
-                        BackupName = backupName,
-                        SourcePath = sourceFile,
-                        TargetPath = targetFile,
-                        Message = $"Completed encryption of file: {sourceFile}",
-                        LogType = "INFO",
-                        ActionType = "ENCRYPTION_COMPLETE"
-                    });
+              try
+              {
+                  // Log encryption start
+                  _logger.AddLogEntry(new LogEntry
+                  {
+                      Timestamp = DateTime.Now,
+                      BackupName = backupName,
+                      SourcePath = sourceFile,
+                      TargetPath = targetFile,
+                      Message = $"Starting encryption of file: {sourceFile}",
+                      LogType = "INFO",
+                      ActionType = "ENCRYPTION_START"
+                  });
 
-                    // Notify encryption complete
-                    EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 100, true));
-                }
-                catch (Exception ex)
-                {
-                    _logger.AddLogEntry(new LogEntry
-                    {
-                        Timestamp = DateTime.Now,
-                        BackupName = backupName,
-                        SourcePath = sourceFile,
-                        TargetPath = targetFile,
-                        Message = $"Encryption error for file {sourceFile}: {ex.Message}",
-                        LogType = "ERROR",
-                        ActionType = "ENCRYPTION_ERROR"
-                    });
+                  // Perform encryption
+                  await EncryptFileWithCryptoSoftAsync(sourceFile, targetFile);
 
-                    // Notify encryption error
-                    EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0, true, true, ex.Message));
-                    throw;
-                }
-            }
-            else
-            {
-                _logger.AddLogEntry(new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = backupName,
-                    SourcePath = sourceFile,
-                    TargetPath = targetFile,
-                    Message = $"Skipping encryption for file: {sourceFile}",
-                    LogType = "INFO",
-                    ActionType = "ENCRYPTION_SKIP"
-                });
+                  // Log encryption success
+                  _logger.AddLogEntry(new LogEntry
+                  {
+                      Timestamp = DateTime.Now,
+                      BackupName = backupName,
+                      SourcePath = sourceFile,
+                      TargetPath = targetFile,
+                      Message = $"Completed encryption of file: {sourceFile}",
+                      LogType = "INFO",
+                      ActionType = "ENCRYPTION_COMPLETE"
+                  });
 
-                await Task.Run(() => File.Copy(sourceFile, targetFile, true));
-            }
+                  // Notify UI: encryption complete
+                  EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 100, true));
+              }
+              catch (Exception ex)
+              {
+                  // Log encryption failure
+                  _logger.AddLogEntry(new LogEntry
+                  {
+                      Timestamp = DateTime.Now,
+                      BackupName = backupName,
+                      SourcePath = sourceFile,
+                      TargetPath = targetFile,
+                      Message = $"Encryption error for file {sourceFile}: {ex.Message}",
+                      LogType = "ERROR",
+                      ActionType = "ENCRYPTION_ERROR"
+                  });
+
+                  // Notify UI: encryption error
+                  EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(backupName, sourceFile, 0, true, true, ex.Message));
+                  throw;
+              }
+          }
+          else
+          {
+              // Log that encryption is skipped
+              _logger.AddLogEntry(new LogEntry
+              {
+                  Timestamp = DateTime.Now,
+                  BackupName = backupName,
+                  SourcePath = sourceFile,
+                  TargetPath = targetFile,
+                  Message = $"Skipping encryption for file: {sourceFile}",
+                  LogType = "INFO",
+                  ActionType = "ENCRYPTION_SKIP"
+              });
+
+              // Perform normal copy
+              await Task.Run(() => File.Copy(sourceFile, targetFile, true));
+          }
         }
 
         /// <summary>
@@ -847,10 +863,10 @@ namespace EasySaveV3._0.Managers
                 var fileList = string.Join("\n", 
                     priorityFiles.Select(f => $"- {Path.GetFileName(f)} (Priority)").Concat(
                     normalFiles.Select(f => $"- {Path.GetFileName(f)} (Non-priority)")));
-                
+
                 _logger.AddLogEntry(new LogEntry
                 {
-                    Timestamp = DateTime.Now,
+                    Timestamp = startTime,
                     BackupName = name,
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
@@ -869,6 +885,7 @@ namespace EasySaveV3._0.Managers
                     state.TotalFilesSize = totalBytes;
                     state.FilesRemaining = totalFiles;
                     state.BytesRemaining = totalBytes;
+                    state.ProgressPercentage = 0;
                     state.CurrentSourceFile = backup.SourcePath;
                     state.CurrentTargetFile = backup.TargetPath;
                 });
@@ -981,6 +998,7 @@ namespace EasySaveV3._0.Managers
                                 
                                 return result;
                             }
+
                             finally
                             {
                                 ReleaseThreadSlot(false);
@@ -997,8 +1015,8 @@ namespace EasySaveV3._0.Managers
                     state.ProgressPercentage = 100;
                     state.FilesRemaining = 0;
                     state.BytesRemaining = 0;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
+                    state.CurrentSourceFile = "";
+                    state.CurrentTargetFile = "";
                 });
 
                 // Create final log entry
@@ -1025,7 +1043,7 @@ namespace EasySaveV3._0.Managers
                           })),
                     LogType = hasErrors ? "ERROR" : "INFO",
                     ActionType = hasErrors ? "BACKUP_ERROR" : "BACKUP_COMPLETED"
-                };
+                 };
                 _logger.AddLogEntry(finalLogEntry);
             }
             catch (OperationCanceledException)
@@ -1057,8 +1075,8 @@ namespace EasySaveV3._0.Managers
                 {
                     state.Status = JobStatus.Error;
                     state.ProgressPercentage = 0;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
+                    state.CurrentSourceFile = "";
+                    state.CurrentTargetFile = "";
                 });
 
                 var errorLogEntry = new LogEntry
@@ -1083,6 +1101,7 @@ namespace EasySaveV3._0.Managers
                 }
             }
         }
+
 
         /// <summary>
         /// Formats a file size in bytes to a human-readable string.

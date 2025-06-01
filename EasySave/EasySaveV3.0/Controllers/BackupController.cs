@@ -88,6 +88,23 @@ namespace EasySaveV3._0.Controllers
                 throw new ArgumentException(_languageManager.GetTranslation("error.samePaths"));
         }
 
+        public bool IsCryptoSoftRunning()
+        {
+            const string mutexName = @"Global\CryptoConsole_MonoInstance";
+
+            if (Mutex.TryOpenExisting(mutexName, out Mutex? existingMutex))
+            {
+                existingMutex.Dispose();
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+
+
         /// <summary>
         /// Creates a new backup job.
         /// </summary>
@@ -221,6 +238,13 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                // 1) Vérification mono-instance CryptoSoft
+                       if (IsCryptoSoftRunning())
+                           {
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
+                           }
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
@@ -359,6 +383,10 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
@@ -387,6 +415,10 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
                 if (_settingsController.IsBusinessSoftwareRunning())
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
