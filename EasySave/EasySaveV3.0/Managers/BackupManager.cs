@@ -1,19 +1,23 @@
-using System;
-using System.IO;
-using System.Threading.Tasks;
 using EasySaveV3._0.Models;
 using EasySaveV3._0.Controllers;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text.Json;
 using System.Diagnostics;
-using System.Security.Cryptography;
 using EasySaveLogging;
-using System.Threading;
-using System.Xml.Linq;
+using System.Collections.Concurrent;
 
 namespace EasySaveV3._0.Managers
 {
+    /// <summary>
+    /// Defines the possible states a backup job can be in
+    /// </summary>
+    public static class JobStatus
+    {
+        public const string NotStarted = "NotStarted";
+        public const string Active = "Active";
+        public const string Completed = "Completed";
+        public const string Error = "Error";
+    }
+
     /// <summary>
     /// Manages backup operations including creation, execution, and monitoring of backup jobs.
     /// Handles file operations, encryption, and logging of backup activities.
@@ -38,14 +42,11 @@ namespace EasySaveV3._0.Managers
 
         // Service dependencies
         private readonly LogController _logController;  // Handles logging operations
-        private readonly EncryptionKey _encryptionKey;  // Manages encryption keys
         private readonly Logger _logger;               // Main logging service
         private readonly SettingsController _settingsController;  // Manages settings including encryption
 
         // Thread synchronization primitives
         private readonly object _stateLock = new();     // Lock for state modifications
-        private readonly object _backupLock = new();    // Lock for backup list modifications
-        private readonly Dictionary<string, CancellationTokenSource> _jobCancellationTokens = new();  // Cancellation tokens for running jobs
 
         // Progress tracking events
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
@@ -54,10 +55,49 @@ namespace EasySaveV3._0.Managers
         public event EventHandler<string>? BusinessSoftwareDetected;
         private readonly string _cryptoSoftPath;
 
-        // Limite de taille (n Ko) et contrôle mutuel des gros transferts
-        private readonly SemaphoreSlim _largeFileSemaphore;
-        private readonly long _maxLargeFileSizeBytes;
+        // Add thread pool configuration
+        private static readonly SemaphoreSlim _priorityThreadPool;
+        private static readonly SemaphoreSlim _normalThreadPool;
+        private static readonly int _maxPriorityThreads;
+        private static readonly int _maxNormalThreads;
+        private static readonly int _maxTotalThreads;
+        private static readonly object _threadPoolLock = new object();
+        private static int _activeThreadCount = 0;
 
+        // Remove global backup semaphore, keep only CryptoSoft semaphore for thread safety
+        private static readonly SemaphoreSlim _cryptoSoftSemaphore = new SemaphoreSlim(1, 1);
+
+        // Add a dictionary to track active backups and their resources
+        private static readonly ConcurrentDictionary<string, BackupResources> _activeBackups = new();
+
+        // Class to hold resources for each backup job
+        private class BackupResources : IDisposable
+        {
+            public CancellationTokenSource CancellationTokenSource { get; } = new();
+            public Stopwatch Stopwatch { get; } = new();
+            public bool IsDisposed { get; private set; }
+
+            public void Dispose()
+            {
+                if (!IsDisposed)
+                {
+                    CancellationTokenSource.Dispose();
+                    IsDisposed = true;
+                }
+            }
+        }
+
+        // Static constructor to initialize thread pools
+        static BackupManager()
+        {
+            // Configure thread pools based on system resources
+            _maxTotalThreads = Environment.ProcessorCount * 2; // Allow 2x CPU cores for I/O operations
+            _maxPriorityThreads = Math.Max(1, Environment.ProcessorCount / 2); // Reserve half for priority operations
+            _maxNormalThreads = _maxTotalThreads - _maxPriorityThreads;
+
+            _priorityThreadPool = new SemaphoreSlim(_maxPriorityThreads, _maxPriorityThreads);
+            _normalThreadPool = new SemaphoreSlim(_maxNormalThreads, _maxNormalThreads);
+        }
 
         /// <summary>
         /// Initializes a new instance of the BackupManager class.
@@ -78,7 +118,6 @@ namespace EasySaveV3._0.Managers
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             };
             _logController = LogController.Instance;
-            _encryptionKey = new EncryptionKey();
             _logger = Logger.GetInstance();
             _settingsController = SettingsController.Instance;
 
@@ -131,7 +170,6 @@ namespace EasySaveV3._0.Managers
                         _jobStates[job.Name] = StateModel.CreateInitialState(job.Name);
                     }
 
-                    // Sauvegarder les états
                     SaveStates(_jobStates.Values.ToList());
                 }
             }
@@ -454,46 +492,33 @@ namespace EasySaveV3._0.Managers
         /// <param name="targetFile">Path where the encrypted file will be saved</param>
         private async Task EncryptFileWithCryptoSoftAsync(string sourceFile, string targetFile)
         {
-            var psi = new ProcessStartInfo
+            try
             {
-                FileName = _cryptoSoftPath,
-                Arguments = $"encrypt \"{sourceFile}\" \"{targetFile}\"",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            await process.WaitForExitAsync();
-            if (process.ExitCode < 0)
-            {
-                var error = await process.StandardError.ReadToEndAsync();
-                throw new Exception($"CryptoSoft error: {error}");
+                await _cryptoSoftSemaphore.WaitAsync();
+                var psi = new ProcessStartInfo
+                {
+                    FileName = _cryptoSoftPath,
+                    Arguments = $"encrypt \"{sourceFile}\" \"{targetFile}\"",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                using var process = Process.Start(psi);
+                if (process == null)
+                {
+                    throw new Exception("Failed to start CryptoSoft process");
+                }
+                await process.WaitForExitAsync();
+                if (process.ExitCode < 0)
+                {
+                    var error = await process.StandardError.ReadToEndAsync();
+                    throw new Exception($"CryptoSoft error: {error}");
+                }
             }
-        }
-
-        /// <summary>
-        /// Decrypts a file using XOR decryption via CryptoSoft.
-        /// </summary>
-        /// <param name="sourceFile">Path to the encrypted file</param>
-        /// <param name="targetFile">Path where the decrypted file will be saved</param>
-        private async Task DecryptFileWithCryptoSoftAsync(string sourceFile, string targetFile)
-        {
-            var psi = new ProcessStartInfo
+            finally
             {
-                FileName = _cryptoSoftPath,
-                Arguments = $"decrypt \"{sourceFile}\" \"{targetFile}\"",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                CreateNoWindow = true
-            };
-            using var process = Process.Start(psi);
-            await process.WaitForExitAsync();
-            if (process.ExitCode < 0)
-            {
-                var error = await process.StandardError.ReadToEndAsync();
-                throw new Exception($"CryptoSoft error: {error}");
+                _cryptoSoftSemaphore.Release();
             }
         }
 
@@ -641,42 +666,203 @@ namespace EasySaveV3._0.Managers
             return sortedFiles;
         }
 
+        // Add thread management methods
+        private async Task AcquireThreadSlotAsync(bool isPriority)
+        {
+            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
+            await semaphore.WaitAsync();
+            
+            lock (_threadPoolLock)
+            {
+                _activeThreadCount++;
+                if (_activeThreadCount > _maxTotalThreads)
+                {
+                    // Log warning if we exceed max threads
+                    _logger.AddLogEntry(new LogEntry
+                    {
+                        Timestamp = DateTime.Now,
+                        Message = $"Warning: Active thread count ({_activeThreadCount}) exceeds maximum ({_maxTotalThreads})",
+                        LogType = "WARNING",
+                        ActionType = "THREAD_POOL"
+                    });
+                }
+            }
+        }
+
+        private void ReleaseThreadSlot(bool isPriority)
+        {
+            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
+            semaphore.Release();
+            
+            lock (_threadPoolLock)
+            {
+                _activeThreadCount--;
+            }
+        }
+
+        // Create a struct to hold file processing results
+        private struct FileProcessingResult
+        {
+            public bool HasError { get; set; }
+            public string? ErrorMessage { get; set; }
+            public long BytesTransferred { get; set; }
+            public long EncryptionTime { get; set; }
+            public bool WasProcessed { get; set; }
+        }
+
+        private async Task<FileProcessingResult> ProcessFileAsync(string sourceFile, Backup backup, string name, 
+            object jobLock, CancellationToken token)
+        {
+            var result = new FileProcessingResult();
+            
+            if (token.IsCancellationRequested)
+            {
+                lock (jobLock)
+                {
+                    UpdateJobState(name, state => 
+                    {
+                        state.Status = JobStatus.Completed;
+                    });
+                }
+                return result;
+            }
+
+            var relativePath = Path.GetRelativePath(backup.SourcePath, sourceFile);
+            var targetFile = Path.Combine(backup.TargetPath, relativePath);
+            var sourceInfo = new FileInfo(sourceFile);
+            var shouldCopy = true;
+
+            // Check if file needs to be copied (differential backup)
+            if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase) && File.Exists(targetFile))
+            {
+                var targetInfo = new FileInfo(targetFile);
+                shouldCopy = sourceInfo.LastWriteTime > targetInfo.LastWriteTime;
+            }
+
+            if (shouldCopy)
+            {
+                // Ensure target directory exists
+                var dir = Path.GetDirectoryName(targetFile);
+                if (dir != null && !Directory.Exists(dir))
+                {
+                    Directory.CreateDirectory(dir);
+                    _logger.LogAdminAction(name, "DIR_CREATE", $"Created directory: {dir}");
+                }
+
+                var stopwatch = Stopwatch.StartNew();
+                try
+                {
+                    // Copy and optionally encrypt the file
+                    await CopyFileAsync(sourceFile, targetFile, name);
+                    
+                    result.BytesTransferred = sourceInfo.Length;
+                    result.EncryptionTime = stopwatch.ElapsedMilliseconds;
+                    result.WasProcessed = true;
+
+                    // Report progress
+                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
+                        name,
+                        sourceFile,
+                        targetFile,
+                        sourceInfo.Length,
+                        0, // Progress will be calculated by caller
+                        0, // Bytes transferred will be calculated by caller
+                        0, // Total bytes will be calculated by caller
+                        0, // Files processed will be calculated by caller
+                        0, // Total files will be calculated by caller
+                        stopwatch.Elapsed,
+                        true
+                    ));
+                }
+                catch (Exception ex)
+                {
+                    stopwatch.Stop();
+                    result.HasError = true;
+                    result.ErrorMessage = $"Error copying file {sourceFile}: {ex.Message}";
+
+                    // Report error progress
+                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
+                        name,
+                        sourceFile,
+                        targetFile,
+                        sourceInfo.Length,
+                        0, // Progress will be calculated by caller
+                        0, // Bytes transferred will be calculated by caller
+                        0, // Total bytes will be calculated by caller
+                        0, // Files processed will be calculated by caller
+                        0, // Total files will be calculated by caller
+                        stopwatch.Elapsed,
+                        false
+                    ));
+
+                    if (backup.Encrypt)
+                    {
+                        EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
+                            name,
+                            sourceFile,
+                            0,
+                            true,
+                            true,
+                            ex.Message
+                        ));
+                    }
+                }
+            }
+
+            return result;
+        }
+
         /// <summary>
         /// Executes a backup job, copying and optionally encrypting files.
         /// Handles differential backups, progress tracking, and error management.
         /// </summary>
         /// <param name="name">Name of the backup job to execute</param>
+        /// <param name="cancellationToken">Optional token to cancel the operation</param>
         /// <exception cref="InvalidOperationException">Thrown when backup job is not found</exception>
-        public async Task ExecuteJob(string name)
+        /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
+        public async Task ExecuteJob(string name, CancellationToken cancellationToken = default)
         {
             var backup = GetJob(name);
             if (backup == null)
                 throw new InvalidOperationException($"Backup job '{name}' not found");
 
-            // Create a new cancellation token for this job
-            var cts = new CancellationTokenSource();
-            _jobCancellationTokens[name] = cts;
-
-            var startTime = DateTime.Now;
-            var filesProcessed = 0;
-            var bytesTransferred = 0L;
-            var totalTransferTime = 0L;
-            var totalEncryptionTime = 0L;
-            var hasErrors = false;
-            var errorMessages = new List<string>();
-            var processedFilesOrder = new List<string>(); 
+            // Create and register backup resources
+            var resources = new BackupResources();
+            if (!_activeBackups.TryAdd(name, resources))
+            {
+                resources.Dispose();
+                throw new InvalidOperationException($"Backup job '{name}' is already running");
+            }
 
             try
             {
-                // 1) Retrieve the list of files to process, with priorityé
-                var sortedFiles = await GetFilesToProcessAsync(backup);
+                resources.Stopwatch.Start();
+                var startTime = DateTime.Now;
+                var totalFiles = 0;
+                var totalBytes = 0L;
+                var filesProcessed = 0;
+                var bytesTransferred = 0L;
+                var totalEncryptionTime = 0L;
+                var hasErrors = false;
+                var errorMessages = new List<string>();
+                var processedFilesOrder = new List<string>();
+                var jobLock = new object();
 
-                // 2) Calculate totals
-                var totalFiles = sortedFiles.Count;
-                var totalBytes = sortedFiles.Sum(f => new FileInfo(f).Length);
+                // Get files to process and separate by priority
+                var allFiles = await GetFilesToProcessAsync(backup);
+                var priorityFiles = allFiles.Where(f => Config.GetPriorityExtensions().Contains(Path.GetExtension(f).ToLower())).ToList();
+                var normalFiles = allFiles.Where(f => !Config.GetPriorityExtensions().Contains(Path.GetExtension(f).ToLower())).ToList();
+                
+                lock (jobLock)
+                {
+                    totalFiles = allFiles.Count;
+                    totalBytes = allFiles.Sum(f => new FileInfo(f).Length);
+                }
 
-                // 3) Log the start of file processing
-                var fileList = string.Join("\n", sortedFiles.Select(f => $"- {Path.GetFileName(f)} ({(Config.GetPriorityExtensions().Contains(Path.GetExtension(f).ToLower()) ? "Priority" : "Non-priority")})"));
+                // Log the start of file processing with priority information
+                var fileList = string.Join("\n", 
+                    priorityFiles.Select(f => $"- {Path.GetFileName(f)} (Priority)").Concat(
+                    normalFiles.Select(f => $"- {Path.GetFileName(f)} (Non-priority)")));
 
                 _logger.AddLogEntry(new LogEntry
                 {
@@ -685,15 +871,16 @@ namespace EasySaveV3._0.Managers
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
-                    Message = $"Starting backup with {totalFiles} files in priority order:\n{fileList}",
+                    Message = $"Starting backup with {totalFiles} files ({priorityFiles.Count} priority, {normalFiles.Count} non-priority):\n{fileList}",
                     LogType = "INFO",
                     ActionType = "BACKUP_STARTED"
                 });
 
-                // 4) Mettre à jour l’état initial
+                // Update initial state
                 UpdateJobState(name, state =>
                 {
-                    state.Status = "Active";
+                    state.Status = JobStatus.Active;
+                    state.ProgressPercentage = 0;
                     state.TotalFilesCount = totalFiles;
                     state.TotalFilesSize = totalBytes;
                     state.FilesRemaining = totalFiles;
@@ -703,137 +890,136 @@ namespace EasySaveV3._0.Managers
                     state.CurrentTargetFile = backup.TargetPath;
                 });
 
-                // 5) Traiter chaque fichier
-                foreach (var sourceFile in sortedFiles)
+                // Process priority files first
+                if (priorityFiles.Any())
                 {
-                    // 5.1) Annulation ?
-                    if (cts.Token.IsCancellationRequested)
+                    var priorityOptions = new ParallelOptions
                     {
-                        UpdateJobState(name, state =>
+                        MaxDegreeOfParallelism = _maxPriorityThreads,
+                        CancellationToken = cancellationToken
+                    };
+
+                    var priorityResults = await Task.WhenAll(
+                        priorityFiles.Select(async sourceFile =>
                         {
-                            state.Status = "Paused";
-                            state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
-                        });
-                        return;
-                    }
-
-                    var relativePath = Path.GetRelativePath(backup.SourcePath, sourceFile);
-                    var targetFile = Path.Combine(backup.TargetPath, relativePath);
-                    var sourceInfo = new FileInfo(sourceFile);
-
-                    // 5.2) Gestion du “gros” fichier (> n Ko)
-                    bool isLarge = sourceInfo.Length > _maxLargeFileSizeBytes;
-                    if (isLarge)
-                    {
-                        await _largeFileSemaphore.WaitAsync(cts.Token);
-                    }
-
-                    try
-                    {
-                        // 5.3) Differential ?
-                        bool shouldCopy = true;
-                        if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase)
-                            && File.Exists(targetFile))
-                        {
-                            var targetInfo = new FileInfo(targetFile);
-                            shouldCopy = sourceInfo.LastWriteTime > targetInfo.LastWriteTime;
-                        }
-
-                        if (shouldCopy)
-                        {
-                            var stopwatch = Stopwatch.StartNew();
                             try
                             {
-                                // Copy and optionally encrypt the file
-                                await CopyFileAsync(sourceFile, targetFile, name);
-                              
-                                totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                                bytesTransferred += sourceInfo.Length;
-                                processedFilesOrder.Add(sourceFile);
-                                filesProcessed++;
-
-                                // Mettre à jour l’état après copie
-                                var progress = (int)((filesProcessed * 100.0) / totalFiles);
-                                UpdateJobState(name, state =>
+                                await AcquireThreadSlotAsync(true);
+                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
+                                
+                                lock (jobLock)
                                 {
-                                    state.ProgressPercentage = progress;
-                                    state.FilesRemaining = totalFiles - filesProcessed;
-                                    state.BytesRemaining = totalBytes - bytesTransferred;
-                                    state.CurrentSourceFile = sourceFile;
-                                    state.CurrentTargetFile = targetFile;
-                                });
-
-                                // Réévaluer la liste toutes les 10 copies
-                                if (filesProcessed % 10 == 0)
-                                {
-                                    var updatedFiles = await GetFilesToProcessAsync(backup);
-                                    if (updatedFiles.Count > sortedFiles.Count)
+                                    if (result.WasProcessed)
                                     {
-                                        sortedFiles = updatedFiles;
-                                        totalFiles = sortedFiles.Count;
-                                        totalBytes = sortedFiles.Sum(f => new FileInfo(f).Length);
+                                        filesProcessed++;
+                                        bytesTransferred += result.BytesTransferred;
+                                        if (backup.Encrypt)
+                                        {
+                                            totalEncryptionTime += result.EncryptionTime;
+                                        }
+                                        processedFilesOrder.Add(sourceFile);
+                                        
+                                        if (result.HasError)
+                                        {
+                                            hasErrors = true;
+                                            errorMessages.Add(result.ErrorMessage!);
+                                        }
 
+                                        // Update progress
+                                        var progress = (int)((filesProcessed * 100.0) / totalFiles);
                                         UpdateJobState(name, state =>
                                         {
-                                            state.TotalFilesCount = totalFiles;
-                                            state.TotalFilesSize = totalBytes;
+                                            state.ProgressPercentage = progress;
                                             state.FilesRemaining = totalFiles - filesProcessed;
                                             state.BytesRemaining = totalBytes - bytesTransferred;
+                                            state.CurrentSourceFile = sourceFile;
+                                            state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
                                         });
                                     }
                                 }
+                                
+                                return result;
                             }
-                            catch (OperationCanceledException)
+                            finally
                             {
-                                stopwatch.Stop();
-                                UpdateJobState(name, state =>
-                                {
-                                    state.Status = "Paused";
-                                    state.ProgressPercentage = (int)((filesProcessed * 100.0) / totalFiles);
-                                });
-                                return;
+                                ReleaseThreadSlot(true);
                             }
-                            catch (Exception ex)
-                            {
-                                stopwatch.Stop();
-                                hasErrors = true;
-                                errorMessages.Add($"Error copying file {sourceFile}: {ex.Message}");
-
-                                FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                                    name, sourceFile, targetFile, sourceInfo.Length,
-                                    (int)(filesProcessed * 100.0 / totalFiles),
-                                    bytesTransferred, totalBytes,
-                                    filesProcessed, totalFiles,
-                                    stopwatch.Elapsed, false
-                                ));
-                                if (backup.Encrypt)
-                                {
-                                    EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                                        name, sourceFile, 0, true, true, ex.Message
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        if (isLarge)
-                            _largeFileSemaphore.Release();
-                    }
+                        })
+                    );
                 }
 
-                // 6) Finalisation : marquer Completed
+                // Process normal files
+                if (normalFiles.Any())
+                {
+                    var normalOptions = new ParallelOptions
+                    {
+                        MaxDegreeOfParallelism = _maxNormalThreads,
+                        CancellationToken = cancellationToken
+                    };
+
+                    var normalResults = await Task.WhenAll(
+                        normalFiles.Select(async sourceFile =>
+                        {
+                            try
+                            {
+                                await AcquireThreadSlotAsync(false);
+                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
+                                
+                                lock (jobLock)
+                                {
+                                    if (result.WasProcessed)
+                                    {
+                                        filesProcessed++;
+                                        bytesTransferred += result.BytesTransferred;
+                                        if (backup.Encrypt)
+                                        {
+                                            totalEncryptionTime += result.EncryptionTime;
+                                        }
+                                        processedFilesOrder.Add(sourceFile);
+                                        
+                                        if (result.HasError)
+                                        {
+                                            hasErrors = true;
+                                            errorMessages.Add(result.ErrorMessage!);
+                                        }
+
+                                        // Update progress
+                                        var progress = (int)((filesProcessed * 100.0) / totalFiles);
+                                        UpdateJobState(name, state =>
+                                        {
+                                            state.ProgressPercentage = progress;
+                                            state.FilesRemaining = totalFiles - filesProcessed;
+                                            state.BytesRemaining = totalBytes - bytesTransferred;
+                                            state.CurrentSourceFile = sourceFile;
+                                            state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
+                                        });
+                                    }
+                                }
+                                
+                                return result;
+                            }
+
+                            finally
+                            {
+                                ReleaseThreadSlot(false);
+                            }
+                        })
+                    );
+                }
+
+                // Update final state
                 UpdateJobState(name, state =>
                 {
-                    state.Status = hasErrors ? "Error" : "Completed";
-                    state.ProgressPercentage = hasErrors ? state.ProgressPercentage : 100;
+                    state.Status = cancellationToken.IsCancellationRequested ? JobStatus.Completed : 
+                                 (hasErrors ? JobStatus.Error : JobStatus.Completed);
+                    state.ProgressPercentage = 100;
                     state.FilesRemaining = 0;
                     state.BytesRemaining = 0;
                     state.CurrentSourceFile = "";
                     state.CurrentTargetFile = "";
                 });
 
-                // 7) Final log
+                // Create final log entry
                 var finalLogEntry = new LogEntry
                 {
                     Timestamp = DateTime.Now,
@@ -841,13 +1027,20 @@ namespace EasySaveV3._0.Managers
                     BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
-                    FileSize = totalBytes,
-                    TransferTime = totalTransferTime,
+                    FileSize = bytesTransferred,
+                    TransferTime = resources.Stopwatch.ElapsedMilliseconds,
                     EncryptionTime = backup.Encrypt ? totalEncryptionTime : -1,
-                    Message = hasErrors
-                        ? $"Completed with errors: {string.Join("; ", errorMessages)}"
-                        : $"Completed successfully: {filesProcessed} files ({FormatFileSize(bytesTransferred)}) in {totalTransferTime}ms" +
-                          (backup.Encrypt ? $" (Encryption: {totalEncryptionTime}ms)" : ""),
+                    Message = hasErrors 
+                        ? $"Backup completed with errors: {string.Join("; ", errorMessages)}\n"
+                        : $"Backup completed successfully. Processed {filesProcessed} files ({FormatFileSize(bytesTransferred)}) in {resources.Stopwatch.ElapsedMilliseconds:F0}ms" + 
+                          (backup.Encrypt ? $" (Encryption time: {totalEncryptionTime}ms)" : "") + "\n" +
+                          "Files processed in order:\n" +
+                          string.Join("\n", processedFilesOrder.Select((f, index) => 
+                          {
+                              var extension = Path.GetExtension(f).ToLower();
+                              var isPriority = Config.GetPriorityExtensions().Contains(extension);
+                              return $"{index + 1}. {Path.GetFileName(f)} ({(isPriority ? "Priority" : "Non-priority")})";
+                          })),
                     LogType = hasErrors ? "ERROR" : "INFO",
                     ActionType = hasErrors ? "BACKUP_ERROR" : "BACKUP_COMPLETED"
                  };
@@ -857,28 +1050,40 @@ namespace EasySaveV3._0.Managers
             {
                 UpdateJobState(name, state =>
                 {
-                    state.Status = "Paused";
-                    state.ProgressPercentage = 0;
+                    state.Status = JobStatus.Completed;
+                    state.CurrentSourceFile = string.Empty;
+                    state.CurrentTargetFile = string.Empty;
                 });
+
+                var cancelLogEntry = new LogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    BackupName = name,
+                    BackupType = backup.Type,
+                    SourcePath = backup.SourcePath,
+                    TargetPath = backup.TargetPath,
+                    Message = "Backup operation cancelled by user",
+                    LogType = "INFO",
+                    ActionType = "BACKUP_CANCELLED"
+                };
+                _logger.AddLogEntry(cancelLogEntry);
+                throw;
             }
             catch (Exception ex)
             {
                 UpdateJobState(name, state =>
                 {
-                    state.Status = "Error";
+                    state.Status = JobStatus.Error;
                     state.ProgressPercentage = 0;
                     state.CurrentSourceFile = "";
                     state.CurrentTargetFile = "";
                 });
 
-                FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                    name, backup.SourcePath, backup.TargetPath, 0, 0, 0, 0, 0, 0, TimeSpan.Zero, false
-                ));
-
                 var errorLogEntry = new LogEntry
                 {
                     Timestamp = DateTime.Now,
                     BackupName = name,
+                    BackupType = backup.Type,
                     SourcePath = backup.SourcePath,
                     TargetPath = backup.TargetPath,
                     Message = $"Backup failed: {ex.Message}",
@@ -890,7 +1095,10 @@ namespace EasySaveV3._0.Managers
             }
             finally
             {
-                _jobCancellationTokens.Remove(name);
+                if (_activeBackups.TryRemove(name, out var backupResources))
+                {
+                    backupResources.Dispose();
+                }
             }
         }
 
@@ -914,224 +1122,25 @@ namespace EasySaveV3._0.Managers
             return $"{size:0.##} {sizes[order]}";
         }
 
-        /// <summary>
-        /// Restores a backup to a specified target location.
-        /// Handles decryption if the backup was encrypted.
-        /// </summary>
-        /// <param name="name">Name of the backup to restore</param>
-        /// <param name="targetPath">Path where the backup will be restored</param>
-        /// <exception cref="InvalidOperationException">Thrown when backup is not found</exception>
-        public async Task RestoreJob(string name, string targetPath)
+        // Add method to get thread pool statistics
+        public (int ActiveThreads, int MaxTotalThreads, int MaxPriorityThreads, int MaxNormalThreads) GetThreadPoolStats()
         {
-            var backup = GetJob(name);
-            if (backup == null)
+            lock (_threadPoolLock)
             {
-                throw new InvalidOperationException($"Backup '{name}' not found.");
-            }
-
-            var startTime = DateTime.Now;
-            var totalFiles = 0;
-            var totalBytes = 0L;
-            var filesProcessed = 0;
-            var bytesTransferred = 0L;
-            var totalTransferTime = 0L;
-            var totalEncryptionTime = 0L;
-            var hasErrors = false;
-            var errorMessages = new List<string>();
-
-            try
-            {
-                // Get all files to restore
-                var files = await Task.Run(() => Directory.GetFiles(backup.TargetPath, "*.*", SearchOption.AllDirectories));
-                totalFiles = files.Length;
-                totalBytes = files.Sum(f => new FileInfo(f).Length);
-
-                // Update initial state
-                UpdateJobState(name, state =>
-                {
-                    state.Status = "Restoring";
-                    state.TotalFilesCount = totalFiles;
-                    state.TotalFilesSize = totalBytes;
-                    state.FilesRemaining = totalFiles;
-                    state.BytesRemaining = totalBytes;
-                    state.CurrentSourceFile = backup.TargetPath;
-                    state.CurrentTargetFile = targetPath;
-                });
-
-                // Process each file
-                foreach (var sourceFile in files)
-                {
-                    var relativePath = Path.GetRelativePath(backup.TargetPath, sourceFile);
-                    var targetFile = Path.Combine(targetPath, relativePath);
-                    var sourceInfo = new FileInfo(sourceFile);
-
-                    // Ensure target directory exists
-                    var dir = Path.GetDirectoryName(targetFile);
-                    if (dir != null && !Directory.Exists(dir))
-                    {
-                        Directory.CreateDirectory(dir);
-                    }
-
-                    var stopwatch = Stopwatch.StartNew();
-                    try
-                    {
-                        // Copy and optionally decrypt the file
-                        await CopyFileAsync(sourceFile, targetFile, name);
-                        totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                        bytesTransferred += sourceInfo.Length;
-                        filesProcessed++;
-
-                        // Update progress
-                        FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                            name,
-                            sourceFile,
-                            targetFile,
-                            sourceInfo.Length,
-                            (int)(filesProcessed * 100.0 / totalFiles),
-                            bytesTransferred,
-                            totalBytes,
-                            filesProcessed,
-                            totalFiles,
-                            stopwatch.Elapsed,
-                            true
-                        ));
-
-                        UpdateJobState(name, state =>
-                        {
-                            state.FilesRemaining--;
-                            state.BytesRemaining -= sourceInfo.Length;
-                            state.CurrentSourceFile = sourceFile;
-                            state.CurrentTargetFile = targetFile;
-                        });
-                    }
-                    catch (Exception ex)
-                    {
-                        stopwatch.Stop();
-                        hasErrors = true;
-                        errorMessages.Add($"Error restoring file {sourceFile}: {ex.Message}");
-
-                        // Report error progress
-                        FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                            name,
-                            sourceFile,
-                            targetFile,
-                            sourceInfo.Length,
-                            (int)(filesProcessed * 100.0 / totalFiles),
-                            bytesTransferred,
-                            totalBytes,
-                            filesProcessed,
-                            totalFiles,
-                            stopwatch.Elapsed,
-                            false
-                        ));
-
-                        if (backup.Encrypt)
-                        {
-                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
-                                name,
-                                sourceFile,
-                                0,
-                                true,
-                                true,
-                                ex.Message
-                            ));
-                        }
-                    }
-                }
-
-                // Update final state
-                UpdateJobState(name, state =>
-                {
-                    state.Status = hasErrors ? "Error" : "Completed";
-                    state.FilesRemaining = 0;
-                    state.BytesRemaining = 0;
-                    state.CurrentSourceFile = "";
-                    state.CurrentTargetFile = "";
-                });
-
-                // Report final progress
-                FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                    name,
-                    backup.TargetPath,
-                    targetPath,
-                    0,
-                    100,
-                    totalBytes,
-                    totalBytes,
-                    totalFiles,
-                    totalFiles,
-                    TimeSpan.Zero,
-                    !hasErrors
-                ));
-
-                // Create final log entry
-                var logEntry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = name,
-                    BackupType = backup.Type,
-                    SourcePath = backup.TargetPath,
-                    TargetPath = targetPath,
-                    FileSize = totalBytes,
-                    TransferTime = totalTransferTime,
-                    EncryptionTime = backup.Encrypt ? totalEncryptionTime : -1,
-                    Message = hasErrors 
-                        ? $"Restore completed with errors: {string.Join("; ", errorMessages)}"
-                        : $"Restore completed successfully. Processed {filesProcessed} files ({FormatFileSize(bytesTransferred)}) in {totalTransferTime}ms" + 
-                          (backup.Encrypt ? $" (Decryption time: {totalEncryptionTime}ms)" : ""),
-                    LogType = hasErrors ? "ERROR" : "INFO",
-                    ActionType = "BACKUP_RESTORE"
-                };
-                _logger.AddLogEntry(logEntry);
-            }
-            catch (Exception ex)
-            {
-                // Update state on error
-                UpdateJobState(name, state =>
-                {
-                    state.Status = "Error";
-                    state.CurrentSourceFile = "";
-                    state.CurrentTargetFile = "";
-                });
-
-                // Report error progress
-                FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                    name,
-                    backup.TargetPath,
-                    targetPath,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    0,
-                    TimeSpan.Zero,
-                    false
-                ));
-
-                // Create error log entry
-                var errorLogEntry = new LogEntry
-                {
-                    Timestamp = DateTime.Now,
-                    BackupName = name,
-                    SourcePath = backup.TargetPath,
-                    TargetPath = targetPath,
-                    Message = $"Restore failed: {ex.Message}",
-                    LogType = "ERROR",
-                    ActionType = "BACKUP_RESTORE"
-                };
-                _logger.AddLogEntry(errorLogEntry);
-                throw;
+                return (_activeThreadCount, _maxTotalThreads, _maxPriorityThreads, _maxNormalThreads);
             }
         }
 
-        /// <summary>
-        /// Displays all logs using the log controller.
-        /// Provides access to the backup operation history.
-        /// </summary>
-        public void DisplayLogs()
+        // Add method to check if a backup is running
+        public bool IsBackupRunning(string name)
         {
-            _logger.DisplayLogs();
+            return _activeBackups.ContainsKey(name);
+        }
+
+        // Add method to get active backup count
+        public int GetActiveBackupCount()
+        {
+            return _activeBackups.Count;
         }
     }
 }
