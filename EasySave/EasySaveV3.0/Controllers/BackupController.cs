@@ -28,10 +28,6 @@ namespace EasySaveV3._0.Controllers
         private readonly Logger _logger;
         private readonly Dictionary<string, StateModel> _backupStates;
         private bool _isDisposed;
-        private readonly object _stateLock = new object();
-        private readonly string _stateFile;
-        private readonly JsonSerializerOptions _jsonOptions;
-        private bool _isInitialized;
         public event EventHandler<string>? BusinessSoftwareDetected;
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
@@ -64,8 +60,9 @@ namespace EasySaveV3._0.Controllers
                 }
 
                 // Subscribe to BackupManager events
-                _backupManager.FileProgressChanged += OnFileProgress;
-                _backupManager.EncryptionProgressChanged += OnEncryptionProgress;
+                _backupManager.BusinessSoftwareDetected += (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                _backupManager.FileProgressChanged += (sender, e) => FileProgressChanged?.Invoke(this, e);
+                _backupManager.EncryptionProgressChanged += (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
             }
             catch (Exception ex)
             {
@@ -233,14 +230,7 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var backup = GetBackup(name);
-                if (backup == null)
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
-                }
-
-                var state = GetBackupState(name);
-                if (state?.Status == "Active" || state?.Status == "Paused")
+                if (_backupManager.IsBackupRunning(name))
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupInProgress"));
                 }
@@ -281,20 +271,12 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
                 }
 
-                var backup = GetBackup(backupName);
-                if (backup == null)
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
-                }
-
-                var state = GetBackupState(backupName);
-                if (state?.Status == "Active" || state?.Status == "Paused")
+                if (_backupManager.IsBackupRunning(backupName))
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupAlreadyRunning"));
                 }
 
-                // Start the backup directly
-                await ExecuteBackup(backup);
+                await _backupManager.ExecuteJob(backupName);
             }
             catch (Exception ex)
             {
@@ -313,10 +295,6 @@ namespace EasySaveV3._0.Controllers
         {
             try
             {
-                if (_backupManager == null)
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
-                }
                 return new List<Backup>(_backupManager.Jobs);
             }
             catch (Exception ex)
@@ -339,10 +317,6 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                if (_backupManager == null)
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
-                }
                 return _backupManager.GetJob(name);
             }
             catch (Exception ex)
@@ -366,10 +340,6 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                if (_backupManager == null)
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("error.backupManagerNotInitialized"));
-                }
                 return _backupManager.GetJobState(name);
             }
             catch (Exception ex)
@@ -426,72 +396,8 @@ namespace EasySaveV3._0.Controllers
             }
         }
 
-        private void OnFileProgress(object? sender, FileProgressEventArgs e)
-        {
-            try
-            {
-                FileProgressChanged?.Invoke(this, e);
-            }
-            catch (Exception ex)
-            {
-                var backup = GetBackup(e.BackupName);
-                _logController.LogBackupError(e.BackupName, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
-            }
-        }
-
-        private void OnEncryptionProgress(object? sender, EncryptionProgressEventArgs e)
-        {
-            try
-            {
-                EncryptionProgressChanged?.Invoke(this, e);
-            }
-            catch (Exception ex)
-            {
-                var backup = GetBackup(e.BackupName);
-                _logController.LogBackupError(e.BackupName, backup?.Type ?? "Unknown", ex.Message, backup?.SourcePath, backup?.TargetPath);
-            }
-        }
-
         /// <summary>
-        /// Disposes of the BackupController and its resources.
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <summary>
-        /// Disposes of the BackupController and its resources.
-        /// </summary>
-        /// <param name="disposing">True if called from Dispose, false if called from finalizer</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (!_isDisposed)
-            {
-                if (disposing)
-                {
-                    _backupManager.FileProgressChanged -= OnFileProgress;
-                    _backupManager.EncryptionProgressChanged -= OnEncryptionProgress;
-                    if (_backupManager is IDisposable disposable)
-                    {
-                        disposable.Dispose();
-                    }
-                }
-                _isDisposed = true;
-            }
-        }
-
-        /// <summary>
-        /// Finalizer for BackupController.
-        /// </summary>
-        ~BackupController()
-        {
-            Dispose(false);
-        }
-
-        /// <summary>
-        /// Starts all backup jobs.
+        /// Starts all backup jobs in parallel.
         /// </summary>
         /// <exception cref="InvalidOperationException">Thrown when backup start fails</exception>
         public async Task StartAllBackups()
@@ -508,14 +414,11 @@ namespace EasySaveV3._0.Controllers
                 }
 
                 var backups = GetBackups();
-                foreach (var backup in backups)
-                {
-                    var state = GetBackupState(backup.Name);
-                    if (state?.Status != "Active" && state?.Status != "Paused")
-                    {
-                        await ExecuteBackup(backup);
-                    }
-                }
+                var backupTasks = backups
+                    .Where(backup => !_backupManager.IsBackupRunning(backup.Name))
+                    .Select(backup => _backupManager.ExecuteJob(backup.Name));
+
+                await Task.WhenAll(backupTasks);
             }
             catch (Exception ex)
             {
@@ -525,7 +428,7 @@ namespace EasySaveV3._0.Controllers
         }
 
         /// <summary>
-        /// Starts selected backup jobs.
+        /// Starts selected backup jobs in parallel.
         /// </summary>
         /// <param name="backupNames">List of backup names to execute</param>
         /// <exception cref="InvalidOperationException">Thrown when backup start fails</exception>
@@ -542,18 +445,11 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
                 }
 
-                foreach (var backupName in backupNames)
-                {
-                    var backup = GetBackup(backupName);
-                    if (backup != null)
-                    {
-                        var state = GetBackupState(backupName);
-                        if (state?.Status != "Active" && state?.Status != "Paused")
-                        {
-                            await ExecuteBackup(backup);
-                        }
-                    }
-                }
+                var backupTasks = backupNames
+                    .Where(backupName => !_backupManager.IsBackupRunning(backupName))
+                    .Select(backupName => _backupManager.ExecuteJob(backupName));
+
+                await Task.WhenAll(backupTasks);
             }
             catch (Exception ex)
             {
@@ -562,7 +458,11 @@ namespace EasySaveV3._0.Controllers
             }
         }
 
-        private async Task ExecuteBackup(Backup backup)
+        /// <summary>
+        /// Gets the current thread pool statistics.
+        /// </summary>
+        /// <returns>A tuple containing active threads, max total threads, max priority threads, and max normal threads</returns>
+        public (int ActiveThreads, int MaxTotalThreads, int MaxPriorityThreads, int MaxNormalThreads) GetThreadPoolStats()
         {
             try
             {
@@ -638,100 +538,51 @@ namespace EasySaveV3._0.Controllers
             }
         }
 
-        private void LogFileOperation(string backupName, string sourcePath, string targetPath, long fileSize, long transferTime, long encryptionTime, string backupType)
+        /// <summary>
+        /// Gets the number of currently active backups.
+        /// </summary>
+        public int GetActiveBackupCount()
         {
-            _logController.LogFileOperation(backupName, backupType, sourcePath, targetPath, fileSize, transferTime, encryptionTime);
+            return _backupManager.GetActiveBackupCount();
         }
 
-        private void SaveStates(List<StateModel> states)
+        /// <summary>
+        /// Disposes of the BackupController and its resources.
+        /// </summary>
+        public void Dispose()
         {
-            try
-            {
-                lock (_stateLock)
-                {
-                    var tempFile = _stateFile + ".tmp";
-                    var json = JsonSerializer.Serialize(states, _jsonOptions);
-                    File.WriteAllText(tempFile, json);
-                    File.Move(tempFile, _stateFile, true);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logController.LogBackupError("System", "State", $"Failed to save states: {ex.Message}");
-                throw;
-            }
+            Dispose(true);
+            GC.SuppressFinalize(this);
         }
 
-        private void UpdateJobState(string name, Action<StateModel> updateAction)
+        /// <summary>
+        /// Disposes of the BackupController and its resources.
+        /// </summary>
+        /// <param name="disposing">True if called from Dispose, false if called from finalizer</param>
+        protected virtual void Dispose(bool disposing)
         {
-            if (string.IsNullOrEmpty(name))
-                throw new ArgumentNullException(nameof(name));
-
-            try
+            if (!_isDisposed)
             {
-                lock (_stateLock)
+                if (disposing)
                 {
-                    if (!_backupStates.ContainsKey(name))
+                    _backupManager.BusinessSoftwareDetected -= (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                    _backupManager.FileProgressChanged -= (sender, e) => FileProgressChanged?.Invoke(this, e);
+                    _backupManager.EncryptionProgressChanged -= (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
+                    if (_backupManager is IDisposable disposable)
                     {
-                        _backupStates[name] = StateModel.CreateInitialState(name);
-                    }
-
-                    var state = _backupStates[name];
-                    updateAction(state);
-                    
-                    // Validation des valeurs
-                    state.ProgressPercentage = Math.Max(0, Math.Min(100, state.ProgressPercentage));
-                    state.FilesRemaining = Math.Max(0, state.FilesRemaining);
-                    state.BytesRemaining = Math.Max(0, state.BytesRemaining);
-                    
-                    state.LastActionTime = DateTime.Now;
-                    SaveStates(_backupStates.Values.ToList());
-                }
-            }
-            catch (Exception ex)
-            {
-                _logController.LogBackupError(name, "State", $"Failed to update state: {ex.Message}");
-                throw;
-            }
-        }
-
-        private void LoadStates()
-        {
-            try
-            {
-                if (File.Exists(_stateFile))
-                {
-                    var json = File.ReadAllText(_stateFile);
-                    var loadedStates = JsonSerializer.Deserialize<List<StateModel>>(json, _jsonOptions);
-                    if (loadedStates != null)
-                    {
-                        foreach (var state in loadedStates.Where(s => !string.IsNullOrEmpty(s.Name)))
-                        {
-                            _backupStates[state.Name] = state;
-                        }
+                        disposable.Dispose();
                     }
                 }
-            }
-            catch (Exception ex)
-            {
-                _logController.LogBackupError("System", "State", $"Failed to load states: {ex.Message}");
-                throw;
+                _isDisposed = true;
             }
         }
 
-        private void EnsureInitialized()
+        /// <summary>
+        /// Finalizer for BackupController.
+        /// </summary>
+        ~BackupController()
         {
-            if (!_isInitialized)
-            {
-                lock (_stateLock)
-                {
-                    if (!_isInitialized)
-                    {
-                        LoadStates();
-                        _isInitialized = true;
-                    }
-                }
-            }
+            Dispose(false);
         }
 
         /// <summary>
