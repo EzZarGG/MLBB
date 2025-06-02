@@ -30,7 +30,7 @@ namespace RemoteConsole
             InitializeComponent();
             InitializeCustomComponents();
             updateTimer = new System.Windows.Forms.Timer();
-            updateTimer.Interval = 2000; // Increase update interval to 2 seconds
+            updateTimer.Interval = 5000; // Change update interval to 5 seconds
             updateTimer.Tick += UpdateTimer_Tick;
         }
 
@@ -62,6 +62,7 @@ namespace RemoteConsole
             jobListView.Columns.Add("Progress", 100);
             jobListView.Columns.Add("Source", 200);
             jobListView.Columns.Add("Destination", 200);
+            jobListView.SelectedIndexChanged += (s, e) => UpdateControlButtonsState();
             this.Controls.Add(jobListView);
 
             // Control buttons
@@ -396,9 +397,16 @@ namespace RemoteConsole
 
         private void EnableControlButtons(bool enable)
         {
-            Controls.Find("pauseButton", true)[0].Enabled = enable;
-            Controls.Find("resumeButton", true)[0].Enabled = enable;
-            Controls.Find("stopButton", true)[0].Enabled = enable;
+            var pauseButton = Controls.Find("pauseButton", true).FirstOrDefault() as Button;
+            var resumeButton = Controls.Find("resumeButton", true).FirstOrDefault() as Button;
+            var stopButton = Controls.Find("stopButton", true).FirstOrDefault() as Button;
+
+            if (pauseButton != null && resumeButton != null && stopButton != null)
+            {
+                pauseButton.Enabled = enable;
+                resumeButton.Enabled = enable;
+                stopButton.Enabled = enable;
+            }
         }
 
         private void UpdateTimer_Tick(object? sender, EventArgs e)
@@ -617,10 +625,38 @@ namespace RemoteConsole
                 }
 
                 listView.EndUpdate();
+
+                // Update control buttons state
+                UpdateControlButtonsState();
             }
             catch (Exception ex)
             {
                 MessageBox.Show($"Failed to update job list: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateControlButtonsState()
+        {
+            var listView = Controls.Find("jobListView", true).FirstOrDefault() as ListView;
+            if (listView == null || listView.SelectedItems.Count == 0)
+            {
+                EnableControlButtons(false);
+                return;
+            }
+
+            var selectedItem = listView.SelectedItems[0];
+            var status = selectedItem.SubItems[1].Text;
+
+            var pauseButton = Controls.Find("pauseButton", true).FirstOrDefault() as Button;
+            var resumeButton = Controls.Find("resumeButton", true).FirstOrDefault() as Button;
+            var stopButton = Controls.Find("stopButton", true).FirstOrDefault() as Button;
+
+            if (pauseButton != null && resumeButton != null && stopButton != null)
+            {
+                pauseButton.Enabled = status.Equals("Active", StringComparison.OrdinalIgnoreCase);
+                resumeButton.Enabled = status.Equals("Paused", StringComparison.OrdinalIgnoreCase);
+                stopButton.Enabled = status.Equals("Active", StringComparison.OrdinalIgnoreCase) || 
+                                   status.Equals("Paused", StringComparison.OrdinalIgnoreCase);
             }
         }
 
@@ -630,7 +666,33 @@ namespace RemoteConsole
             if (listView.SelectedItems.Count > 0)
             {
                 var jobName = listView.SelectedItems[0].Text;
-                await SendCommand("PAUSE", jobName);
+                try
+                {
+                    await SendCommand("PAUSE", jobName);
+                    var response = await ReceiveResponse();
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        var result = JsonConvert.DeserializeObject<dynamic>(response);
+                        if (result?.error != null)
+                        {
+                            MessageBox.Show(result.error.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            // Refresh the job list to update the status
+                            await SendCommand("GET_STATUS");
+                            var statusResponse = await ReceiveResponse();
+                            if (!string.IsNullOrEmpty(statusResponse))
+                            {
+                                UpdateJobList(statusResponse);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to pause backup: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -640,7 +702,33 @@ namespace RemoteConsole
             if (listView.SelectedItems.Count > 0)
             {
                 var jobName = listView.SelectedItems[0].Text;
-                await SendCommand("RESUME", jobName);
+                try
+                {
+                    await SendCommand("RESUME", jobName);
+                    var response = await ReceiveResponse();
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        var result = JsonConvert.DeserializeObject<dynamic>(response);
+                        if (result?.error != null)
+                        {
+                            MessageBox.Show(result.error.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            // Refresh the job list to update the status
+                            await SendCommand("GET_STATUS");
+                            var statusResponse = await ReceiveResponse();
+                            if (!string.IsNullOrEmpty(statusResponse))
+                            {
+                                UpdateJobList(statusResponse);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to resume backup: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -650,7 +738,33 @@ namespace RemoteConsole
             if (listView.SelectedItems.Count > 0)
             {
                 var jobName = listView.SelectedItems[0].Text;
-                await SendCommand("STOP", jobName);
+                try
+                {
+                    await SendCommand("STOP", jobName);
+                    var response = await ReceiveResponse();
+                    if (!string.IsNullOrEmpty(response))
+                    {
+                        var result = JsonConvert.DeserializeObject<dynamic>(response);
+                        if (result?.error != null)
+                        {
+                            MessageBox.Show(result.error.ToString(), "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                        }
+                        else
+                        {
+                            // Refresh the job list to update the status
+                            await SendCommand("GET_STATUS");
+                            var statusResponse = await ReceiveResponse();
+                            if (!string.IsNullOrEmpty(statusResponse))
+                            {
+                                UpdateJobList(statusResponse);
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to stop backup: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 

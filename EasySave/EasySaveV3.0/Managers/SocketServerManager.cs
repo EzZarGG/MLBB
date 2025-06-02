@@ -275,8 +275,16 @@ namespace EasySaveV3._0.Managers
                             return JsonConvert.SerializeObject(new { error = "Job name is required" });
                         }
                         Log($"Processing PAUSE command for job: {command.JobName}");
-                        // TODO: Implement pause functionality in BackupController
-                        return JsonConvert.SerializeObject(new { message = "Pause command received" });
+                        try
+                        {
+                            _backupController.PauseBackup(command.JobName);
+                            return JsonConvert.SerializeObject(new { message = "Backup paused successfully" });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Error pausing backup: {ex.Message}");
+                            return JsonConvert.SerializeObject(new { error = ex.Message });
+                        }
 
                     case "RESUME":
                         if (string.IsNullOrEmpty(command.JobName))
@@ -285,8 +293,16 @@ namespace EasySaveV3._0.Managers
                             return JsonConvert.SerializeObject(new { error = "Job name is required" });
                         }
                         Log($"Processing RESUME command for job: {command.JobName}");
-                        // TODO: Implement resume functionality in BackupController
-                        return JsonConvert.SerializeObject(new { message = "Resume command received" });
+                        try
+                        {
+                            _backupController.ResumeBackup(command.JobName);
+                            return JsonConvert.SerializeObject(new { message = "Backup resumed successfully" });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Error resuming backup: {ex.Message}");
+                            return JsonConvert.SerializeObject(new { error = ex.Message });
+                        }
 
                     case "STOP":
                         if (string.IsNullOrEmpty(command.JobName))
@@ -295,8 +311,16 @@ namespace EasySaveV3._0.Managers
                             return JsonConvert.SerializeObject(new { error = "Job name is required" });
                         }
                         Log($"Processing STOP command for job: {command.JobName}");
-                        // TODO: Implement stop functionality in BackupController
-                        return JsonConvert.SerializeObject(new { message = "Stop command received" });
+                        try
+                        {
+                            _backupController.StopBackup(command.JobName);
+                            return JsonConvert.SerializeObject(new { message = "Backup stopped successfully" });
+                        }
+                        catch (Exception ex)
+                        {
+                            Log($"Error stopping backup: {ex.Message}");
+                            return JsonConvert.SerializeObject(new { error = ex.Message });
+                        }
 
                     default:
                         Log($"Unknown command received: {command.Command}");
