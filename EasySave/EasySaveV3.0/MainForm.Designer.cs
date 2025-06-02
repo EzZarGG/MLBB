@@ -106,7 +106,7 @@ namespace EasySaveV3._0
             // _updateTimer
             // 
             this._updateTimer.Interval = 1000;
-            this._updateTimer.Tick += new System.EventHandler(async (s, e) => await UpdateBackupStatesAsync());
+            this._updateTimer.Tick += new System.EventHandler(this.UpdateTimer_Tick);
             // 
             // MainForm
             // 

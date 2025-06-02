@@ -148,7 +148,15 @@ namespace EasySaveV3._0
         private void InitializeTimer()
         {
             _updateTimer.Interval = UPDATE_INTERVAL_MS;
-            _updateTimer.Tick += async (s, e) => await UpdateBackupStatesAsync();
+            _updateTimer.Tick += UpdateTimer_Tick;
+        }
+
+        private void UpdateTimer_Tick(object sender, EventArgs e)
+        {
+            if (!_isUpdating)
+            {
+                _ = UpdateBackupStatesAsync();
+            }
         }
 
         private async Task UpdateBackupStatesAsync()

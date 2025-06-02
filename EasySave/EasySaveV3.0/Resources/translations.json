@@ -75,9 +75,9 @@
     "message.businessSoftwareRunning": "Un logiciel métier est en cours d'exécution. La sauvegarde a été annulée.",
     "message.noBackupsSelected": "Veuillez sélectionner au moins une sauvegarde à exécuter.",
     "message.confirmRunSelected": "Voulez-vous exécuter {0} sauvegarde(s) sélectionnée(s) ?",
-    "message.selectedBackupsSuccess": "Les sauvegardes sélectionnées ont été lancées avec succès.",
+    "message.selectedBackupsSuccess": "Les sauvegardes sélectionnées ont été terminées avec succès.",
     "message.confirmRunAll": "Voulez-vous exécuter toutes les sauvegardes ?",
-    "message.allBackupsSuccess": "Toutes les sauvegardes ont été lancées avec succès.",
+    "message.allBackupsSuccess": "Toutes les sauvegardes ont été terminées avec succès.",
     "message.noBackups": "Aucune sauvegarde n'est disponible.",
     "message.confirmExitWithBackup": "Des sauvegardes sont en cours. Êtes-vous sûr de vouloir quitter ?",
     "status.ready": "Prêt",
@@ -287,9 +287,9 @@
     "menu.backup.runAll": "Run All Backups",
     "message.noBackupsSelected": "Please select at least one backup to run.",
     "message.confirmRunSelected": "Do you want to run {0} selected backup(s)?",
-    "message.selectedBackupsSuccess": "Selected backups have been successfully started.",
+    "message.selectedBackupsSuccess": "Selected backups have been completed successfully.",
     "message.confirmRunAll": "Do you want to run all backups?",
-    "message.allBackupsSuccess": "All backups have been successfully started.",
+    "message.allBackupsSuccess": "All backups have been completed successfully.",
     "message.noBackups": "No backups available.",
     "message.confirmExitWithBackup": "Backups are running. Are you sure you want to exit?"
   }
