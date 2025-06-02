@@ -18,7 +18,6 @@ namespace EasySaveV3._0.Managers
         public const string Paused = "Paused";
         public const string Completed = "Completed";
         public const string Error = "Error";
-        public const string Paused = "Paused";
         public const string Cancelled = "Cancelled";
         public const string Stopped = "Stopped";
     }
@@ -760,9 +759,9 @@ namespace EasySaveV3._0.Managers
             }
 
             /// <summary>
-            /// Attend asynchronement l’acquisition d’un slot dans le sémaphore.
-            /// Si le token est annulé, retourne false et n’appelle pas Release plus tard.
-            /// Si l’attente réussit, marque _acquired=true pour que le Dispose() relâche.
+            /// Asynchronously waits for a slot in the semaphore.
+            /// If the token is cancelled, returns false and won't call Release later.
+            /// If the wait succeeds, marks _acquired=true so Dispose() will release.
             /// </summary>
             public async Task<bool> AcquireAsync(CancellationToken cancellationToken)
             {
@@ -774,20 +773,19 @@ namespace EasySaveV3._0.Managers
                 }
                 catch (OperationCanceledException)
                 {
-                    // L'attente a été annulée : on ne libèrera pas car on a pas réellement acquis
+                    // Wait was cancelled: won't release since we didn't actually acquire
                     _acquired = false;
                     return false;
                 }
             }
 
             /// <summary>
-            /// Libère le slot si et seulement si AcquireAsync avait réussi.
+            /// Releases the slot if and only if AcquireAsync had succeeded.
             /// </summary>
             public void Dispose()
             {
                 if (_acquired)
                 {
-                    // On sait que ce ThreadSlot avait obtenu un WaitAsync(), donc on libère
                     _semaphore.Release();
                     _acquired = false;
                 }
@@ -1088,7 +1086,7 @@ namespace EasySaveV3._0.Managers
                     {
                         try
                         {
-                            await AcquireThreadSlotAsync(true); // Acquire priority thread slot
+                            await AcquireThreadSlotAsync(true, token); // Acquire priority thread slot
 
                             // Check for business software and pause if needed
                             bool alreadySignaledPause = false;
@@ -1263,7 +1261,7 @@ namespace EasySaveV3._0.Managers
                     {
                         try
                         {
-                            await AcquireThreadSlotAsync(false); // Acquire normal thread slot
+                            await AcquireThreadSlotAsync(false, token); // Acquire normal thread slot
 
                             // Check for business software and pause if needed
                             bool alreadySignaledPause = false;
@@ -1477,7 +1475,7 @@ namespace EasySaveV3._0.Managers
 
                     try
                     {
-                        await AcquireThreadSlotAsync(true); // Acquire priority thread slot
+                        await AcquireThreadSlotAsync(true, token); // Acquire priority thread slot
 
                         // Check for business software and pause if needed
                         bool alreadySignaledPause = false;
@@ -1893,61 +1891,6 @@ namespace EasySaveV3._0.Managers
             }
         }
 
-        /// <summary>
-        /// Helper class to manage thread slot acquisition and release
-        /// </summary>
-        private class ThreadSlot : IDisposable
-        {
-            private readonly SemaphoreSlim _semaphore;
-            private bool _acquired;
-
-            public ThreadSlot(SemaphoreSlim semaphore)
-            {
-                _semaphore = semaphore;
-                _acquired = false;
-            }
-
-            /// <summary>
-            /// Asynchronously waits for a slot in the semaphore.
-            /// If the token is cancelled, returns false and won't call Release later.
-            /// If the wait succeeds, marks _acquired=true so Dispose() will release.
-            /// </summary>
-            public async Task<bool> AcquireAsync(CancellationToken cancellationToken)
-            {
-                try
-                {
-                    await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
-                    _acquired = true;
-                    return true;
-                }
-                catch (OperationCanceledException)
-                {
-                    // Wait was cancelled: won't release since we didn't actually acquire
-                    _acquired = false;
-                    return false;
-                }
-            }
-
-            /// <summary>
-            /// Releases the slot if and only if AcquireAsync had succeeded.
-            /// </summary>
-            public void Dispose()
-            {
-                if (_acquired)
-                {
-                    _semaphore.Release();
-                    _acquired = false;
-                }
-            }
-        }
-
-        private ThreadSlot GetThreadSlot(bool isPriority)
-        {
-            return isPriority
-                ? new ThreadSlot(_priorityThreadPool)
-                : new ThreadSlot(_normalThreadPool);
-        }
-
         // Inside your existing ExecuteJob method, add this check before processing each file:
         private async Task CheckForBusinessSoftwareAndPauseIfNeeded(string name, CancellationToken token)
         {
@@ -1986,6 +1929,18 @@ namespace EasySaveV3._0.Managers
                 });
                 BusinessSoftwareResumed?.Invoke(this, name);
             }
+        }
+
+        private async Task<bool> AcquireThreadSlotAsync(bool isPriority, CancellationToken token)
+        {
+            var slot = GetThreadSlot(isPriority);
+            return await slot.AcquireAsync(token);
+        }
+
+        private void ReleaseThreadSlot(bool isPriority)
+        {
+            var slot = GetThreadSlot(isPriority);
+            slot.Dispose();
         }
     }
 }
