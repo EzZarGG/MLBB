@@ -520,19 +520,18 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Active")
+                if (state.Status != JobStatus.Active)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotActive"));
                 }
 
-                state.Status = "Paused";
-                state.LastActionTime = DateTime.Now;
+                _backupManager.UpdateJobState(name, s => s.Status = JobStatus.Paused);
                 _logger.LogAdminAction(name, "BACKUP_PAUSED", "Backup job paused");
             }
             catch (Exception ex)
@@ -555,19 +554,18 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Paused")
+                if (state.Status != JobStatus.Paused)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotPaused"));
                 }
 
-                state.Status = "Active";
-                state.LastActionTime = DateTime.Now;
+                _backupManager.UpdateJobState(name, s => s.Status = JobStatus.Active);
                 _logger.LogAdminAction(name, "BACKUP_RESUMED", "Backup job resumed");
             }
             catch (Exception ex)
@@ -590,24 +588,34 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Active" && state.Status != "Paused")
+                if (state.Status != JobStatus.Active && state.Status != JobStatus.Paused)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotRunning"));
                 }
 
-                state.Status = "Stopped";
-                state.LastActionTime = DateTime.Now;
-                state.ProgressPercentage = 0;
-                state.FilesRemaining = 0;
-                state.BytesRemaining = 0;
-                state.CurrentSourceFile = string.Empty;
-                state.CurrentTargetFile = string.Empty;
+                // Signal cancellation to stop the backup task
+                if (BackupManager._activeBackups.TryGetValue(name, out var resources))
+                {
+                    resources.CancellationTokenSource.Cancel();
+                }
+
+                // Update state immediately to reflect stopping, even if cancellation takes a moment
+                _backupManager.UpdateJobState(name, s =>
+                {
+                    s.Status = JobStatus.Stopped; // Or a specific 'Stopped' status if available
+                    s.ProgressPercentage = 0;
+                    s.FilesRemaining = 0;
+                    s.BytesRemaining = 0;
+                    s.CurrentSourceFile = string.Empty;
+                    s.CurrentTargetFile = string.Empty;
+                });
+
                 _logger.LogAdminAction(name, "BACKUP_STOPPED", "Backup job stopped");
             }
             catch (Exception ex)

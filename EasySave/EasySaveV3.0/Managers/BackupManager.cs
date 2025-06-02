@@ -16,6 +16,9 @@ namespace EasySaveV3._0.Managers
         public const string Active = "Active";
         public const string Completed = "Completed";
         public const string Error = "Error";
+        public const string Paused = "Paused";
+        public const string Cancelled = "Cancelled";
+        public const string Stopped = "Stopped";
     }
 
     /// <summary>
@@ -69,10 +72,10 @@ namespace EasySaveV3._0.Managers
         private static readonly SemaphoreSlim _cryptoSoftSemaphore = new SemaphoreSlim(1, 1);
 
         // Add a dictionary to track active backups and their resources
-        private static readonly ConcurrentDictionary<string, BackupResources> _activeBackups = new();
+        internal static readonly ConcurrentDictionary<string, BackupResources> _activeBackups = new();
 
         // Class to hold resources for each backup job
-        private class BackupResources : IDisposable
+        internal class BackupResources : IDisposable
         {
             public CancellationTokenSource CancellationTokenSource { get; } = new();
             public Stopwatch Stopwatch { get; } = new();
@@ -714,16 +717,21 @@ namespace EasySaveV3._0.Managers
         {
             var result = new FileProcessingResult();
             
+            // Check for cancellation before processing
             if (token.IsCancellationRequested)
             {
+                // Update state to indicate cancellation before processing the file
                 lock (jobLock)
                 {
                     UpdateJobState(name, state => 
                     {
-                        state.Status = JobStatus.Completed;
+                        state.Status = JobStatus.Cancelled; // Or a specific 'Cancelled' status if available
+                        state.CurrentSourceFile = string.Empty;
+                        state.CurrentTargetFile = string.Empty;
                     });
                 }
-                return result;
+                // Throw OperationCanceledException to stop the task
+                token.ThrowIfCancellationRequested();
             }
 
             // Add delay to slow down backup progress
@@ -795,7 +803,7 @@ namespace EasySaveV3._0.Managers
                     var currentState = GetJobState(name);
                     if (currentState != null)
                     {
-                        var progress = (int)((currentState.FilesRemaining * 100.0) / currentState.TotalFilesCount);
+                        var progress = (int)(currentState.FilesRemaining * 100.0 / currentState.TotalFilesCount);
                         var bytesTransferred = currentState.TotalFilesSize - currentState.BytesRemaining;
                         var filesProcessed = currentState.TotalFilesCount - currentState.FilesRemaining;
 
@@ -843,6 +851,9 @@ namespace EasySaveV3._0.Managers
         public async Task ExecuteJob(string name, CancellationToken cancellationToken = default)
         {
             Backup? backup = null;  // Declare backup variable outside try block
+            BackupResources? resources = null; // Declare resources variable outside try block
+            var jobLock = new object(); // Declare jobLock outside try block
+
             try
             {
                 CheckForBusinessSoftware(name);  // Check for business software before starting backup
@@ -851,12 +862,16 @@ namespace EasySaveV3._0.Managers
                     throw new InvalidOperationException($"Backup job '{name}' not found");
 
                 // Create and register backup resources
-                var resources = new BackupResources();
+                resources = new BackupResources();
                 if (!_activeBackups.TryAdd(name, resources))
                 {
                     resources.Dispose();
                     throw new InvalidOperationException($"Backup job '{name}' is already running");
                 }
+
+                // Combine the external cancellation token with the internal one
+                using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, resources.CancellationTokenSource.Token);
+                var token = linkedCts.Token;
 
                 // Update state to Active immediately
                 UpdateJobState(name, state =>
@@ -877,7 +892,6 @@ namespace EasySaveV3._0.Managers
                 var hasErrors = false;
                 var errorMessages = new List<string>();
                 var processedFilesOrder = new List<string>();
-                var jobLock = new object();
 
                 // Get files to process and separate by priority
                 var allFiles = await GetFilesToProcessAsync(backup);
@@ -922,16 +936,24 @@ namespace EasySaveV3._0.Managers
                     var priorityOptions = new ParallelOptions
                     {
                         MaxDegreeOfParallelism = _maxPriorityThreads,
-                        CancellationToken = cancellationToken
+                        CancellationToken = token // Use the combined token
                     };
 
                     var priorityResults = await Task.WhenAll(
                         priorityFiles.Select(async sourceFile =>
                         {
+                            // Check for cancellation or pause before processing each file
+                            while (GetJobState(name)?.Status == JobStatus.Paused)
+                            {
+                                await Task.Delay(100, token); // Wait while paused
+                                token.ThrowIfCancellationRequested(); // Check for stop during pause
+                            }
+                            token.ThrowIfCancellationRequested(); // Check for stop before processing
+
                             try
                             {
                                 await AcquireThreadSlotAsync(true);
-                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
+                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, token); // Pass the combined token
                                 
                                 lock (jobLock)
                                 {
@@ -980,16 +1002,24 @@ namespace EasySaveV3._0.Managers
                     var normalOptions = new ParallelOptions
                     {
                         MaxDegreeOfParallelism = _maxNormalThreads,
-                        CancellationToken = cancellationToken
+                        CancellationToken = token // Use the combined token
                     };
 
                     var normalResults = await Task.WhenAll(
                         normalFiles.Select(async sourceFile =>
                         {
+                            // Check for cancellation or pause before processing each file
+                            while (GetJobState(name)?.Status == JobStatus.Paused)
+                            {
+                                await Task.Delay(100, token); // Wait while paused
+                                token.ThrowIfCancellationRequested(); // Check for stop during pause
+                            }
+                            token.ThrowIfCancellationRequested(); // Check for stop before processing
+
                             try
                             {
                                 await AcquireThreadSlotAsync(false);
-                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
+                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, token); // Pass the combined token
                                 
                                 lock (jobLock)
                                 {
@@ -1032,11 +1062,13 @@ namespace EasySaveV3._0.Managers
                     );
                 }
 
-                // Update final state
+                // Update final state based on cancellation or completion
+                token.ThrowIfCancellationRequested(); // Throw if cancellation was requested during file processing
+
+                // If we reach here without cancellation, it's either completed or had errors
                 UpdateJobState(name, state =>
                 {
-                    state.Status = cancellationToken.IsCancellationRequested ? JobStatus.Completed : 
-                                 (hasErrors ? JobStatus.Error : JobStatus.Completed);
+                    state.Status = hasErrors ? JobStatus.Error : JobStatus.Completed;
                     state.ProgressPercentage = 100;
                     state.FilesRemaining = 0;
                     state.BytesRemaining = 0;
@@ -1073,12 +1105,8 @@ namespace EasySaveV3._0.Managers
             }
             catch (OperationCanceledException)
             {
-                UpdateJobState(name, state =>
-                {
-                    state.Status = JobStatus.Completed;
-                    state.CurrentSourceFile = string.Empty;
-                    state.CurrentTargetFile = string.Empty;
-                });
+                // This block is reached when token.ThrowIfCancellationRequested() is called
+                // The state should already be updated to Completed/Cancelled in ProcessFileAsync or the pause loop check
 
                 var cancelLogEntry = new LogEntry
                 {
@@ -1092,7 +1120,7 @@ namespace EasySaveV3._0.Managers
                     ActionType = "BACKUP_CANCELLED"
                 };
                 _logger.AddLogEntry(cancelLogEntry);
-                throw;
+                // Do not re-throw if cancellation was intended (pause/stop)
             }
             catch (Exception ex)
             {
@@ -1120,10 +1148,12 @@ namespace EasySaveV3._0.Managers
             }
             finally
             {
-                if (_activeBackups.TryRemove(name, out var backupResources))
+                // Ensure resources are disposed and removed from active backups
+                if (resources != null && _activeBackups.TryRemove(name, out var backupResources))
                 {
                     backupResources.Dispose();
                 }
+                // Re-enable buttons in UI if they were disabled during execution (this is handled in MainForm, but good to keep in mind)
             }
         }
 

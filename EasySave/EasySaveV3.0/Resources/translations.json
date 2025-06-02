@@ -145,7 +145,8 @@
     "logs.errorTitle": "Erreur",
     "logs.fileNotFound": "Le fichier de logs n'a pas été trouvé",
     "logs.startDate": "Du",
-    "logs.endDate": "Au"
+    "logs.endDate": "Au",
+    "message.backupStoppedSuccess": "Sauvegarde arrêtée avec succès."
   },
   "en": {
     "language.french": "French",
@@ -295,6 +296,7 @@
     "message.confirmRunAll": "Do you want to run all backups?",
     "message.allBackupsSuccess": "All backups have been completed successfully.",
     "message.noBackups": "No backups available.",
-    "message.confirmExitWithBackup": "Backups are running. Are you sure you want to exit?"
+    "message.confirmExitWithBackup": "Backups are running. Are you sure you want to exit?",
+    "message.backupStoppedSuccess": "Backup stopped successfully."
   }
 }

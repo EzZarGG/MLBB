@@ -212,14 +212,16 @@ namespace EasySaveV3._0
 
             item.BackColor = state.Status switch
             {
-                "Active" => Color.LightGreen,
-                "Paused" => Color.LightYellow,
-                "Error" => Color.LightPink,
-                "Completed" => Color.LightBlue,
+                JobStatus.Active => Color.LightGreen,
+                JobStatus.Paused => Color.LightYellow,
+                JobStatus.Error => Color.LightPink,
+                JobStatus.Completed => Color.LightBlue,
+                JobStatus.Stopped => Color.LightGray,
+                JobStatus.Cancelled => Color.LightGray,
                 _ => SystemColors.Window
             };
 
-            if (state.Status == "Active" || state.Status == "Completed")
+            if (state.Status == JobStatus.Active || state.Status == JobStatus.Completed)
             {
                 _progressBar.Value = Math.Min(Math.Max(state.ProgressPercentage, 0), 100);
                 _progressBar.Visible = true;
@@ -883,23 +885,65 @@ namespace EasySaveV3._0
                     // Update state to Active immediately for all selected backups
                     foreach (var backupName in selectedBackups)
                     {
-                        var item = _backupItems[backupName];
-                        item.SubItems[4].Text = "Active";
-                        item.BackColor = Color.LightGreen;
+                        if (_backupItems.TryGetValue(backupName, out var item))
+                        {
+                             item.SubItems[4].Text = JobStatus.Active; // Use constant
+                             item.BackColor = Color.LightGreen;
+                        }
                     }
 
                     await _backupController.StartSelectedBackups(selectedBackups);
 
-                    DebugLog("Selected backups completed successfully");
-                    _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
-                    _progressBar.Visible = false;
+                    DebugLog("Selected backups execution finished.");
+                    
+                    // Check the final status of the first selected backup to determine the message
+                    var firstBackupName = selectedBackups.FirstOrDefault();
+                    var finalState = firstBackupName != null ? _backupController.GetBackupState(firstBackupName) : null;
 
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.selectedBackupsSuccess"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
+                    if (finalState?.Status == JobStatus.Stopped || finalState?.Status == JobStatus.Cancelled)
+                    {
+                         _statusLabel.Text = _languageManager.GetTranslation("status.backupStopped");
+                         _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.backupStoppedSuccess"),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else if (finalState?.Status == JobStatus.Completed)
+                    {
+                        _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
+                        _progressBar.Visible = false;
+                        MessageBox.Show(
+                            _languageManager.GetTranslation("message.selectedBackupsSuccess"),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else if (finalState?.Status == JobStatus.Error)
+                    {
+                         _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
+                         _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.error").Replace("{0}", _languageManager.GetTranslation("message.backupError")),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                    }
+                    else // Handle other potential final states or no selection
+                    {
+                        _statusLabel.Text = _languageManager.GetTranslation("status.ready");
+                        _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.error").Replace("{0}", "Backup did not complete as expected."),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                    }
                 }
             }
             catch (Exception ex)
@@ -975,18 +1019,65 @@ namespace EasySaveV3._0
                     _statusLabel.Text = _languageManager.GetTranslation("status.backupInProgress");
                     _progressBar.Visible = true;
 
+                    // Update state to Active immediately for all backups
+                    foreach (ListViewItem item in _backupListView.Items)
+                    {
+                        item.SubItems[4].Text = JobStatus.Active; // Use constant
+                        item.BackColor = Color.LightGreen;
+                    }
+
                     await _backupController.StartAllBackups();
 
-                    DebugLog("All backups completed successfully");
-                    _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
-                    _progressBar.Visible = false;
+                    DebugLog("All backups execution finished.");
 
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.allBackupsSuccess"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Information
-                    );
+                     // Check the final status of the first backup to determine the message
+                    var firstBackupName = _backupListView.Items.Cast<ListViewItem>().FirstOrDefault()?.Text;
+                    var finalState = firstBackupName != null ? _backupController.GetBackupState(firstBackupName) : null;
+
+                     if (finalState?.Status == JobStatus.Stopped || finalState?.Status == JobStatus.Cancelled)
+                    {
+                         _statusLabel.Text = _languageManager.GetTranslation("status.backupStopped");
+                         _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.backupStoppedSuccess"),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else if (finalState?.Status == JobStatus.Completed)
+                    {
+                        _statusLabel.Text = _languageManager.GetTranslation("status.backupComplete");
+                        _progressBar.Visible = false;
+                        MessageBox.Show(
+                            _languageManager.GetTranslation("message.allBackupsSuccess"),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information
+                        );
+                    }
+                    else if (finalState?.Status == JobStatus.Error)
+                    {
+                         _statusLabel.Text = _languageManager.GetTranslation("status.backupError");
+                         _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.error").Replace("{0}", _languageManager.GetTranslation("message.backupError")),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                    }
+                     else // Handle other potential final states or no backups
+                    {
+                        _statusLabel.Text = _languageManager.GetTranslation("status.ready");
+                        _progressBar.Visible = false;
+                         MessageBox.Show(
+                            _languageManager.GetTranslation("message.error").Replace("{0}", "All backups did not complete as expected."),
+                            _languageManager.GetTranslation("menu.title"),
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Error
+                        );
+                    }
                 }
             }
             catch (Exception ex)
