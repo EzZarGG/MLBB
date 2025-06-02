@@ -29,6 +29,7 @@ namespace EasySaveV3._0.Controllers
         private readonly Dictionary<string, StateModel> _backupStates;
         private bool _isDisposed;
         public event EventHandler<string>? BusinessSoftwareDetected;
+        public event EventHandler<string>? BusinessSoftwareResumed;
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;
 
@@ -54,6 +55,7 @@ namespace EasySaveV3._0.Controllers
 
                 // Subscribe to BackupManager events
                 _backupManager.BusinessSoftwareDetected += (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                _backupManager.BusinessSoftwareResumed += (sender, jobName) => BusinessSoftwareResumed?.Invoke(this, jobName);
                 _backupManager.FileProgressChanged += (sender, e) => FileProgressChanged?.Invoke(this, e);
                 _backupManager.EncryptionProgressChanged += (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
             }
@@ -258,11 +260,6 @@ namespace EasySaveV3._0.Controllers
                         _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                     );
                 }
-                // 2) Check for running business software
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
-                }
 
                 if (_backupManager.IsBackupRunning(backupName))
                 {
@@ -401,10 +398,6 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
-                }
 
                 var backups = GetBackups();
                 var backupTasks = backups
@@ -433,10 +426,33 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
-                }
+
+                var backupTasks = backupNames
+                    .Where(backupName => !_backupManager.IsBackupRunning(backupName))
+                    .Select(backupName => _backupManager.ExecuteJob(backupName));
+
+                await Task.WhenAll(backupTasks);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("Selected", "Unknown", ex.Message, null, null);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Resumes selected backup jobs after business software is no longer running.
+        /// </summary>
+        /// <param name="backupNames">List of backup names to resume</param>
+        /// <exception cref="InvalidOperationException">Thrown when backup resume fails</exception>
+        public async Task ResumeSelectedBackups(List<string> backupNames)
+        {
+            try
+            {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
 
                 var backupTasks = backupNames
                     .Where(backupName => !_backupManager.IsBackupRunning(backupName))
@@ -488,6 +504,7 @@ namespace EasySaveV3._0.Controllers
                 if (disposing)
                 {
                     _backupManager.BusinessSoftwareDetected -= (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                    _backupManager.BusinessSoftwareResumed -= (sender, jobName) => BusinessSoftwareResumed?.Invoke(this, jobName);
                     _backupManager.FileProgressChanged -= (sender, e) => FileProgressChanged?.Invoke(this, e);
                     _backupManager.EncryptionProgressChanged -= (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
                     if (_backupManager is IDisposable disposable)

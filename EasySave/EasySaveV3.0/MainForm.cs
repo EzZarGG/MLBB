@@ -48,6 +48,10 @@ namespace EasySaveV3._0
                 _logger = Logger.GetInstance();
                 _socketServerManager = new SocketServerManager(_backupController);
 
+                // Subscribe to business software events
+                _backupController.BusinessSoftwareDetected += OnBusinessSoftwareDetected;
+                _backupController.BusinessSoftwareResumed += OnBusinessSoftwareResumed;
+
                 // Subscribe to events
                 _backupController.FileProgressChanged += OnFileProgressChanged;
                 _backupController.EncryptionProgressChanged += OnEncryptionProgressChanged;
@@ -166,32 +170,95 @@ namespace EasySaveV3._0
 
             try
             {
-                await Task.Run(() =>
-                {
-                    foreach (var item in _backupItems.Values)
-                    {
-                        if (item.Tag is Backup backup)
-                        {
-                            var state = _backupController.GetBackupState(backup.Name);
-                            if (state != null)
-                            {
-                                if (state.Status == "Completed" || state.Status == "Error")
-                                {
-                                    continue;
-                                }
+                var backups = _backupController.GetBackups();
+                if (backups == null || backups.Count == 0)
+                    return;
 
-                                if (InvokeRequired)
-                                {
-                                    Invoke(new Action(() => UpdateBackupItem(item, state)));
-                                }
-                                else
-                                {
-                                    UpdateBackupItem(item, state);
-                                }
+                foreach (var job in backups)
+                {
+                    StateModel? state = _backupController.GetBackupState(job.Name);
+                    if (state == null)
+                        continue;
+
+                    if (InvokeRequired)
+                    {
+                        Invoke(new Action(() =>
+                        {
+                            switch (state.Status)
+                            {
+                                case JobStatus.Active:
+                                    _progressBar.Visible = true;
+                                    _progressBar.Value = state.ProgressPercentage;
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.jobProgress", job.Name, state.ProgressPercentage);
+                                    break;
+
+                                case JobStatus.Paused:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupPaused", job.Name);
+                                    break;
+
+                                case JobStatus.Completed:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupComplete", job.Name);
+                                    break;
+
+                                case JobStatus.Error:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupError", job.Name);
+                                    break;
                             }
+                        }));
+                    }
+                    else
+                    {
+                        switch (state.Status)
+                        {
+                            case JobStatus.Active:
+                                _progressBar.Visible = true;
+                                _progressBar.Value = state.ProgressPercentage;
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.jobProgress", job.Name, state.ProgressPercentage);
+                                break;
+
+                            case JobStatus.Paused:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupPaused", job.Name);
+                                break;
+
+                            case JobStatus.Completed:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupComplete", job.Name);
+                                break;
+
+                            case JobStatus.Error:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupError", job.Name);
+                                break;
                         }
                     }
-                });
+                }
+
+                foreach (var item in _backupItems.Values)
+                {
+                    if (item.Tag is Backup backup)
+                    {
+                        StateModel? state = _backupController.GetBackupState(backup.Name);
+                        if (state == null)
+                            continue;
+
+                        if (state.Status == JobStatus.Completed || state.Status == JobStatus.Error)
+                            continue;
+
+                        UpdateBackupItem(item, state);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -873,18 +940,6 @@ namespace EasySaveV3._0
                     return;
                 }
 
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    DebugLog("Cannot start backup: Business software is running");
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.businessSoftwareRunning"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
-                    return;
-                }
-
                 var result = MessageBox.Show(
                     _languageManager.GetTranslation("message.confirmRunSelected").Replace("{0}", selectedItems.Count.ToString()),
                     _languageManager.GetTranslation("menu.title"),
@@ -1010,18 +1065,6 @@ namespace EasySaveV3._0
                         _languageManager.GetTranslation("menu.title"),
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information
-                    );
-                    return;
-                }
-
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    DebugLog("Cannot start backups: Business software is running");
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.businessSoftwareRunning"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
                     );
                     return;
                 }
@@ -1206,6 +1249,37 @@ namespace EasySaveV3._0
                     ProgressPercentage = e.ProgressPercentage 
                 });
             }
+        }
+
+        private void OnBusinessSoftwareDetected(object? sender, string jobName)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
+                return;
+            }
+
+            _progressBar.Visible = false;
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupPaused", jobName);
+
+            MessageBox.Show(
+                _languageManager.GetTranslation("message.backupPaused", jobName),
+                _languageManager.GetTranslation("error.title"),
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+        }
+
+        private void OnBusinessSoftwareResumed(object? sender, string jobName)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareResumed(sender, jobName)));
+                return;
+            }
+
+            _progressBar.Visible = true;
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupResumed", jobName);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

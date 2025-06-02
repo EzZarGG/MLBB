@@ -59,6 +59,7 @@ namespace EasySaveV3._0.Managers
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
         public event EventHandler<string>? BusinessSoftwareDetected;  // Fired when business software is detected during backup
+        public event EventHandler<string>? BusinessSoftwareResumed;  // Fired when business software is no longer running
 
         // Add thread pool configuration
         private static readonly SemaphoreSlim _priorityThreadPool;
@@ -660,6 +661,9 @@ namespace EasySaveV3._0.Managers
                 int bytesRead;
                 while ((bytesRead = await sourceStream.ReadAsync(buffer, 0, buffer.Length, token)) > 0)
                 {
+                    // Check for business software and pause if needed
+                    await CheckForBusinessSoftwareAndPauseIfNeeded(backupName, token);
+
                     // Check for cancellation or pause before writing each chunk
                     while (GetJobState(backupName)?.Status == JobStatus.Paused)
                     {
@@ -792,6 +796,9 @@ namespace EasySaveV3._0.Managers
             CancellationToken token)
         {
             var result = new FileProcessingResult();
+            
+            // Check for business software and pause if needed
+            await CheckForBusinessSoftwareAndPauseIfNeeded(name, token);
             
             // Check for cancellation or pause before processing each file
             while (GetJobState(name)?.Status == JobStatus.Paused)
@@ -1861,14 +1868,14 @@ namespace EasySaveV3._0.Managers
                           catch (Exception ex)
                           {
                                _logger.AddLogEntry(new LogEntry
-                               {
-                                   Timestamp = DateTime.Now,
-                                   BackupName = name,
-                                   SourcePath = tempFile,
-                                   Message = $"Failed to clean up temporary encrypted file in finally block {Path.GetFileName(tempFile)}: {ex.Message}",
-                                   LogType = "WARNING",
-                                   ActionType = "TEMP_FILE_CLEANUP_FAILED_FINALLY"
-                               });
+                              {
+                                  Timestamp = DateTime.Now,
+                                  BackupName = name,
+                                  SourcePath = tempFile,
+                                  Message = $"Failed to clean up temporary encrypted file in finally block {Path.GetFileName(tempFile)}: {ex.Message}",
+                                  LogType = "WARNING",
+                                  ActionType = "TEMP_FILE_CLEANUP_FAILED_FINALLY"
+                              });
                           }
                      }
                      // Optionally clean up the temp directory if empty
@@ -1950,6 +1957,101 @@ namespace EasySaveV3._0.Managers
             if (_settingsController.IsBusinessSoftwareRunning())
             {
                 BusinessSoftwareDetected?.Invoke(this, jobName);
+            }
+        }
+
+        /// <summary>
+        /// Helper class to manage thread slot acquisition and release
+        /// </summary>
+        private class ThreadSlot : IDisposable
+        {
+            private readonly SemaphoreSlim _semaphore;
+            private bool _acquired;
+
+            public ThreadSlot(SemaphoreSlim semaphore)
+            {
+                _semaphore = semaphore;
+                _acquired = false;
+            }
+
+            /// <summary>
+            /// Asynchronously waits for a slot in the semaphore.
+            /// If the token is cancelled, returns false and won't call Release later.
+            /// If the wait succeeds, marks _acquired=true so Dispose() will release.
+            /// </summary>
+            public async Task<bool> AcquireAsync(CancellationToken cancellationToken)
+            {
+                try
+                {
+                    await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    _acquired = true;
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // Wait was cancelled: won't release since we didn't actually acquire
+                    _acquired = false;
+                    return false;
+                }
+            }
+
+            /// <summary>
+            /// Releases the slot if and only if AcquireAsync had succeeded.
+            /// </summary>
+            public void Dispose()
+            {
+                if (_acquired)
+                {
+                    _semaphore.Release();
+                    _acquired = false;
+                }
+            }
+        }
+
+        private ThreadSlot GetThreadSlot(bool isPriority)
+        {
+            return isPriority
+                ? new ThreadSlot(_priorityThreadPool)
+                : new ThreadSlot(_normalThreadPool);
+        }
+
+        // Inside your existing ExecuteJob method, add this check before processing each file:
+        private async Task CheckForBusinessSoftwareAndPauseIfNeeded(string name, CancellationToken token)
+        {
+            bool alreadySignaledPause = false;
+            while (_settingsController.IsBusinessSoftwareRunning())
+            {
+                if (!alreadySignaledPause)
+                {
+                    BusinessSoftwareDetected?.Invoke(this, name);
+                    alreadySignaledPause = true;
+                }
+
+                UpdateJobState(name, state =>
+                {
+                    if (state.Status != JobStatus.Paused)
+                    {
+                        state.Status = JobStatus.Paused;
+                        _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                              "Backup job paused (business software detected)");
+                    }
+                });
+
+                // Wait while business software is running
+                await Task.Delay(500, token);
+                token.ThrowIfCancellationRequested();
+            }
+
+            // Only resume if we were previously paused
+            if (alreadySignaledPause)
+            {
+                UpdateJobState(name, state =>
+                {
+                    state.Status = JobStatus.Active;
+                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                          "Backup job resumed (business software stopped)");
+                });
+                BusinessSoftwareResumed?.Invoke(this, name);
             }
         }
     }
