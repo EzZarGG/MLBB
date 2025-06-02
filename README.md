@@ -50,6 +50,25 @@ The purpose of EasySave is to offer a reliable and straightforward backup soluti
 - **Improved Error Handling**: Detailed error reporting and logging
 - **Multi-threaded Operations**: Parallel backup execution support
 
+#### v3.0.0
+
+* All features from v2.0.0
+* Pause/Resume Support  
+  - The user can now pause or resume one or multiple backup tasks at any time (pause takes effect immediately after the current file transfer finishes; resume restarts where it left off)
+* Business-Software Detection  
+  - If a “business” application is launched, EasySave will immediately stop all ongoing transfers. All backups automatically resume as soon as that business application is closed.
+* Priority-File Management  
+  - No non-priority file will be backed up as long as there is at least one priority-extension file waiting. (Extensions are declared by the user in a pre-configured list.)
+* Large-File Transfer Restriction  
+  - To avoid saturating the network, EasySave will not transfer two files whose size is greater than a configurable threshold n KB at the same time. (n KB is adjustable in the configuration.)
+* Remote Console (via Sockets)  
+  - A remote, graphical monitoring console has been added. A user can now attach to a distant machine and both watch progress in real time and issue Play/Pause/Stop commands over the network.
+* CryptoSoft Mono-Instance Support  
+  - CryptoSoft is now strictly mono-instance (cannot run two copies on the same PC). EasySave has been updated to detect and handle any errors or collisions caused by that restriction.
+* Network-Load Monitoring (OPTIONAL)  
+  - If network usage exceeds a configurable threshold, EasySave will automatically reduce its parallel tasks to avoid saturating the link.
+
+
 ### Getting Started
 Refer to the User Guide for detailed instructions on how to use 
 EasySave v1.0.
@@ -106,6 +125,25 @@ L'objectif d'EasySave est d'offrir une solution de sauvegarde fiable et simple q
 - **Configuration Améliorée** : Configuration basée sur JSON avec paramètres de chiffrement
 - **Gestion des Erreurs Améliorée** : Rapports d'erreurs et journalisation détaillés
 - **Opérations Multi-threads** : Support de l'exécution parallèle des sauvegardes
+
+#### v3.0.0
+
+* Toutes les fonctionnalités de la v2.0.0
+* Mise en pause/Reprise  
+  - L’utilisateur peut désormais mettre en pause ou reprendre un ou plusieurs travaux de sauvegarde à tout moment (la pause s’effectue dès la fin du transfert en cours ; la reprise repart d’où elle s’était arrêtée)
+* Détection de Logiciel Métier  
+  - Si un logiciel métier est lancé, EasySave interrompt immédiatement tous les transferts en cours. Les sauvegardes redémarrent automatiquement dès que le logiciel métier est fermé.
+* Gestion des Fichiers Prioritaires  
+  - Aucune sauvegarde de fichier non prioritaire ne sera lancée tant qu’une extension prioritaire est en attente. (Les extensions sont déclarées par l’utilisateur dans une liste prédéfinie.)
+* Restriction de Sauvegardes de Gros Fichiers  
+  - Pour ne pas saturer la bande passante, EasySave n’autorise pas le transfert simultané de deux fichiers dont la taille est supérieure à une valeur n Ko paramétrable. (n Ko est configurable dans les paramètres.)
+* Console à Distance (via Sockets)  
+  - Une console graphique distante a été ajoutée. Un utilisateur peut maintenant se connecter à un poste éloigné pour suivre en temps réel la progression et envoyer des commandes Play/Pause/Stop par réseau.
+* Support Mono-Instance pour CryptoSoft  
+  - CryptoSoft est désormais strictement mono-instance (ne peut pas s’exécuter deux fois sur une même machine). EasySave gère les éventuels conflits ou erreurs liées à cette contrainte.
+* Surveillance de la Charge Réseau (OPTIONNEL)  
+  - Si la charge réseau dépasse un seuil paramétrable, EasySave réduit automatiquement le nombre de tâches parallèles pour éviter de saturer la connexion.
+
 
 ### Démarrage
 Consultez le Guide d'Utilisateur pour des instructions détaillées sur l'utilisation d'EasySaveV2.

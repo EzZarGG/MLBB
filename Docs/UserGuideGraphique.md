@@ -1,4 +1,4 @@
-# EasySave V2.0 User Guide
+# EasySave V2.0 & V3.0 User Guide
 
 ## English
 
@@ -152,6 +152,39 @@ Common issues and solutions:
    - Verify network connection
    - Adjust buffer size in settings
 
+   #### v3.0.0
+
+##### What's New (EN)
+
+- **Pause / Resume Support**  
+  • The user can now pause or resume one or multiple backup tasks at any time.  
+  • “Pause” takes effect immediately after the current file transfer finishes; “Resume” restarts that task where it left off.  
+
+- **Business-Application Detection**  
+  • If EasySave detects that a “business” (métier) application is running, it will immediately stop all ongoing backups.  
+  • All paused backups automatically resume as soon as that application is closed.  
+
+- **Priority-File Management**  
+  • No non-priority file will be backed up as long as at least one priority-extension file is waiting.  
+  • Extensions are declared by the user in a predefined list (see “Configuration → Priority Extensions”).  
+
+- **Large-File Transfer Restriction**  
+  • To avoid saturating the network, EasySave will not transfer simultaneously two files whose size is greater than a configurable threshold (n KB).  
+  • “n KB” is adjustable under “Configuration → Network / File Settings.”  
+
+- **Remote Console (via Sockets)**  
+  • A new graphical console allows a user to connect from a remote machine and monitor all backups in real time.  
+  • From that remote console, the user can issue Play / Pause / Stop commands over the network.  
+
+- **CryptoSoft Mono-Instance Support**  
+  • CryptoSoft must now run as a single instance (cannot execute two copies on the same PC).  
+  • EasySave detects any conflict (e.g., CryptoSoft already running) and displays an error before attempting encryption.  
+
+- **Network-Load Monitoring (OPTIONAL)**  
+  • If network usage exceeds a configurable threshold, EasySave will automatically reduce its parallel tasks.  
+  • This feature is off by default—enable under “Configuration → Performance → Network Load.”
+
+
 ---
 
 ## Français
@@ -304,4 +337,35 @@ Problèmes courants et solutions :
 3. **Problèmes de Performance** :
    - Vérifiez l'espace disque
    - Vérifiez la connexion réseau
-   - Ajustez la taille du tampon dans les paramètres 
+   - Ajustez la taille du tampon dans les paramètres
+
+
+   ##### Nouveautés (FR)
+
+- **Mise en pause / Reprise**  
+  • L’utilisateur peut désormais mettre en pause ou reprendre un ou plusieurs travaux de sauvegarde à tout moment.  
+  • La “Pause” s’effectue immédiatement après la fin du transfert de fichier en cours ; la “Reprise” repart d’où elle s’était arrêtée.  
+
+- **Détection de logiciel métier**  
+  • Si EasySave détecte qu’un logiciel métier est en cours d’exécution, il interrompt immédiatement tous les transferts en cours.  
+  • Toutes les sauvegardes en pause redémarrent automatiquement dès que ce logiciel métier est fermé.  
+
+- **Gestion des fichiers prioritaires**  
+  • Aucune sauvegarde d’un fichier non prioritaire ne peut commencer tant qu’au moins un fichier d’extension prioritaire est en attente.  
+  • Les extensions prioritaires sont déclarées par l’utilisateur dans une liste prédéfinie (voir « Configuration → Extensions prioritaires »).  
+
+- **Restriction de transfert de gros fichiers**  
+  • Pour ne pas saturer la bande passante, EasySave n’autorise pas le transfert simultané de deux fichiers dont la taille est supérieure à un seuil paramétrable (n Ko).  
+  • “n Ko” est configurable dans « Configuration → Paramètres Réseau / Fichiers ».  
+
+- **Console à distance (via Sockets)**  
+  • Une nouvelle console graphique permet à l’utilisateur de se connecter depuis un poste distant et de suivre toutes les sauvegardes en temps réel.  
+  • Depuis cette console, l’utilisateur peut envoyer des commandes Play / Pause / Stop par réseau.  
+
+- **Support Mono-Instance pour CryptoSoft**  
+  • CryptoSoft doit désormais s’exécuter en mono-instance (ne peut pas tourner deux fois sur la même machine).  
+  • EasySave détecte tout conflit (par exemple, CryptoSoft déjà ouvert) et affiche un message d’erreur avant de lancer le chiffrement.  
+
+- **Surveillance de la charge réseau (OPTIONNEL)**  
+  • Si l’utilisation réseau dépasse un seuil paramétrable, EasySave réduit automatiquement le nombre de tâches parallèles.  
+  • Cette option est désactivée par défaut : pour l’activer, aller dans « Configuration → Performance → Charge Réseau ».
