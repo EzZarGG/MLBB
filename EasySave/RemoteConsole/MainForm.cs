@@ -18,7 +18,7 @@ namespace RemoteConsole
         private const int BUFFER_SIZE = 8192;
         private const int MAX_RETRY_ATTEMPTS = 3;
         private const int RETRY_DELAY_MS = 1000;
-        private const int SERVER_CHECK_TIMEOUT_MS = 1000;  // Timeout pour la vérification du serveur
+        private const int SERVER_CHECK_TIMEOUT_MS = 1000;  // Timeout for server verification
         private readonly object connectionLock = new object();
         private bool isUpdating = false;
         private int consecutiveErrors = 0;
@@ -265,7 +265,7 @@ namespace RemoteConsole
                         }
                     }
 
-                    // Si on arrive ici, la connexion a réussi
+                    // If we reach here, the connection was successful
                     try
                     {
                         if (!client.Connected)

@@ -218,7 +218,7 @@ namespace EasySaveV3._0.Views
             {
                 Location = new Point(230, 18),
                 Minimum = 1,
-                Maximum = 1024 * 1024, // jusqu’à 1 Go en Ko
+                Maximum = 1024 * 1024, // up to 1 GB in KB
                 Width = 80,
                 DecimalPlaces = 0
             };
