@@ -1367,6 +1367,15 @@ namespace EasySaveV3._0.Managers
                     var sourceFileForCopy = filesForCopy[originalSourceFile]; // Get the path to copy from (original or temp encrypted)
                     var relativePath = Path.GetRelativePath(backup.SourcePath, originalSourceFile);
                     var targetFile = Path.Combine(backup.TargetPath, relativePath);
+                    var originalSourceInfo = new FileInfo(originalSourceFile);
+
+                    bool isLargeFile = originalSourceInfo.Length > _maxLargeFileSizeBytes;
+
+                    // Acquire semaphore for large files if applicable
+                    if (isLargeFile)
+                    {
+                        await _largeFileSemaphore.WaitAsync(fileToken);
+                    }
 
                     try
                     {
@@ -1379,7 +1388,6 @@ namespace EasySaveV3._0.Managers
                          {
                              var targetInfo = new FileInfo(targetFile);
                              // For differential, compare last write time of original source file
-                             var originalSourceInfo = new FileInfo(originalSourceFile);
                              shouldCopy = originalSourceInfo.LastWriteTime > targetInfo.LastWriteTime;
                          }
 
@@ -1497,6 +1505,13 @@ namespace EasySaveV3._0.Managers
                      finally
                      {
                         ReleaseThreadSlot(true); // Release priority thread slot
+
+                         // Release large file semaphore if acquired
+                         if (isLargeFile)
+                         {
+                             _largeFileSemaphore.Release();
+                         }
+
                          // Clean up temporary encrypted file if it exists and copy is complete or failed
                           if (filesForCopy.TryGetValue(originalSourceFile, out var sourcePathUsed) && sourcePathUsed != originalSourceFile && File.Exists(sourcePathUsed))
                           {
@@ -1545,6 +1560,15 @@ namespace EasySaveV3._0.Managers
                      var sourceFileForCopy = filesForCopy[originalSourceFile]; // Get the path to copy from (original or temporary encrypted)
                      var relativePath = Path.GetRelativePath(backup.SourcePath, originalSourceFile);
                      var targetFile = Path.Combine(backup.TargetPath, relativePath);
+                     var originalSourceInfo = new FileInfo(originalSourceFile);
+
+                     bool isLargeFile = originalSourceInfo.Length > _maxLargeFileSizeBytes;
+
+                     // Acquire semaphore for large files if applicable
+                     if (isLargeFile)
+                     {
+                         await _largeFileSemaphore.WaitAsync(fileToken);
+                     }
 
                      try
                      {
@@ -1557,7 +1581,6 @@ namespace EasySaveV3._0.Managers
                          {
                              var targetInfo = new FileInfo(targetFile);
                               // For differential, compare last write time of original source file
-                             var originalSourceInfo = new FileInfo(originalSourceFile);
                              shouldCopy = originalSourceInfo.LastWriteTime > targetInfo.LastWriteTime;
                          }
 
@@ -1674,6 +1697,13 @@ namespace EasySaveV3._0.Managers
                             finally
                             {
                          ReleaseThreadSlot(false); // Release normal thread slot
+
+                         // Release large file semaphore if acquired
+                         if (isLargeFile)
+                         {
+                             _largeFileSemaphore.Release();
+                         }
+
                          // Clean up temporary encrypted file if it exists and copy is complete or failed
                           if (filesForCopy.TryGetValue(originalSourceFile, out var sourcePathUsed) && sourcePathUsed != originalSourceFile && File.Exists(sourcePathUsed))
                           {
