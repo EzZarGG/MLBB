@@ -55,6 +55,7 @@ namespace EasySaveV3._0.Controllers
 
                 // Subscribe to BackupManager events
                 _backupManager.BusinessSoftwareDetected += (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                _backupManager.BusinessSoftwareResumed += (sender, jobName) => BusinessSoftwareResumed?.Invoke(this, jobName);
                 _backupManager.FileProgressChanged += (sender, e) => FileProgressChanged?.Invoke(this, e);
                 _backupManager.EncryptionProgressChanged += (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
                 _backupManager.BusinessSoftwareResumed += (_, jobName)=> BusinessSoftwareResumed?.Invoke(this, jobName);
@@ -260,11 +261,6 @@ namespace EasySaveV3._0.Controllers
                         _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                     );
                 }
-                // 2) Check for running business software
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
-                }
 
                 if (_backupManager.IsBackupRunning(backupName))
                 {
@@ -403,10 +399,6 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    throw new InvalidOperationException(_languageManager.GetTranslation("message.businessSoftwareRunning"));
-                }
 
                 var backups = GetBackups();
                 var backupTasks = backups
@@ -435,7 +427,33 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
-               
+                               
+                var backupTasks = backupNames
+                    .Where(backupName => !_backupManager.IsBackupRunning(backupName))
+                    .Select(backupName => _backupManager.ExecuteJob(backupName));
+
+                await Task.WhenAll(backupTasks);
+            }
+            catch (Exception ex)
+            {
+                _logController.LogBackupError("Selected", "Unknown", ex.Message, null, null);
+                throw;
+            }
+        }
+
+        /// <summary>
+        /// Resumes selected backup jobs after business software is no longer running.
+        /// </summary>
+        /// <param name="backupNames">List of backup names to resume</param>
+        /// <exception cref="InvalidOperationException">Thrown when backup resume fails</exception>
+        public async Task ResumeSelectedBackups(List<string> backupNames)
+        {
+            try
+            {
+                if (IsCryptoSoftRunning())
+                    throw new InvalidOperationException(
+                    _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
+                               );
 
                                     var backupTasks = backupNames
                     .Where(backupName => !_backupManager.IsBackupRunning(backupName))
@@ -487,6 +505,7 @@ namespace EasySaveV3._0.Controllers
                 if (disposing)
                 {
                     _backupManager.BusinessSoftwareDetected -= (sender, jobName) => BusinessSoftwareDetected?.Invoke(this, jobName);
+                    _backupManager.BusinessSoftwareResumed -= (sender, jobName) => BusinessSoftwareResumed?.Invoke(this, jobName);
                     _backupManager.FileProgressChanged -= (sender, e) => FileProgressChanged?.Invoke(this, e);
                     _backupManager.EncryptionProgressChanged -= (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
                     if (_backupManager is IDisposable disposable)
@@ -519,19 +538,18 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Active")
+                if (state.Status != JobStatus.Active)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotActive"));
                 }
 
-                state.Status = "Paused";
-                state.LastActionTime = DateTime.Now;
+                _backupManager.UpdateJobState(name, s => s.Status = JobStatus.Paused);
                 _logger.LogAdminAction(name, "BACKUP_PAUSED", "Backup job paused");
             }
             catch (Exception ex)
@@ -554,19 +572,18 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Paused")
+                if (state.Status != JobStatus.Paused)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotPaused"));
                 }
 
-                state.Status = "Active";
-                state.LastActionTime = DateTime.Now;
+                _backupManager.UpdateJobState(name, s => s.Status = JobStatus.Active);
                 _logger.LogAdminAction(name, "BACKUP_RESUMED", "Backup job resumed");
             }
             catch (Exception ex)
@@ -589,24 +606,34 @@ namespace EasySaveV3._0.Controllers
 
             try
             {
-                var state = GetBackupState(name);
+                var state = _backupManager.GetJobState(name);
                 if (state == null)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("message.backupNotFound"));
                 }
 
-                if (state.Status != "Active" && state.Status != "Paused")
+                if (state.Status != JobStatus.Active && state.Status != JobStatus.Paused)
                 {
                     throw new InvalidOperationException(_languageManager.GetTranslation("error.backupNotRunning"));
                 }
 
-                state.Status = "Stopped";
-                state.LastActionTime = DateTime.Now;
-                state.ProgressPercentage = 0;
-                state.FilesRemaining = 0;
-                state.BytesRemaining = 0;
-                state.CurrentSourceFile = string.Empty;
-                state.CurrentTargetFile = string.Empty;
+                // Signal cancellation to stop the backup task
+                if (BackupManager._activeBackups.TryGetValue(name, out var resources))
+                {
+                    resources.CancellationTokenSource.Cancel();
+                }
+
+                // Update state immediately to reflect stopping, even if cancellation takes a moment
+                _backupManager.UpdateJobState(name, s =>
+                {
+                    s.Status = JobStatus.Stopped; // Or a specific 'Stopped' status if available
+                    s.ProgressPercentage = 0;
+                    s.FilesRemaining = 0;
+                    s.BytesRemaining = 0;
+                    s.CurrentSourceFile = string.Empty;
+                    s.CurrentTargetFile = string.Empty;
+                });
+
                 _logger.LogAdminAction(name, "BACKUP_STOPPED", "Backup job stopped");
             }
             catch (Exception ex)

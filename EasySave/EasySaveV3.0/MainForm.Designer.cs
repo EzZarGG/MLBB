@@ -10,6 +10,10 @@ namespace EasySaveV3._0
         private System.Windows.Forms.ToolStripStatusLabel _statusLabel;
         private System.Windows.Forms.ProgressBar _progressBar;
         private System.Windows.Forms.Timer _updateTimer;
+        private System.Windows.Forms.Button _pauseButton;
+        private System.Windows.Forms.Button _resumeButton;
+        private System.Windows.Forms.Button _stopButton;
+        private System.Windows.Forms.Panel _controlPanel;
 
         /// <summary>
         ///  Required designer variable.
@@ -45,7 +49,12 @@ namespace EasySaveV3._0
             this._statusLabel = new System.Windows.Forms.ToolStripStatusLabel();
             this._progressBar = new System.Windows.Forms.ProgressBar();
             this._updateTimer = new System.Windows.Forms.Timer(this.components);
+            this._controlPanel = new System.Windows.Forms.Panel();
+            this._pauseButton = new System.Windows.Forms.Button();
+            this._resumeButton = new System.Windows.Forms.Button();
+            this._stopButton = new System.Windows.Forms.Button();
             this._statusStrip.SuspendLayout();
+            this._controlPanel.SuspendLayout();
             this.SuspendLayout();
             // 
             // _menuStrip
@@ -72,7 +81,7 @@ namespace EasySaveV3._0
             this._backupListView.Location = new System.Drawing.Point(0, 24);
             this._backupListView.MultiSelect = false;
             this._backupListView.Name = "_backupListView";
-            this._backupListView.Size = new System.Drawing.Size(1280, 756);
+            this._backupListView.Size = new System.Drawing.Size(1280, 706);
             this._backupListView.TabIndex = 2;
             this._backupListView.UseCompatibleStateImageBehavior = false;
             this._backupListView.View = System.Windows.Forms.View.Details;
@@ -106,7 +115,48 @@ namespace EasySaveV3._0
             // _updateTimer
             // 
             this._updateTimer.Interval = 1000;
-            this._updateTimer.Tick += new System.EventHandler(async (s, e) => await UpdateBackupStatesAsync());
+            this._updateTimer.Tick += new System.EventHandler(this.UpdateTimer_Tick);
+            // 
+            // _controlPanel
+            // 
+            this._controlPanel.Controls.Add(this._pauseButton);
+            this._controlPanel.Controls.Add(this._resumeButton);
+            this._controlPanel.Controls.Add(this._stopButton);
+            this._controlPanel.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this._controlPanel.Location = new System.Drawing.Point(0, 730);
+            this._controlPanel.Name = "_controlPanel";
+            this._controlPanel.Size = new System.Drawing.Size(1280, 30);
+            this._controlPanel.TabIndex = 5;
+            // 
+            // _pauseButton
+            // 
+            this._pauseButton.Location = new System.Drawing.Point(10, 5);
+            this._pauseButton.Name = "_pauseButton";
+            this._pauseButton.Size = new System.Drawing.Size(100, 23);
+            this._pauseButton.TabIndex = 0;
+            this._pauseButton.Text = "Pause";
+            this._pauseButton.UseVisualStyleBackColor = true;
+            this._pauseButton.Click += new System.EventHandler(this.PauseButton_Click);
+            // 
+            // _resumeButton
+            // 
+            this._resumeButton.Location = new System.Drawing.Point(120, 5);
+            this._resumeButton.Name = "_resumeButton";
+            this._resumeButton.Size = new System.Drawing.Size(100, 23);
+            this._resumeButton.TabIndex = 1;
+            this._resumeButton.Text = "Resume";
+            this._resumeButton.UseVisualStyleBackColor = true;
+            this._resumeButton.Click += new System.EventHandler(this.ResumeButton_Click);
+            // 
+            // _stopButton
+            // 
+            this._stopButton.Location = new System.Drawing.Point(230, 5);
+            this._stopButton.Name = "_stopButton";
+            this._stopButton.Size = new System.Drawing.Size(100, 23);
+            this._stopButton.TabIndex = 2;
+            this._stopButton.Text = "Stop";
+            this._stopButton.UseVisualStyleBackColor = true;
+            this._stopButton.Click += new System.EventHandler(this.StopButton_Click);
             // 
             // MainForm
             // 
@@ -115,6 +165,7 @@ namespace EasySaveV3._0
             this.ClientSize = new System.Drawing.Size(1280, 800);
             this.MinimumSize = new System.Drawing.Size(1024, 600);
             this.Controls.Add(this._backupListView);
+            this.Controls.Add(this._controlPanel);
             this.Controls.Add(this._progressBar);
             this.Controls.Add(this._statusStrip);
             this.Controls.Add(this._menuStrip);
@@ -126,6 +177,7 @@ namespace EasySaveV3._0
             this.WindowState = System.Windows.Forms.FormWindowState.Maximized;
             this._statusStrip.ResumeLayout(false);
             this._statusStrip.PerformLayout();
+            this._controlPanel.ResumeLayout(false);
             this.ResumeLayout(false);
             this.PerformLayout();
         }

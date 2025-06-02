@@ -75,9 +75,9 @@
     "message.businessSoftwareRunning": "Un logiciel métier est en cours d'exécution. La sauvegarde a été annulée.",
     "message.noBackupsSelected": "Veuillez sélectionner au moins une sauvegarde à exécuter.",
     "message.confirmRunSelected": "Voulez-vous exécuter {0} sauvegarde(s) sélectionnée(s) ?",
-    "message.selectedBackupsSuccess": "Les sauvegardes sélectionnées ont été lancées avec succès.",
+    "message.selectedBackupsSuccess": "Les sauvegardes sélectionnées ont été terminées avec succès.",
     "message.confirmRunAll": "Voulez-vous exécuter toutes les sauvegardes ?",
-    "message.allBackupsSuccess": "Toutes les sauvegardes ont été lancées avec succès.",
+    "message.allBackupsSuccess": "Toutes les sauvegardes ont été terminées avec succès.",
     "message.noBackups": "Aucune sauvegarde n'est disponible.",
     "message.confirmExitWithBackup": "Des sauvegardes sont en cours. Êtes-vous sûr de vouloir quitter ?",
     "message.backupPaused": "Job « {0} » en PAUSE (fermez le logiciel métier)…",
@@ -87,6 +87,8 @@
     "status.backupComplete": "Sauvegarde terminée",
     "status.backupError": "Erreur de sauvegarde",
     "status.settingsSaved": "Paramètres enregistrés avec succès",
+    "status.backupPaused": "Sauvegarde en pause",
+    "status.backupStopped": "Sauvegarde arrêtée",
     "settings.title": "Paramètres",
     "settings.businessSoftware": "Logiciels métier",
     "settings.encryptionExtensions": "Extensions à chiffrer",
@@ -145,7 +147,8 @@
     "logs.errorTitle": "Erreur",
     "logs.fileNotFound": "Le fichier de logs n'a pas été trouvé",
     "logs.startDate": "Du",
-    "logs.endDate": "Au"
+    "logs.endDate": "Au",
+    "message.backupStoppedSuccess": "Sauvegarde arrêtée avec succès."
   },
   "en": {
     "language.french": "French",
@@ -212,6 +215,8 @@
     "status.backupComplete": "Backup completed",
     "status.backupError": "Backup error",
     "status.settingsSaved": "Settings saved successfully",
+    "status.backupPaused": "Backup paused",
+    "status.backupStopped": "Backup stopped",
     "settings.title": "Settings",
     "settings.businessSoftware": "Business Software",
     "settings.encryptionExtensions": "Extensions to Encrypt",
@@ -291,10 +296,11 @@
     "menu.backup.runAll": "Run All Backups",
     "message.noBackupsSelected": "Please select at least one backup to run.",
     "message.confirmRunSelected": "Do you want to run {0} selected backup(s)?",
-    "message.selectedBackupsSuccess": "Selected backups have been successfully started.",
+    "message.selectedBackupsSuccess": "Selected backups have been completed successfully.",
     "message.confirmRunAll": "Do you want to run all backups?",
-    "message.allBackupsSuccess": "All backups have been successfully started.",
+    "message.allBackupsSuccess": "All backups have been completed successfully.",
     "message.noBackups": "No backups available.",
-    "message.confirmExitWithBackup": "Backups are running. Are you sure you want to exit?"
+    "message.confirmExitWithBackup": "Backups are running. Are you sure you want to exit?",
+    "message.backupStoppedSuccess": "Backup stopped successfully."
   }
 }
