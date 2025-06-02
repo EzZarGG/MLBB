@@ -627,23 +627,18 @@ namespace EasySaveV3._0
         }
         private void OnBusinessSoftwareDetected(object? sender, string jobName)
         {
-           
             if (InvokeRequired)
             {
                 Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
                 return;
             }
 
-            
             _progressBar.Visible = false;
-
-            
             _statusLabel.Text = _languageManager.GetTranslation("message.backupPaused", jobName);
 
-      
             MessageBox.Show(
                 _languageManager.GetTranslation("message.backupPaused", jobName),
-                _languageManager.GetTranslation("error.title"),  // ou "menu.title" si vous préférez
+                _languageManager.GetTranslation("error.title"),
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning
             );
@@ -657,10 +652,7 @@ namespace EasySaveV3._0
                 return;
             }
 
-         
             _progressBar.Visible = true;
-
-            
             _statusLabel.Text = _languageManager.GetTranslation("message.backupResumed", jobName);
         }
 
@@ -1302,37 +1294,6 @@ namespace EasySaveV3._0
                     ProgressPercentage = e.ProgressPercentage 
                 });
             }
-        }
-
-        private void OnBusinessSoftwareDetected(object? sender, string jobName)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
-                return;
-            }
-
-            _progressBar.Visible = false;
-            _statusLabel.Text = _languageManager.GetTranslation("message.backupPaused", jobName);
-
-            MessageBox.Show(
-                _languageManager.GetTranslation("message.backupPaused", jobName),
-                _languageManager.GetTranslation("error.title"),
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Warning
-            );
-        }
-
-        private void OnBusinessSoftwareResumed(object? sender, string jobName)
-        {
-            if (InvokeRequired)
-            {
-                Invoke(new Action(() => OnBusinessSoftwareResumed(sender, jobName)));
-                return;
-            }
-
-            _progressBar.Visible = true;
-            _statusLabel.Text = _languageManager.GetTranslation("message.backupResumed", jobName);
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
