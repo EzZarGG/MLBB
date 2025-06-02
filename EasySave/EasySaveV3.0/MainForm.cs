@@ -226,9 +226,29 @@ namespace EasySaveV3._0
                 _progressBar.Value = Math.Min(Math.Max(state.ProgressPercentage, 0), 100);
                 _progressBar.Visible = true;
             }
+            else if (state.Status == JobStatus.Paused)
+            {
+                _progressBar.Visible = true; // Keep progress bar visible when paused
+            }
             else
             {
                 _progressBar.Visible = false;
+            }
+
+            // Update status label based on job status
+            if (_statusLabel != null)
+            {
+                _statusLabel.Text = state.Status switch
+                {
+                    JobStatus.Ready => _languageManager.GetTranslation("status.ready"),
+                    JobStatus.Active => _languageManager.GetTranslation("status.backupInProgress"),
+                    JobStatus.Completed => _languageManager.GetTranslation("status.backupComplete"),
+                    JobStatus.Error => _languageManager.GetTranslation("status.backupError"),
+                    JobStatus.Paused => _languageManager.GetTranslation("status.backupPaused"),
+                    JobStatus.Stopped => _languageManager.GetTranslation("status.backupStopped"),
+                    JobStatus.Cancelled => _languageManager.GetTranslation("status.backupStopped"), // Use stopped translation for cancelled
+                    _ => _languageManager.GetTranslation("status.ready")
+                };
             }
         }
 
@@ -1271,7 +1291,13 @@ namespace EasySaveV3._0
                 if (_backupListView.SelectedItems.Count > 0)
                 {
                     var selectedItem = _backupListView.SelectedItems[0];
-                    _backupController.PauseBackup(selectedItem.Text);
+                    var backupName = selectedItem.Text;
+
+                    // Update UI state immediately
+                    selectedItem.SubItems[4].Text = JobStatus.Paused; // Use constant
+                    selectedItem.BackColor = Color.LightYellow; // Use color for paused
+                    
+                    _backupController.PauseBackup(backupName);
                     UpdateStatus(_languageManager.GetTranslation("status.backupPaused"));
                 }
             }
