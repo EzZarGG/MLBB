@@ -1,6 +1,6 @@
 {
   "fr": {
-  "language.french": "Français",
+    "language.french": "Français",
     "language.english": "English",
     "language.invalidChoice": "Entrée invalide. Veuillez entrer 1 ou 2.",
     "language.prompt": "> ",
@@ -80,6 +80,8 @@
     "message.allBackupsSuccess": "Toutes les sauvegardes ont été lancées avec succès.",
     "message.noBackups": "Aucune sauvegarde n'est disponible.",
     "message.confirmExitWithBackup": "Des sauvegardes sont en cours. Êtes-vous sûr de vouloir quitter ?",
+    "message.backupPaused": "Job « {0} » en PAUSE (fermez le logiciel métier)…",
+    "message.backupResumed": "Job « {0} » repris…",
     "status.ready": "Prêt",
     "status.backupInProgress": "Sauvegarde en cours",
     "status.backupComplete": "Sauvegarde terminée",
@@ -203,6 +205,8 @@
     "message.backupSuccess": "Backup completed successfully",
     "message.backupError": "Error during backup",
     "message.businessSoftwareRunning": "A business software is currently running. Backup was canceled.",
+    "message.backupPaused": "Job \"{0}\" is PAUSED (please close business software)…",
+    "message.backupResumed": "Job \"{0}\" resumed…",
     "status.ready": "Ready",
     "status.backupInProgress": "Backup in progress",
     "status.backupComplete": "Backup completed",

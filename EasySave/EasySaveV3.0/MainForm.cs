@@ -49,12 +49,12 @@ namespace EasySaveV3._0
                 _socketServerManager = new SocketServerManager(_backupController);
              
 
-                // ❶ Abonnement à l’événement « pause à cause d’un logiciel métier »
+               
                 _backupController.BusinessSoftwareDetected += OnBusinessSoftwareDetected;
                 _backupController.BusinessSoftwareResumed += OnBusinessSoftwareResumed;
 
 
-                // ❷ Démarrer le timer qui rafraîchit l’UI toutes les secondes (vous l’avez déjà en designer)
+               
                 
 
                 // Subscribe to events
@@ -191,29 +191,34 @@ namespace EasySaveV3._0
                                 case JobStatus.Active:
                                     _progressBar.Visible = true;
                                     _progressBar.Value = state.ProgressPercentage;
-                                    _statusLabel.Text = $"Job « {job.Name} » : {state.ProgressPercentage}%";
+                                    // Exemple : on recycle le même libellé “Progress” suivi d’un chiffre
+                                    // Vous pouvez définir une clé “message.jobProgress” = "Job \"{0}\" : {1}%"
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.jobProgress", job.Name, state.ProgressPercentage);
                                     break;
 
                                 case JobStatus.Paused:
                                     _progressBar.Visible = false;
-                                    _statusLabel.Text = $"Job « {job.Name} » en PAUSE (fermez le logiciel métier)…";
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupPaused", job.Name);
                                     break;
 
                                 case JobStatus.Completed:
                                     _progressBar.Visible = false;
-                                    _statusLabel.Text = $"Job « {job.Name} » terminé.";
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupComplete", job.Name);
+                                    // ("message.backupComplete" doit être ajouté au JSON si nécessaire)
                                     break;
 
                                 case JobStatus.Error:
                                     _progressBar.Visible = false;
-                                    _statusLabel.Text = $"Job « {job.Name} » en ERREUR.";
-                                    break;
-
-                                default:
-                                    _progressBar.Visible = false;
-                                    _statusLabel.Text = $"Job « {job.Name} » : statut inconnu.";
+                                    _statusLabel.Text = _languageManager.GetTranslation(
+                                        "message.backupError", job.Name);
+                                    // ("message.backupError" doit être ajouté au JSON si besoin)
                                     break;
                             }
+                            
+                            
                         }));
                     }
                     else
@@ -223,29 +228,32 @@ namespace EasySaveV3._0
                             case JobStatus.Active:
                                 _progressBar.Visible = true;
                                 _progressBar.Value = state.ProgressPercentage;
-                                _statusLabel.Text = $"Job « {job.Name} » : {state.ProgressPercentage}%";
+                  
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.jobProgress", job.Name, state.ProgressPercentage);
                                 break;
 
                             case JobStatus.Paused:
                                 _progressBar.Visible = false;
-                                _statusLabel.Text = $"Job « {job.Name} » en PAUSE (fermez le logiciel métier)…";
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupPaused", job.Name);
                                 break;
 
                             case JobStatus.Completed:
                                 _progressBar.Visible = false;
-                                _statusLabel.Text = $"Job « {job.Name} » terminé.";
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupComplete", job.Name);
+                               
                                 break;
 
                             case JobStatus.Error:
                                 _progressBar.Visible = false;
-                                _statusLabel.Text = $"Job « {job.Name} » en ERREUR.";
-                                break;
-
-                            default:
-                                _progressBar.Visible = false;
-                                _statusLabel.Text = $"Job « {job.Name} » : statut inconnu.";
+                                _statusLabel.Text = _languageManager.GetTranslation(
+                                    "message.backupError", job.Name);
+                                
                                 break;
                         }
+
                     }
                 }
 
@@ -599,30 +607,26 @@ namespace EasySaveV3._0
         }
         private void OnBusinessSoftwareDetected(object? sender, string jobName)
         {
-            // Cette méthode est appelée dès que BackupManager détecte qu’un logiciel métier tourne.
-            // On peut afficher une notification, une MessageBox, ou mettre à jour un label / icône.
-
-            // Exemple : on affiche un pop-up d’info (à appeler sur le thread UI) :
+           
             if (InvokeRequired)
             {
                 Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
                 return;
             }
-            _progressBar.Visible = false;
-            // → Afficher un message dans la StatusStrip
-            _statusLabel.Text = $"Job « {jobName} » en PAUSE : logiciel métier détecté. Fermez-le pour continuer.";
 
-            // Méthode 1 : MessageBox (invasif)
+            
+            _progressBar.Visible = false;
+
+            
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupPaused", jobName);
+
+      
             MessageBox.Show(
-                $"La sauvegarde « {jobName} » est mise en pause : un logiciel métier est en cours d’exécution.\n" +
-                "Veuillez fermer ce(s) logiciel(s) pour reprendre la sauvegarde.",
-                "Sauvegarde en pause",
+                _languageManager.GetTranslation("message.backupPaused", jobName),
+                _languageManager.GetTranslation("error.title"),  // ou "menu.title" si vous préférez
                 MessageBoxButtons.OK,
-                MessageBoxIcon.Warning);
-
-            // Méthode 2 : Mettre à jour un label dans la StatusStrip
-            _statusLabel.Text = $"Job « {jobName} » en PAUSE (logiciel métier détecté)…";
-            _progressBar.Visible = false;
+                MessageBoxIcon.Warning
+            );
         }
 
         private void OnBusinessSoftwareResumed(object? sender, string jobName)
@@ -633,12 +637,13 @@ namespace EasySaveV3._0
                 return;
             }
 
-            // Réaffiche la ProgressBar
+         
             _progressBar.Visible = true;
 
-            // Met à jour le StatusStrip pour indiquer la reprise
-            _statusLabel.Text = $"Job « {jobName} » repris…";
+            
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupResumed", jobName);
         }
+
 
         private void InitializeListView()
         {
