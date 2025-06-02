@@ -1,4 +1,4 @@
-using EasySaveV3._0.Controllers;
+﻿using EasySaveV3._0.Controllers;
 using EasySaveV3._0.Models;
 using EasySaveV3._0.Views;
 using EasySaveV3._0.Managers;
@@ -47,6 +47,15 @@ namespace EasySaveV3._0
                 _backupController = new BackupController();
                 _logger = Logger.GetInstance();
                 _socketServerManager = new SocketServerManager(_backupController);
+             
+
+                // ❶ Abonnement à l’événement « pause à cause d’un logiciel métier »
+                _backupController.BusinessSoftwareDetected += OnBusinessSoftwareDetected;
+                _backupController.BusinessSoftwareResumed += OnBusinessSoftwareResumed;
+
+
+                // ❷ Démarrer le timer qui rafraîchit l’UI toutes les secondes (vous l’avez déjà en designer)
+                
 
                 // Subscribe to events
                 _backupController.FileProgressChanged += OnFileProgressChanged;
@@ -58,7 +67,7 @@ namespace EasySaveV3._0
                 InitializeComponent();
                 InitializeUI();
                 InitializeTimer();
-
+                _updateTimer.Start();
                 // Start the socket server
                 _ = StartSocketServer();
 
@@ -153,37 +162,110 @@ namespace EasySaveV3._0
 
         private async Task UpdateBackupStatesAsync()
         {
-            if (_isUpdating) return;
-            _isUpdating = true;
+            
+            if (_isUpdating)
+                return;
 
+            _isUpdating = true;
             try
             {
-                await Task.Run(() =>
-                {
-                    foreach (var item in _backupItems.Values)
-                    {
-                        if (item.Tag is Backup backup)
-                        {
-                            var state = _backupController.GetBackupState(backup.Name);
-                            if (state != null)
-                            {
-                                if (state.Status == "Completed" || state.Status == "Error")
-                                {
-                                    continue;
-                                }
+                
+                var backups = _backupController.GetBackups();
+                if (backups == null || backups.Count == 0)
+                    return;
 
-                                if (InvokeRequired)
-                                {
-                                    Invoke(new Action(() => UpdateBackupItem(item, state)));
-                                }
-                                else
-                                {
-                                    UpdateBackupItem(item, state);
-                                }
+                foreach (var job in backups)
+                {
+                   
+                    StateModel? state = _backupController.GetBackupState(job.Name);
+                    if (state == null)
+                        continue;
+
+                   
+                    if (InvokeRequired)
+                    {
+                        Invoke(new Action(() =>
+                        {
+                            switch (state.Status)
+                            {
+                                case JobStatus.Active:
+                                    _progressBar.Visible = true;
+                                    _progressBar.Value = state.ProgressPercentage;
+                                    _statusLabel.Text = $"Job « {job.Name} » : {state.ProgressPercentage}%";
+                                    break;
+
+                                case JobStatus.Paused:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = $"Job « {job.Name} » en PAUSE (fermez le logiciel métier)…";
+                                    break;
+
+                                case JobStatus.Completed:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = $"Job « {job.Name} » terminé.";
+                                    break;
+
+                                case JobStatus.Error:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = $"Job « {job.Name} » en ERREUR.";
+                                    break;
+
+                                default:
+                                    _progressBar.Visible = false;
+                                    _statusLabel.Text = $"Job « {job.Name} » : statut inconnu.";
+                                    break;
                             }
+                        }));
+                    }
+                    else
+                    {
+                        switch (state.Status)
+                        {
+                            case JobStatus.Active:
+                                _progressBar.Visible = true;
+                                _progressBar.Value = state.ProgressPercentage;
+                                _statusLabel.Text = $"Job « {job.Name} » : {state.ProgressPercentage}%";
+                                break;
+
+                            case JobStatus.Paused:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = $"Job « {job.Name} » en PAUSE (fermez le logiciel métier)…";
+                                break;
+
+                            case JobStatus.Completed:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = $"Job « {job.Name} » terminé.";
+                                break;
+
+                            case JobStatus.Error:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = $"Job « {job.Name} » en ERREUR.";
+                                break;
+
+                            default:
+                                _progressBar.Visible = false;
+                                _statusLabel.Text = $"Job « {job.Name} » : statut inconnu.";
+                                break;
                         }
                     }
-                });
+                }
+
+           
+                foreach (var item in _backupItems.Values)
+                {
+                    if (item.Tag is Backup backup)
+                    {
+                        StateModel? state = _backupController.GetBackupState(backup.Name);
+                        if (state == null)
+                            continue;
+
+                       
+                        if (state.Status == JobStatus.Completed || state.Status == JobStatus.Error)
+                            continue;
+
+                       
+                        UpdateBackupItem(item, state);
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -194,6 +276,7 @@ namespace EasySaveV3._0
                 _isUpdating = false;
             }
         }
+
 
         private void UpdateBackupItem(ListViewItem item, StateModel state)
         {
@@ -514,6 +597,48 @@ namespace EasySaveV3._0
                 throw;
             }
         }
+        private void OnBusinessSoftwareDetected(object? sender, string jobName)
+        {
+            // Cette méthode est appelée dès que BackupManager détecte qu’un logiciel métier tourne.
+            // On peut afficher une notification, une MessageBox, ou mettre à jour un label / icône.
+
+            // Exemple : on affiche un pop-up d’info (à appeler sur le thread UI) :
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
+                return;
+            }
+            _progressBar.Visible = false;
+            // → Afficher un message dans la StatusStrip
+            _statusLabel.Text = $"Job « {jobName} » en PAUSE : logiciel métier détecté. Fermez-le pour continuer.";
+
+            // Méthode 1 : MessageBox (invasif)
+            MessageBox.Show(
+                $"La sauvegarde « {jobName} » est mise en pause : un logiciel métier est en cours d’exécution.\n" +
+                "Veuillez fermer ce(s) logiciel(s) pour reprendre la sauvegarde.",
+                "Sauvegarde en pause",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            // Méthode 2 : Mettre à jour un label dans la StatusStrip
+            _statusLabel.Text = $"Job « {jobName} » en PAUSE (logiciel métier détecté)…";
+            _progressBar.Visible = false;
+        }
+
+        private void OnBusinessSoftwareResumed(object? sender, string jobName)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareResumed(sender, jobName)));
+                return;
+            }
+
+            // Réaffiche la ProgressBar
+            _progressBar.Visible = true;
+
+            // Met à jour le StatusStrip pour indiquer la reprise
+            _statusLabel.Text = $"Job « {jobName} » repris…";
+        }
 
         private void InitializeListView()
         {
@@ -825,17 +950,7 @@ namespace EasySaveV3._0
                     return;
                 }
 
-                if (_settingsController.IsBusinessSoftwareRunning())
-                {
-                    DebugLog("Cannot start backup: Business software is running");
-                    MessageBox.Show(
-                        _languageManager.GetTranslation("message.businessSoftwareRunning"),
-                        _languageManager.GetTranslation("menu.title"),
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Warning
-                    );
-                    return;
-                }
+               
 
                 var result = MessageBox.Show(
                     _languageManager.GetTranslation("message.confirmRunSelected").Replace("{0}", selectedItems.Count.ToString()),

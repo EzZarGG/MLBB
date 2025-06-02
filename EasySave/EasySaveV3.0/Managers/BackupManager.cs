@@ -14,6 +14,7 @@ namespace EasySaveV3._0.Managers
     {
         public const string NotStarted = "NotStarted";
         public const string Active = "Active";
+        public const string Paused = "Paused";
         public const string Completed = "Completed";
         public const string Error = "Error";
     }
@@ -55,6 +56,7 @@ namespace EasySaveV3._0.Managers
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
         public event EventHandler<string>? BusinessSoftwareDetected;  // Fired when business software is detected during backup
+        public event EventHandler<string>? BusinessSoftwareResumed;
 
         // Add thread pool configuration
         private static readonly SemaphoreSlim _priorityThreadPool;
@@ -824,7 +826,7 @@ namespace EasySaveV3._0.Managers
             Backup? backup = null;  // Declare backup variable outside try block
             try
             {
-                CheckForBusinessSoftware(name);  // Check for business software before starting backup
+                 
                 backup = GetJob(name);
                 if (backup == null)
                     throw new InvalidOperationException($"Backup job '{name}' not found");
@@ -905,6 +907,36 @@ namespace EasySaveV3._0.Managers
                         {
                             try
                             {
+                                bool alreadySignaledPause = false;
+                                while (_settingsController.IsBusinessSoftwareRunning())
+                                {
+                                    if (!alreadySignaledPause)
+                                    {
+                                        BusinessSoftwareDetected?.Invoke(this, name);
+                                        alreadySignaledPause = true;
+                                    }
+
+                                    UpdateJobState(name, state =>
+                                    {
+                                        if (state.Status != JobStatus.Paused)
+                                        {
+                                            state.Status = JobStatus.Paused;
+                                            _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                                  "Backup job paused (business software detected)");
+                                        }
+                                    });
+
+                                    await Task.Delay(500, cancellationToken);
+                                }
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+
+
                                 await AcquireThreadSlotAsync(true);
                                 var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
                                 
@@ -952,18 +984,44 @@ namespace EasySaveV3._0.Managers
                 // Process normal files
                 if (normalFiles.Any())
                 {
-                    var normalOptions = new ParallelOptions
-                    {
-                        MaxDegreeOfParallelism = _maxNormalThreads,
-                        CancellationToken = cancellationToken
-                    };
+
+                    
 
                     var normalResults = await Task.WhenAll(
                         normalFiles.Select(async sourceFile =>
                         {
                             try
                             {
-                                await AcquireThreadSlotAsync(false);
+                                bool alreadySignaledPause = false;
+                                while (_settingsController.IsBusinessSoftwareRunning())
+                                {
+                                    if (!alreadySignaledPause)
+                                    {
+                                        BusinessSoftwareDetected?.Invoke(this, name);
+                                        alreadySignaledPause = true;
+                                    }
+
+                                    UpdateJobState(name, state =>
+                                    {
+                                        if (state.Status != JobStatus.Paused)
+                                        {
+                                            state.Status = JobStatus.Paused;
+                                            _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                                  "Backup job paused (business software detected)");
+                                        }
+                                    });
+
+                                    await Task.Delay(500, cancellationToken);
+                                }
+
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+                                await AcquireThreadSlotAsync(true);
                                 var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
                                 
                                 lock (jobLock)
