@@ -1,4 +1,4 @@
-# EasySave V2.0 User Guide
+# EasySave V2.0 & V3.0 User Guide
 
 ## English
 
