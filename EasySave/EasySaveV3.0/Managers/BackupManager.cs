@@ -1194,14 +1194,6 @@ namespace EasySaveV3._0.Managers
                      // Check for cancellation after waiting for pause (if any) and before processing
                      fileToken.ThrowIfCancellationRequested();
 
-                     // *** Added: Wait if there are priority files remaining ***
-                     while (GetJobState(name)?.FilesRemaining > (totalFiles - priorityFiles.Count))
-                     {
-                          await Task.Delay(100, fileToken); // Wait, checking periodically
-                          fileToken.ThrowIfCancellationRequested(); // Check for stop while waiting
-                     }
-                     // *** End Added ***
-
                      var shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
                      var targetFileForCopy = sourceFile; // Default to original file for copy
 
@@ -1564,14 +1556,6 @@ namespace EasySaveV3._0.Managers
 
                      // Check for cancellation after waiting for pause (if any) and before processing
                      fileToken.ThrowIfCancellationRequested();
-
-                     // *** Added: Wait if there are priority files remaining ***
-                     while (GetJobState(name)?.FilesRemaining > (totalFiles - priorityFiles.Count))
-                     {
-                          await Task.Delay(100, fileToken); // Wait, checking periodically
-                          fileToken.ThrowIfCancellationRequested(); // Check for stop while waiting
-                     }
-                     // *** End Added ***
 
                      var sourceFileForCopy = filesForCopy[originalSourceFile]; // Get the path to copy from (original or temporary encrypted)
                      var relativePath = Path.GetRelativePath(backup.SourcePath, originalSourceFile);
