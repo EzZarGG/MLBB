@@ -15,6 +15,7 @@ namespace EasySaveV3._0.Managers
         public const string Ready = "Ready";
         public const string NotStarted = "NotStarted";
         public const string Active = "Active";
+        public const string Paused = "Paused";
         public const string Completed = "Completed";
         public const string Error = "Error";
         public const string Paused = "Paused";
@@ -747,40 +748,59 @@ namespace EasySaveV3._0.Managers
             
             return sortedFiles;
         }
-
-        // Add thread management methods
-        private async Task AcquireThreadSlotAsync(bool isPriority)
+        private class ThreadSlot : IDisposable
         {
-            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
-            await semaphore.WaitAsync();
-            
-            lock (_threadPoolLock)
+            private readonly SemaphoreSlim _semaphore;
+            private bool _acquired;
+
+            public ThreadSlot(SemaphoreSlim semaphore)
             {
-                _activeThreadCount++;
-                if (_activeThreadCount > _maxTotalThreads)
+                _semaphore = semaphore;
+                _acquired = false;
+            }
+
+            /// <summary>
+            /// Attend asynchronement l’acquisition d’un slot dans le sémaphore.
+            /// Si le token est annulé, retourne false et n’appelle pas Release plus tard.
+            /// Si l’attente réussit, marque _acquired=true pour que le Dispose() relâche.
+            /// </summary>
+            public async Task<bool> AcquireAsync(CancellationToken cancellationToken)
+            {
+                try
                 {
-                    // Log warning if we exceed max threads
-                    _logger.AddLogEntry(new LogEntry
-                    {
-                        Timestamp = DateTime.Now,
-                        Message = $"Warning: Active thread count ({_activeThreadCount}) exceeds maximum ({_maxTotalThreads})",
-                        LogType = "WARNING",
-                        ActionType = "THREAD_POOL"
-                    });
+                    await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    _acquired = true;
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // L'attente a été annulée : on ne libèrera pas car on a pas réellement acquis
+                    _acquired = false;
+                    return false;
+                }
+            }
+
+            /// <summary>
+            /// Libère le slot si et seulement si AcquireAsync avait réussi.
+            /// </summary>
+            public void Dispose()
+            {
+                if (_acquired)
+                {
+                    // On sait que ce ThreadSlot avait obtenu un WaitAsync(), donc on libère
+                    _semaphore.Release();
+                    _acquired = false;
                 }
             }
         }
-
-        private void ReleaseThreadSlot(bool isPriority)
+        private ThreadSlot GetThreadSlot(bool isPriority)
         {
-            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
-            semaphore.Release();
-            
-            lock (_threadPoolLock)
-            {
-                _activeThreadCount--;
-            }
+            return isPriority
+                ? new ThreadSlot(_priorityThreadPool)
+                : new ThreadSlot(_normalThreadPool);
         }
+
+        
 
         // Create a struct to hold file processing results
         private struct FileProcessingResult
@@ -944,7 +964,7 @@ namespace EasySaveV3._0.Managers
 
             try
             {
-                CheckForBusinessSoftware(name);  // Check for business software before starting backup
+                 
                 backup = GetJob(name);
                 if (backup == null)
                     throw new InvalidOperationException($"Backup job '{name}' not found");
@@ -1049,7 +1069,7 @@ namespace EasySaveV3._0.Managers
                 var normalEncryptionFiles = filesToProcess.Where(f => normalFiles.Contains(f)).ToList();
 
                 // Encrypt priority files first
-                 await Parallel.ForEachAsync(priorityEncryptionFiles, priorityEncryptionOptions, async (sourceFile, fileToken) =>
+                await Parallel.ForEachAsync(priorityEncryptionFiles, priorityEncryptionOptions, async (sourceFile, fileToken) =>
                 {
                     // Check for cancellation or pause before processing each file
                     while (GetJobState(name)?.Status == JobStatus.Paused)
@@ -1065,268 +1085,339 @@ namespace EasySaveV3._0.Managers
                     var targetFileForCopy = sourceFile; // Default to original file for copy
 
                     if (shouldEncrypt)
+                    {
+                        try
                         {
-                            try
+                            await AcquireThreadSlotAsync(true); // Acquire priority thread slot
+
+                            // Check for business software and pause if needed
+                            bool alreadySignaledPause = false;
+                            while (_settingsController.IsBusinessSoftwareRunning())
                             {
-                             await AcquireThreadSlotAsync(true); // Acquire priority thread slot
+                                if (!alreadySignaledPause)
+                                {
+                                    BusinessSoftwareDetected?.Invoke(this, name);
+                                    alreadySignaledPause = true;
+                                }
 
-                             // Notify UI: encryption started
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0));
+                                UpdateJobState(name, state =>
+                                {
+                                    if (state.Status != JobStatus.Paused)
+                                    {
+                                        state.Status = JobStatus.Paused;
+                                        _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                              "Backup job paused (business software detected)");
+                                    }
+                                });
 
-                             // Log encryption start
-                             _logger.AddLogEntry(new LogEntry
-                             {
-                                 Timestamp = DateTime.Now,
-                                 BackupName = name,
-                                 SourcePath = sourceFile,
-                                 Message = $"Starting encryption of file: {sourceFile}",
-                                 LogType = "INFO",
-                                 ActionType = "ENCRYPTION_START"
-                             });
+                                await Task.Delay(500, fileToken);
+                                fileToken.ThrowIfCancellationRequested();
+                            }
 
-                             // Determine temporary file path
-                             var tempEncryptedDir = Path.Combine(Path.GetTempPath(), "EasySave_Encrypted");
-                             if (!Directory.Exists(tempEncryptedDir))
-                             {
-                                 Directory.CreateDirectory(tempEncryptedDir);
-                             }
-                             var tempEncryptedFile = Path.Combine(tempEncryptedDir, Path.GetFileName(sourceFile) + ".encrypted");
-                             targetFileForCopy = tempEncryptedFile; // Copy from this temp file later
+                            if (alreadySignaledPause)
+                            {
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+                            }
 
-                             var stopwatch = Stopwatch.StartNew();
-                             // Perform encryption (this call is not pausable internally with current CryptoSoft implementation)
-                             await EncryptFileWithCryptoSoftAsync(sourceFile, tempEncryptedFile);
-                             stopwatch.Stop();
-                             
-                             // Track encryption time
-                             lock(_stateLock)
-                             {
+                            // Notify UI: encryption started
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0));
+
+                            // Log encryption start
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                Message = $"Starting encryption of file: {sourceFile}",
+                                LogType = "INFO",
+                                ActionType = "ENCRYPTION_START"
+                            });
+
+                            // Determine temporary file path
+                            var tempEncryptedDir = Path.Combine(Path.GetTempPath(), "EasySave_Encrypted");
+                            if (!Directory.Exists(tempEncryptedDir))
+                            {
+                                Directory.CreateDirectory(tempEncryptedDir);
+                            }
+                            var tempEncryptedFile = Path.Combine(tempEncryptedDir, Path.GetFileName(sourceFile) + ".encrypted");
+                            targetFileForCopy = tempEncryptedFile; // Copy from this temp file later
+
+                            var stopwatch = Stopwatch.StartNew();
+                            // Perform encryption (this call is not pausable internally with current CryptoSoft implementation)
+                            await EncryptFileWithCryptoSoftAsync(sourceFile, tempEncryptedFile);
+                            stopwatch.Stop();
+
+                            // Track encryption time
+                            lock(_stateLock)
+                            {
                                 totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                             }
+                            }
 
-                             // Log encryption success
-                             _logger.AddLogEntry(new LogEntry
-                             {
-                                 Timestamp = DateTime.Now,
-                                 BackupName = name,
-                                 SourcePath = sourceFile,
-                                 TargetPath = tempEncryptedFile,
-                                 Message = $"Completed encryption of file: {sourceFile} to {tempEncryptedFile} in {stopwatch.ElapsedMilliseconds}ms",
-                                 LogType = "INFO",
-                                 ActionType = "ENCRYPTION_COMPLETE"
-                             });
+                            // Log encryption success
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                TargetPath = tempEncryptedFile,
+                                Message = $"Completed encryption of file: {sourceFile} to {tempEncryptedFile} in {stopwatch.ElapsedMilliseconds}ms",
+                                LogType = "INFO",
+                                ActionType = "ENCRYPTION_COMPLETE"
+                            });
 
-                             // Notify UI: encryption complete
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 100, true));
-                         }
-                         catch (OperationCanceledException)
-                         {
-                             // Propagate cancellation
-                             throw;
-                         }
-                         catch (Exception ex)
-                         {
-                             hasErrors = true;
-                             errorMessages.Add($"Encryption error for file {sourceFile}: {ex.Message}");
+                            // Notify UI: encryption complete
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 100, true));
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Propagate cancellation
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            hasErrors = true;
+                            errorMessages.Add($"Encryption error for file {sourceFile}: {ex.Message}");
 
-                             // Log encryption failure
-                             _logger.AddLogEntry(new LogEntry
-                             {
-                                 Timestamp = DateTime.Now,
-                                 BackupName = name,
-                                 SourcePath = sourceFile,
-                                 Message = $"Encryption error for file {sourceFile}: {ex.Message}",
-                                 LogType = "ERROR",
-                                 ActionType = "ENCRYPTION_ERROR"
-                             });
+                            // Log encryption failure
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                Message = $"Encryption error for file {sourceFile}: {ex.Message}",
+                                LogType = "ERROR",
+                                ActionType = "ENCRYPTION_ERROR"
+                            });
 
-                             // Notify UI: encryption error
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0, true, true, ex.Message));
-                         }
-                         finally
-                         {
+                            // Notify UI: encryption error
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0, true, true, ex.Message));
+                        }
+                        finally
+                        {
                             ReleaseThreadSlot(true); // Release priority thread slot
                             lock(_stateLock)
                             {
                                 encryptedFilesCount++;
                                 // Update state with encryption progress (based on files encrypted)
                                 var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
-                                        UpdateJobState(name, state =>
-                                        {
+                                UpdateJobState(name, state =>
+                                {
                                     state.ProgressPercentage = encryptionProgress / 2;
                                     state.CurrentSourceFile = $"Encrypting: {Path.GetFileName(sourceFile)}";
                                 });
                             }
-                         }
+                        }
                     }
                     else
                     {
-                         // Log that encryption is skipped
-                         _logger.AddLogEntry(new LogEntry
-                         {
-                             Timestamp = DateTime.Now,
-                             BackupName = name,
-                             SourcePath = sourceFile,
-                             Message = $"Skipping encryption for file: {sourceFile}",
-                             LogType = "INFO",
-                             ActionType = "ENCRYPTION_SKIP"
-                         });
-                         lock(_stateLock)
-                         {
-                             // Still count towards encryption phase progress for files not needing encryption
-                             encryptedFilesCount++;
-                             var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
-                             UpdateJobState(name, state =>
-                             {
-                                 state.ProgressPercentage = encryptionProgress / 2;
-                                 state.CurrentSourceFile = $"Processing (No Encryption): {Path.GetFileName(sourceFile)}";
-                                        });
-                                    }
-                                }
-                                
+                        // Log that encryption is skipped
+                        _logger.AddLogEntry(new LogEntry
+                        {
+                            Timestamp = DateTime.Now,
+                            BackupName = name,
+                            SourcePath = sourceFile,
+                            Message = $"Skipping encryption for file: {sourceFile}",
+                            LogType = "INFO",
+                            ActionType = "ENCRYPTION_SKIP"
+                        });
+                        lock(_stateLock)
+                        {
+                            // Still count towards encryption phase progress for files not needing encryption
+                            encryptedFilesCount++;
+                            var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
+                            UpdateJobState(name, state =>
+                            {
+                                state.ProgressPercentage = encryptionProgress / 2;
+                                state.CurrentSourceFile = $"Processing (No Encryption): {Path.GetFileName(sourceFile)}";
+                            });
+                        }
+                    }
+
                     // Store the path to use for the copy phase
                     filesForCopy[sourceFile] = targetFileForCopy;
                 });
 
                  // Encrypt normal files
-                 await Parallel.ForEachAsync(normalEncryptionFiles, normalEncryptionOptions, async (sourceFile, fileToken) =>
-                 {
-                     // Check for cancellation or pause before processing each file
-                     while (GetJobState(name)?.Status == JobStatus.Paused)
-                     {
-                         await Task.Delay(50, fileToken); // Wait while paused, checking more frequently
-                         fileToken.ThrowIfCancellationRequested(); // Check for stop during pause
-                     }
+                await Parallel.ForEachAsync(normalEncryptionFiles, normalEncryptionOptions, async (sourceFile, fileToken) =>
+                {
+                    // Check for cancellation or pause before processing each file
+                    while (GetJobState(name)?.Status == JobStatus.Paused)
+                    {
+                        await Task.Delay(50, fileToken); // Wait while paused, checking more frequently
+                        fileToken.ThrowIfCancellationRequested(); // Check for stop during pause
+                    }
 
-                     // Check for cancellation after waiting for pause (if any) and before processing
-                     fileToken.ThrowIfCancellationRequested();
+                    // Check for cancellation after waiting for pause (if any) and before processing
+                    fileToken.ThrowIfCancellationRequested();
 
-                     var shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
-                     var targetFileForCopy = sourceFile; // Default to original file for copy
+                    var shouldEncrypt = backup.Encrypt && _settingsController.ShouldEncryptFile(sourceFile);
+                    var targetFileForCopy = sourceFile; // Default to original file for copy
 
-                     if (shouldEncrypt)
-                     {
-                         try
-                         {
-                             await AcquireThreadSlotAsync(false); // Acquire normal thread slot
+                    if (shouldEncrypt)
+                    {
+                        try
+                        {
+                            await AcquireThreadSlotAsync(false); // Acquire normal thread slot
 
-                              // Notify UI: encryption started
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0));
-
-                              // Log encryption start
-                              _logger.AddLogEntry(new LogEntry
-                              {
-                                  Timestamp = DateTime.Now,
-                                  BackupName = name,
-                                  SourcePath = sourceFile,
-                                  Message = $"Starting encryption of file: {sourceFile}",
-                                  LogType = "INFO",
-                                  ActionType = "ENCRYPTION_START"
-                              });
-
-                             // Determine temporary file path
-                             var tempEncryptedDir = Path.Combine(Path.GetTempPath(), "EasySave_Encrypted");
-                             if (!Directory.Exists(tempEncryptedDir))
-                             {
-                                 Directory.CreateDirectory(tempEncryptedDir);
-                             }
-                             var tempEncryptedFile = Path.Combine(tempEncryptedDir, Path.GetFileName(sourceFile) + ".encrypted");
-                             targetFileForCopy = tempEncryptedFile; // Copy from this temp file later
-
-                              var stopwatch = Stopwatch.StartNew();
-                              // Perform encryption (this call is not pausable internally with current CryptoSoft implementation)
-                              await EncryptFileWithCryptoSoftAsync(sourceFile, tempEncryptedFile);
-                              stopwatch.Stop();
-
-                             // Track encryption time
-                             lock(_stateLock)
-                             {
-                                totalEncryptionTime += stopwatch.ElapsedMilliseconds;
-                             }
-
-                             // Log encryption success
-                              _logger.AddLogEntry(new LogEntry
-                              {
-                                  Timestamp = DateTime.Now,
-                                  BackupName = name,
-                                  SourcePath = sourceFile,
-                                  TargetPath = tempEncryptedFile,
-                                  Message = $"Completed encryption of file: {sourceFile} to {tempEncryptedFile} in {stopwatch.ElapsedMilliseconds}ms",
-                                  LogType = "INFO",
-                                  ActionType = "ENCRYPTION_COMPLETE"
-                              });
-
-                              // Notify UI: encryption complete
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 100, true));
-                         }
-                         catch (OperationCanceledException)
-                         {
-                             // Propagate cancellation
-                             throw;
-                         }
-                         catch (Exception ex)
-                         {
-                             hasErrors = true;
-                             errorMessages.Add($"Encryption error for file {sourceFile}: {ex.Message}");
-
-                             // Log encryption failure
-                              _logger.AddLogEntry(new LogEntry
-                              {
-                                  Timestamp = DateTime.Now,
-                                  BackupName = name,
-                                  SourcePath = sourceFile,
-                                  Message = $"Encryption error for file {sourceFile}: {ex.Message}",
-                                  LogType = "ERROR",
-                                  ActionType = "ENCRYPTION_ERROR"
-                              });
-
-                             // Notify UI: encryption error
-                             EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0, true, true, ex.Message));
-                            }
-                            finally
+                            // Check for business software and pause if needed
+                            bool alreadySignaledPause = false;
+                            while (_settingsController.IsBusinessSoftwareRunning())
                             {
-                             ReleaseThreadSlot(false); // Release normal thread slot
-                             lock(_stateLock)
-                             {
-                                 encryptedFilesCount++;
-                                 // Update state with encryption progress (based on files encrypted)
-                                 var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
-                                 UpdateJobState(name, state =>
-                                 {
-                                     state.ProgressPercentage = encryptionProgress / 2;
-                                     state.CurrentSourceFile = $"Encrypting: {Path.GetFileName(sourceFile)}";
-                                 });
-                             }
-                         }
-                     }
-                     else
-                     {
-                         // Log that encryption is skipped
-                          _logger.AddLogEntry(new LogEntry
-                          {
-                              Timestamp = DateTime.Now,
-                              BackupName = name,
-                              SourcePath = sourceFile,
-                              Message = $"Skipping encryption for file: {sourceFile}",
-                              LogType = "INFO",
-                              ActionType = "ENCRYPTION_SKIP"
-                          });
-                          lock(_stateLock)
-                          {
-                              // Still count towards encryption phase progress for files not needing encryption
-                              encryptedFilesCount++;
-                              var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
-                              UpdateJobState(name, state =>
-                              {
-                                  state.ProgressPercentage = encryptionProgress / 2;
-                                  state.CurrentSourceFile = $"Processing (No Encryption): {Path.GetFileName(sourceFile)}";
-                              });
-                          }
-                     }
+                                if (!alreadySignaledPause)
+                                {
+                                    BusinessSoftwareDetected?.Invoke(this, name);
+                                    alreadySignaledPause = true;
+                                }
+
+                                UpdateJobState(name, state =>
+                                {
+                                    if (state.Status != JobStatus.Paused)
+                                    {
+                                        state.Status = JobStatus.Paused;
+                                        _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                              "Backup job paused (business software detected)");
+                                    }
+                                });
+
+                                await Task.Delay(500, fileToken);
+                                fileToken.ThrowIfCancellationRequested();
+                            }
+
+                            if (alreadySignaledPause)
+                            {
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+                            }
+
+                            // Notify UI: encryption started
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0));
+
+                            // Log encryption start
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                Message = $"Starting encryption of file: {sourceFile}",
+                                LogType = "INFO",
+                                ActionType = "ENCRYPTION_START"
+                            });
+
+                            // Determine temporary file path
+                            var tempEncryptedDir = Path.Combine(Path.GetTempPath(), "EasySave_Encrypted");
+                            if (!Directory.Exists(tempEncryptedDir))
+                            {
+                                Directory.CreateDirectory(tempEncryptedDir);
+                            }
+                            var tempEncryptedFile = Path.Combine(tempEncryptedDir, Path.GetFileName(sourceFile) + ".encrypted");
+                            targetFileForCopy = tempEncryptedFile; // Copy from this temp file later
+
+                            var stopwatch = Stopwatch.StartNew();
+                            // Perform encryption (this call is not pausable internally with current CryptoSoft implementation)
+                            await EncryptFileWithCryptoSoftAsync(sourceFile, tempEncryptedFile);
+                            stopwatch.Stop();
+
+                            // Track encryption time
+                            lock(_stateLock)
+                            {
+                                totalEncryptionTime += stopwatch.ElapsedMilliseconds;
+                            }
+
+                            // Log encryption success
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                TargetPath = tempEncryptedFile,
+                                Message = $"Completed encryption of file: {sourceFile} to {tempEncryptedFile} in {stopwatch.ElapsedMilliseconds}ms",
+                                LogType = "INFO",
+                                ActionType = "ENCRYPTION_COMPLETE"
+                            });
+
+                            // Notify UI: encryption complete
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 100, true));
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            // Propagate cancellation
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            hasErrors = true;
+                            errorMessages.Add($"Encryption error for file {sourceFile}: {ex.Message}");
+
+                            // Log encryption failure
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = sourceFile,
+                                Message = $"Encryption error for file {sourceFile}: {ex.Message}",
+                                LogType = "ERROR",
+                                ActionType = "ENCRYPTION_ERROR"
+                            });
+
+                            // Notify UI: encryption error
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(name, sourceFile, 0, true, true, ex.Message));
+                            throw; // Re-throw to ensure proper cleanup
+                        }
+                        finally
+                        {
+                            ReleaseThreadSlot(false); // Release normal thread slot
+                            lock(_stateLock)
+                            {
+                                encryptedFilesCount++;
+                                // Update state with encryption progress (based on files encrypted)
+                                var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
+                                UpdateJobState(name, state =>
+                                {
+                                    state.ProgressPercentage = encryptionProgress / 2;
+                                    state.CurrentSourceFile = $"Encrypting: {Path.GetFileName(sourceFile)}";
+                                });
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Log that encryption is skipped
+                        _logger.AddLogEntry(new LogEntry
+                        {
+                            Timestamp = DateTime.Now,
+                            BackupName = name,
+                            SourcePath = sourceFile,
+                            Message = $"Skipping encryption for file: {sourceFile}",
+                            LogType = "INFO",
+                            ActionType = "ENCRYPTION_SKIP"
+                        });
+                        lock(_stateLock)
+                        {
+                            // Still count towards encryption phase progress for files not needing encryption
+                            encryptedFilesCount++;
+                            var encryptionProgress = (int)((encryptedFilesCount * 100.0) / totalFilesToEncrypt);
+                            UpdateJobState(name, state =>
+                            {
+                                state.ProgressPercentage = encryptionProgress / 2;
+                                state.CurrentSourceFile = $"Processing (No Encryption): {Path.GetFileName(sourceFile)}";
+                            });
+                        }
+                    }
+
                     // Store the path to use for the copy phase
                     filesForCopy[sourceFile] = targetFileForCopy;
-                 });
-
+                });
 
                 // PHASE 2: COPYING
                 var filesCopiedCount = 0;
@@ -1388,15 +1479,50 @@ namespace EasySaveV3._0.Managers
                     {
                         await AcquireThreadSlotAsync(true); // Acquire priority thread slot
 
+                        // Check for business software and pause if needed
+                        bool alreadySignaledPause = false;
+                        while (_settingsController.IsBusinessSoftwareRunning())
+                        {
+                            if (!alreadySignaledPause)
+                            {
+                                BusinessSoftwareDetected?.Invoke(this, name);
+                                alreadySignaledPause = true;
+                            }
+
+                            UpdateJobState(name, state =>
+                            {
+                                if (state.Status != JobStatus.Paused)
+                                {
+                                    state.Status = JobStatus.Paused;
+                                    _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                          "Backup job paused (business software detected)");
+                                }
+                            });
+
+                            await Task.Delay(500, fileToken);
+                            fileToken.ThrowIfCancellationRequested();
+                        }
+
+                        if (alreadySignaledPause)
+                        {
+                            UpdateJobState(name, state =>
+                            {
+                                state.Status = JobStatus.Active;
+                                _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                      "Backup job resumed (business software stopped)");
+                            });
+                            BusinessSoftwareResumed?.Invoke(this, name);
+                        }
+
                         // Determine if this file needs to be copied (differential backup)
                         var sourceInfo = new FileInfo(sourceFileForCopy); // Use source file for copy (temp or original) for info
                         var shouldCopy = true;
-                         if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase) && File.Exists(targetFile))
-                         {
-                             var targetInfo = new FileInfo(targetFile);
-                             // For differential, compare last write time of original source file
-                             shouldCopy = originalSourceInfo.LastWriteTime > targetInfo.LastWriteTime;
-                         }
+                        if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase) && File.Exists(targetFile))
+                        {
+                            var targetInfo = new FileInfo(targetFile);
+                            // For differential, compare last write time of original source file
+                            shouldCopy = originalSourceInfo.LastWriteTime > targetInfo.LastWriteTime;
+                        }
 
                         if(shouldCopy)
                         {
@@ -1453,49 +1579,49 @@ namespace EasySaveV3._0.Managers
                                 var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
                                 UpdateJobState(name, state =>
                                 {
-                                     state.ProgressPercentage = 50 + (copyProgress / 2);
-                                     state.FilesRemaining = totalFiles - filesCopiedCount;
-                                     // Bytes remaining doesn't change for skipped files
-                                     state.CurrentSourceFile = $"Skipped (Differential): {Path.GetFileName(originalSourceFile)}";
-                                     state.CurrentTargetFile = targetFile;
+                                    state.ProgressPercentage = 50 + (copyProgress / 2);
+                                    state.FilesRemaining = totalFiles - filesCopiedCount;
+                                    // Bytes remaining doesn't change for skipped files
+                                    state.CurrentSourceFile = $"Skipped (Differential): {Path.GetFileName(originalSourceFile)}";
+                                    state.CurrentTargetFile = targetFile;
                                 });
                             }
-                             _logger.AddLogEntry(new LogEntry
-                             {
-                                 Timestamp = DateTime.Now,
-                                 BackupName = name,
-                                 SourcePath = originalSourceFile,
-                                 TargetPath = targetFile,
-                                 Message = $"File skipped (Differential): {Path.GetFileName(originalSourceFile)}",
-                                 LogType = "INFO",
-                                 ActionType = "FILE_SKIPPED_DIFFERENTIAL"
-                             });
+                            _logger.AddLogEntry(new LogEntry
+                            {
+                                Timestamp = DateTime.Now,
+                                BackupName = name,
+                                SourcePath = originalSourceFile,
+                                TargetPath = targetFile,
+                                Message = $"File skipped (Differential): {Path.GetFileName(originalSourceFile)}",
+                                LogType = "INFO",
+                                ActionType = "FILE_SKIPPED_DIFFERENTIAL"
+                            });
                         }
                     }
-                     catch (OperationCanceledException)
-                     {
-                         // Propagate cancellation
-                         throw;
-                     }
+                    catch (OperationCanceledException)
+                    {
+                        // Propagate cancellation
+                        throw;
+                    }
                     catch (Exception ex)
                     {
-                         lock (_stateLock)
-                                        {
-                                            hasErrors = true;
-                              errorMessages.Add($"Copy error for file {originalSourceFile}: {ex.Message}");
+                        lock (_stateLock)
+                        {
+                            hasErrors = true;
+                            errorMessages.Add($"Copy error for file {originalSourceFile}: {ex.Message}");
 
-                             // Update state on error
-                             filesCopiedCount++; // Count the file as processed even on error
-                             var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
-                             UpdateJobState(name, state =>
-                             {
-                                 state.ProgressPercentage = 50 + (copyProgress / 2);
-                                 state.FilesRemaining = totalFiles - filesCopiedCount;
-                                 // Bytes remaining doesn't change on error
-                                 state.CurrentSourceFile = $"Error Copying: {Path.GetFileName(originalSourceFile)}";
-                                 state.CurrentTargetFile = targetFile;
-                             });
-                         }
+                            // Update state on error
+                            filesCopiedCount++; // Count the file as processed even on error
+                            var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
+                            UpdateJobState(name, state =>
+                            {
+                                state.ProgressPercentage = 50 + (copyProgress / 2);
+                                state.FilesRemaining = totalFiles - filesCopiedCount;
+                                // Bytes remaining doesn't change on error
+                                state.CurrentSourceFile = $"Error Copying: {Path.GetFileName(originalSourceFile)}";
+                                state.CurrentTargetFile = targetFile;
+                            });
+                        }
 
                         // Log copy failure
                         _logger.AddLogEntry(new LogEntry
@@ -1509,240 +1635,47 @@ namespace EasySaveV3._0.Managers
                             ActionType = "FILE_COPY_ERROR"
                         });
                     }
-                     finally
-                     {
+                    finally
+                    {
                         ReleaseThreadSlot(true); // Release priority thread slot
 
-                         // Release large file semaphore if acquired
-                         if (isLargeFile)
-                         {
-                             _largeFileSemaphore.Release();
-                         }
+                        // Release large file semaphore if acquired
+                        if (isLargeFile)
+                        {
+                            _largeFileSemaphore.Release();
+                        }
 
-                         // Clean up temporary encrypted file if it exists and copy is complete or failed
-                          if (filesForCopy.TryGetValue(originalSourceFile, out var sourcePathUsed) && sourcePathUsed != originalSourceFile && File.Exists(sourcePathUsed))
-                          {
-                              try
-                              {
-                                  File.Delete(sourcePathUsed);
-                                   _logger.AddLogEntry(new LogEntry
-                                  {
-                                      Timestamp = DateTime.Now,
-                                      BackupName = name,
-                                      SourcePath = sourcePathUsed,
-                                      Message = $"Cleaned up temporary encrypted file: {Path.GetFileName(sourcePathUsed)}",
-                                      LogType = "INFO",
-                                      ActionType = "TEMP_FILE_CLEANUP"
-                                  });
-                              }
-                              catch (Exception ex)
-                              {
-                                   _logger.AddLogEntry(new LogEntry
-                                  {
-                                      Timestamp = DateTime.Now,
-                                      BackupName = name,
-                                      SourcePath = sourcePathUsed,
-                                      Message = $"Failed to clean up temporary encrypted file {Path.GetFileName(sourcePathUsed)}: {ex.Message}",
-                                      LogType = "WARNING",
-                                      ActionType = "TEMP_FILE_CLEANUP_FAILED"
-                                  });
-                              }
-                          }
-                     }
-                });
-
-                // Copy normal files
-                 await Parallel.ForEachAsync(normalCopyFiles, normalCopyOptions, async (originalSourceFile, fileToken) =>
-                 {
-                     // Check for cancellation or pause before processing each file
-                     while (GetJobState(name)?.Status == JobStatus.Paused)
-                     {
-                         await Task.Delay(50, fileToken); // Wait while paused, checking more frequently
-                         fileToken.ThrowIfCancellationRequested(); // Check for stop during pause
-                     }
-
-                     // Check for cancellation after waiting for pause (if any) and before processing
-                     fileToken.ThrowIfCancellationRequested();
-
-                     var sourceFileForCopy = filesForCopy[originalSourceFile]; // Get the path to copy from (original or temporary encrypted)
-                     var relativePath = Path.GetRelativePath(backup.SourcePath, originalSourceFile);
-                     var targetFile = Path.Combine(backup.TargetPath, relativePath);
-                     var originalSourceInfo = new FileInfo(originalSourceFile);
-
-                     bool isLargeFile = originalSourceInfo.Length > _maxLargeFileSizeBytes;
-
-                     // Acquire semaphore for large files if applicable
-                     if (isLargeFile)
-                     {
-                         await _largeFileSemaphore.WaitAsync(fileToken);
-                     }
-
-                     try
-                     {
-                         await AcquireThreadSlotAsync(false); // Acquire normal thread slot
-
-                         // Determine if this file needs to be copied (differential backup)
-                         var sourceInfo = new FileInfo(sourceFileForCopy); // Use source file for copy (temp or original) for info
-                         var shouldCopy = true;
-                         if (backup.Type.Equals("Differential", StringComparison.OrdinalIgnoreCase) && File.Exists(targetFile))
-                         {
-                             var targetInfo = new FileInfo(targetFile);
-                              // For differential, compare last write time of original source file
-                             shouldCopy = originalSourceInfo.LastWriteTime > targetInfo.LastWriteTime;
-                         }
-
-                         if(shouldCopy)
-                         {
-                             // Ensure target directory exists
-                             var dir = Path.GetDirectoryName(targetFile);
-                             if (dir != null && !Directory.Exists(dir))
-                             {
-                                 Directory.CreateDirectory(dir);
-                                 _logger.LogAdminAction(name, "DIR_CREATE", $"Created directory: {dir}");
-                             }
-
-                             var stopwatch = Stopwatch.StartNew();
-                             // Copy the file using the streaming method (supports pause/cancellation within file)
-                             await CopyFileStreamAsync(sourceFileForCopy, targetFile, name, fileToken); // Pass file-specific token for granular cancel
-                             stopwatch.Stop();
-
-                             lock (_stateLock)
-                             {
-                                 filesCopiedCount++;
-                                 bytesTransferred += sourceInfo.Length; // Use size of the file being copied (temp or original)
-
-                                 // Update state with copy progress
-                                 var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
-                                        UpdateJobState(name, state =>
-                                        {
-                                     state.ProgressPercentage = 50 + (copyProgress / 2);
-                                     state.FilesRemaining = totalFiles - filesCopiedCount;
-                                            state.BytesRemaining = totalBytes - bytesTransferred;
-                                     state.CurrentSourceFile = $"Copying: {Path.GetFileName(originalSourceFile)}"; // Use original source name for UI
-                                     state.CurrentTargetFile = targetFile;
-                                 });
-                                 // Note: FileProgressChanged is now emitted by CopyFileStreamAsync for granular progress
-                             }
-
-                             _logger.AddLogEntry(new LogEntry
-                             {
-                                 Timestamp = DateTime.Now,
-                                 BackupName = name,
-                                 SourcePath = originalSourceFile,
-                                 TargetPath = targetFile,
-                                 Message = $"Successfully copied file: {Path.GetFileName(originalSourceFile)} in {stopwatch.ElapsedMilliseconds}ms",
-                                 LogType = "INFO",
-                                 ActionType = "FILE_COPY_COMPLETE"
-                             });
-                         }
-                         else
-                         {
-                              // File skipped due to differential backup logic
-                              lock(_stateLock)
-                              {
-                                  filesCopiedCount++;
-                                   // Update state even for skipped files to track overall completion
-                                   var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
-                                   UpdateJobState(name, state =>
-                                   {
-                                        state.ProgressPercentage = 50 + (copyProgress / 2);
-                                        state.FilesRemaining = totalFiles - filesCopiedCount;
-                                        // Bytes remaining doesn't change for skipped files
-                                        state.CurrentSourceFile = $"Skipped (Differential): {Path.GetFileName(originalSourceFile)}";
-                                        state.CurrentTargetFile = targetFile;
-                                   });
-                              }
-                               _logger.AddLogEntry(new LogEntry
-                               {
-                                   Timestamp = DateTime.Now,
-                                   BackupName = name,
-                                   SourcePath = originalSourceFile,
-                                   TargetPath = targetFile,
-                                   Message = $"File skipped (Differential): {Path.GetFileName(originalSourceFile)}",
-                                   LogType = "INFO",
-                                   ActionType = "FILE_SKIPPED_DIFFERENTIAL"
-                               });
-                         }
-                     }
-                     catch (OperationCanceledException)
-                     {
-                         // Propagate cancellation
-                         throw;
-                     }
-                     catch (Exception ex)
-                     {
-                         lock (_stateLock)
-                         {
-                             hasErrors = true;
-                             errorMessages.Add($"Copy error for file {originalSourceFile}: {ex.Message}");
-
-                             // Update state on error
-                             filesCopiedCount++; // Count the file as processed even on error
-                             var copyProgress = (int)((filesCopiedCount * 100.0) / totalFiles);
-                             UpdateJobState(name, state =>
-                             {
-                                 state.ProgressPercentage = 50 + (copyProgress / 2);
-                                 state.FilesRemaining = totalFiles - filesCopiedCount;
-                                 // Bytes remaining doesn't change on error
-                                 state.CurrentSourceFile = $"Error Copying: {Path.GetFileName(originalSourceFile)}";
-                                 state.CurrentTargetFile = targetFile;
-                             });
-                         }
-
-                         // Log copy failure
-                         _logger.AddLogEntry(new LogEntry
-                         {
-                             Timestamp = DateTime.Now,
-                             BackupName = name,
-                             SourcePath = originalSourceFile,
-                             TargetPath = targetFile,
-                             Message = $"Copy error for file {originalSourceFile}: {ex.Message}",
-                             LogType = "ERROR",
-                             ActionType = "FILE_COPY_ERROR"
-                         });
-                     }
-                            finally
+                        // Clean up temporary encrypted file if it exists and copy is complete or failed
+                        if (filesForCopy.TryGetValue(originalSourceFile, out var sourcePathUsed) && sourcePathUsed != originalSourceFile && File.Exists(sourcePathUsed))
+                        {
+                            try
                             {
-                         ReleaseThreadSlot(false); // Release normal thread slot
-
-                         // Release large file semaphore if acquired
-                         if (isLargeFile)
-                         {
-                             _largeFileSemaphore.Release();
-                         }
-
-                         // Clean up temporary encrypted file if it exists and copy is complete or failed
-                          if (filesForCopy.TryGetValue(originalSourceFile, out var sourcePathUsed) && sourcePathUsed != originalSourceFile && File.Exists(sourcePathUsed))
-                          {
-                              try
-                              {
-                                  File.Delete(sourcePathUsed);
-                                   _logger.AddLogEntry(new LogEntry
-                                  {
-                                      Timestamp = DateTime.Now,
-                                      BackupName = name,
-                                      SourcePath = sourcePathUsed,
-                                      Message = $"Cleaned up temporary encrypted file: {Path.GetFileName(sourcePathUsed)}",
-                                      LogType = "INFO",
-                                      ActionType = "TEMP_FILE_CLEANUP"
-                                  });
-                              }
-                              catch (Exception ex)
-                              {
-                                   _logger.AddLogEntry(new LogEntry
-                                  {
-                                      Timestamp = DateTime.Now,
-                                      BackupName = name,
-                                      SourcePath = sourcePathUsed,
-                                      Message = $"Failed to clean up temporary encrypted file {Path.GetFileName(sourcePathUsed)}: {ex.Message}",
-                                      LogType = "WARNING",
-                                      ActionType = "TEMP_FILE_CLEANUP_FAILED"
-                                  });
-                              }
-                          }
-                     }
-                 });
-
+                                File.Delete(sourcePathUsed);
+                                _logger.AddLogEntry(new LogEntry
+                                {
+                                    Timestamp = DateTime.Now,
+                                    BackupName = name,
+                                    SourcePath = sourcePathUsed,
+                                    Message = $"Cleaned up temporary encrypted file: {Path.GetFileName(sourcePathUsed)}",
+                                    LogType = "INFO",
+                                    ActionType = "TEMP_FILE_CLEANUP"
+                                });
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.AddLogEntry(new LogEntry
+                                {
+                                    Timestamp = DateTime.Now,
+                                    BackupName = name,
+                                    SourcePath = sourcePathUsed,
+                                    Message = $"Failed to clean up temporary encrypted file {Path.GetFileName(sourcePathUsed)}: {ex.Message}",
+                                    LogType = "WARNING",
+                                    ActionType = "TEMP_FILE_CLEANUP_FAILED"
+                                });
+                            }
+                        }
+                    }
+                });
 
                 // Update final state based on cancellation or completion
                 token.ThrowIfCancellationRequested(); // Throw if cancellation was requested during file processing

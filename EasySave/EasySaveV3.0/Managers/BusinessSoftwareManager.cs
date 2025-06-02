@@ -13,6 +13,7 @@ namespace EasySaveV2._0.Managers
     {
         private static List<string> _businessNames = new List<string>();
 
+
         /// <summary>
         /// Initializes with a collection of process names (may or may not include the .exe extension).
         /// </summary>

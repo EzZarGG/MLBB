@@ -58,6 +58,7 @@ namespace EasySaveV3._0.Controllers
                 _backupManager.BusinessSoftwareResumed += (sender, jobName) => BusinessSoftwareResumed?.Invoke(this, jobName);
                 _backupManager.FileProgressChanged += (sender, e) => FileProgressChanged?.Invoke(this, e);
                 _backupManager.EncryptionProgressChanged += (sender, e) => EncryptionProgressChanged?.Invoke(this, e);
+                _backupManager.BusinessSoftwareResumed += (_, jobName)=> BusinessSoftwareResumed?.Invoke(this, jobName);
             }
             catch (Exception ex)
             {
@@ -426,7 +427,7 @@ namespace EasySaveV3._0.Controllers
                     throw new InvalidOperationException(
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
-
+                               
                 var backupTasks = backupNames
                     .Where(backupName => !_backupManager.IsBackupRunning(backupName))
                     .Select(backupName => _backupManager.ExecuteJob(backupName));
@@ -454,7 +455,7 @@ namespace EasySaveV3._0.Controllers
                     _languageManager.GetTranslation("message.cryptoSoftAlreadyRunning")
                                );
 
-                var backupTasks = backupNames
+                                    var backupTasks = backupNames
                     .Where(backupName => !_backupManager.IsBackupRunning(backupName))
                     .Select(backupName => _backupManager.ExecuteJob(backupName));
 

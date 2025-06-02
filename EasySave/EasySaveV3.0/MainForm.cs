@@ -1,4 +1,4 @@
-using EasySaveV3._0.Controllers;
+﻿using EasySaveV3._0.Controllers;
 using EasySaveV3._0.Models;
 using EasySaveV3._0.Views;
 using EasySaveV3._0.Managers;
@@ -47,6 +47,15 @@ namespace EasySaveV3._0
                 _backupController = new BackupController();
                 _logger = Logger.GetInstance();
                 _socketServerManager = new SocketServerManager(_backupController);
+             
+
+               
+                _backupController.BusinessSoftwareDetected += OnBusinessSoftwareDetected;
+                _backupController.BusinessSoftwareResumed += OnBusinessSoftwareResumed;
+
+
+               
+                
 
                 // Subscribe to business software events
                 _backupController.BusinessSoftwareDetected += OnBusinessSoftwareDetected;
@@ -62,7 +71,7 @@ namespace EasySaveV3._0
                 InitializeComponent();
                 InitializeUI();
                 InitializeTimer();
-
+                _updateTimer.Start();
                 // Start the socket server
                 _ = StartSocketServer();
 
@@ -165,9 +174,11 @@ namespace EasySaveV3._0
 
         private async Task UpdateBackupStatesAsync()
         {
-            if (_isUpdating) return;
-            _isUpdating = true;
+            
+            if (_isUpdating)
+                return;
 
+            _isUpdating = true;
             try
             {
                 var backups = _backupController.GetBackups();
@@ -189,6 +200,7 @@ namespace EasySaveV3._0
                                 case JobStatus.Active:
                                     _progressBar.Visible = true;
                                     _progressBar.Value = state.ProgressPercentage;
+
                                     _statusLabel.Text = _languageManager.GetTranslation(
                                         "message.jobProgress", job.Name, state.ProgressPercentage);
                                     break;
@@ -242,6 +254,7 @@ namespace EasySaveV3._0
                                     "message.backupError", job.Name);
                                 break;
                         }
+
                     }
                 }
 
@@ -269,6 +282,7 @@ namespace EasySaveV3._0
                 _isUpdating = false;
             }
         }
+
 
         private void UpdateBackupItem(ListViewItem item, StateModel state)
         {
@@ -611,6 +625,45 @@ namespace EasySaveV3._0
                 throw;
             }
         }
+        private void OnBusinessSoftwareDetected(object? sender, string jobName)
+        {
+           
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareDetected(sender, jobName)));
+                return;
+            }
+
+            
+            _progressBar.Visible = false;
+
+            
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupPaused", jobName);
+
+      
+            MessageBox.Show(
+                _languageManager.GetTranslation("message.backupPaused", jobName),
+                _languageManager.GetTranslation("error.title"),  // ou "menu.title" si vous préférez
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning
+            );
+        }
+
+        private void OnBusinessSoftwareResumed(object? sender, string jobName)
+        {
+            if (InvokeRequired)
+            {
+                Invoke(new Action(() => OnBusinessSoftwareResumed(sender, jobName)));
+                return;
+            }
+
+         
+            _progressBar.Visible = true;
+
+            
+            _statusLabel.Text = _languageManager.GetTranslation("message.backupResumed", jobName);
+        }
+
 
         private void InitializeListView()
         {

@@ -1,6 +1,6 @@
 {
   "fr": {
-  "language.french": "Français",
+    "language.french": "Français",
     "language.english": "English",
     "language.invalidChoice": "Entrée invalide. Veuillez entrer 1 ou 2.",
     "language.prompt": "> ",
