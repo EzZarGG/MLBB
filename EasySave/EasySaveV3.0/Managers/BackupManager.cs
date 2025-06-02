@@ -726,6 +726,9 @@ namespace EasySaveV3._0.Managers
                 return result;
             }
 
+            // Add delay to slow down backup progress
+            await Task.Delay(10000, token);
+
             var relativePath = Path.GetRelativePath(backup.SourcePath, sourceFile);
             var targetFile = Path.Combine(backup.TargetPath, relativePath);
             var sourceInfo = new FileInfo(sourceFile);
@@ -751,6 +754,10 @@ namespace EasySaveV3._0.Managers
                 var stopwatch = Stopwatch.StartNew();
                 try
                 {
+                    // Get current state to calculate progress
+                    var currentState = GetJobState(name);
+                    if (currentState == null) return result;
+
                     // Copy and optionally encrypt the file
                     await CopyFileAsync(sourceFile, targetFile, name);
                     
@@ -758,17 +765,22 @@ namespace EasySaveV3._0.Managers
                     result.EncryptionTime = stopwatch.ElapsedMilliseconds;
                     result.WasProcessed = true;
 
-                    // Report progress
+                    // Calculate progress based on current state
+                    var progress = (int)(currentState.FilesRemaining * 100.0 / currentState.TotalFilesCount);
+                    var bytesTransferred = currentState.TotalFilesSize - currentState.BytesRemaining;
+                    var filesProcessed = currentState.TotalFilesCount - currentState.FilesRemaining;
+
+                    // Report progress with calculated values
                     FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
                         name,
                         sourceFile,
                         targetFile,
                         sourceInfo.Length,
-                        0, // Progress will be calculated by caller
-                        0, // Bytes transferred will be calculated by caller
-                        0, // Total bytes will be calculated by caller
-                        0, // Files processed will be calculated by caller
-                        0, // Total files will be calculated by caller
+                        progress,
+                        bytesTransferred,
+                        currentState.TotalFilesSize,
+                        filesProcessed,
+                        currentState.TotalFilesCount,
                         stopwatch.Elapsed,
                         true
                     ));
@@ -779,31 +791,40 @@ namespace EasySaveV3._0.Managers
                     result.HasError = true;
                     result.ErrorMessage = $"Error copying file {sourceFile}: {ex.Message}";
 
-                    // Report error progress
-                    FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
-                        name,
-                        sourceFile,
-                        targetFile,
-                        sourceInfo.Length,
-                        0, // Progress will be calculated by caller
-                        0, // Bytes transferred will be calculated by caller
-                        0, // Total bytes will be calculated by caller
-                        0, // Files processed will be calculated by caller
-                        0, // Total files will be calculated by caller
-                        stopwatch.Elapsed,
-                        false
-                    ));
-
-                    if (backup.Encrypt)
+                    // Get current state for error reporting
+                    var currentState = GetJobState(name);
+                    if (currentState != null)
                     {
-                        EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
+                        var progress = (int)((currentState.FilesRemaining * 100.0) / currentState.TotalFilesCount);
+                        var bytesTransferred = currentState.TotalFilesSize - currentState.BytesRemaining;
+                        var filesProcessed = currentState.TotalFilesCount - currentState.FilesRemaining;
+
+                        // Report error progress with calculated values
+                        FileProgressChanged?.Invoke(this, new FileProgressEventArgs(
                             name,
                             sourceFile,
-                            0,
-                            true,
-                            true,
-                            ex.Message
+                            targetFile,
+                            sourceInfo.Length,
+                            progress,
+                            bytesTransferred,
+                            currentState.TotalFilesSize,
+                            filesProcessed,
+                            currentState.TotalFilesCount,
+                            stopwatch.Elapsed,
+                            false
                         ));
+
+                        if (backup.Encrypt)
+                        {
+                            EncryptionProgressChanged?.Invoke(this, new EncryptionProgressEventArgs(
+                                name,
+                                sourceFile,
+                                progress,
+                                true,
+                                true,
+                                ex.Message
+                            ));
+                        }
                     }
                 }
             }
@@ -837,6 +858,15 @@ namespace EasySaveV3._0.Managers
                     throw new InvalidOperationException($"Backup job '{name}' is already running");
                 }
 
+                // Update state to Active immediately
+                UpdateJobState(name, state =>
+                {
+                    state.Status = JobStatus.Active;
+                    state.ProgressPercentage = 0;
+                    state.CurrentSourceFile = backup.SourcePath;
+                    state.CurrentTargetFile = backup.TargetPath;
+                });
+
                 resources.Stopwatch.Start();
                 var startTime = DateTime.Now;
                 var totalFiles = 0;
@@ -860,6 +890,15 @@ namespace EasySaveV3._0.Managers
                     totalBytes = allFiles.Sum(f => new FileInfo(f).Length);
                 }
 
+                // Update state with total files and bytes
+                UpdateJobState(name, state =>
+                {
+                    state.TotalFilesCount = totalFiles;
+                    state.TotalFilesSize = totalBytes;
+                    state.FilesRemaining = totalFiles;
+                    state.BytesRemaining = totalBytes;
+                });
+
                 // Log the start of file processing with priority information
                 var fileList = string.Join("\n", 
                     priorityFiles.Select(f => $"- {Path.GetFileName(f)} (Priority)").Concat(
@@ -875,20 +914,6 @@ namespace EasySaveV3._0.Managers
                     Message = $"Starting backup with {totalFiles} files ({priorityFiles.Count} priority, {normalFiles.Count} non-priority):\n{fileList}",
                     LogType = "INFO",
                     ActionType = "BACKUP_STARTED"
-                });
-
-                // Update initial state
-                UpdateJobState(name, state =>
-                {
-                    state.Status = JobStatus.Active;
-                    state.ProgressPercentage = 0;
-                    state.TotalFilesCount = totalFiles;
-                    state.TotalFilesSize = totalBytes;
-                    state.FilesRemaining = totalFiles;
-                    state.BytesRemaining = totalBytes;
-                    state.ProgressPercentage = 0;
-                    state.CurrentSourceFile = backup.SourcePath;
-                    state.CurrentTargetFile = backup.TargetPath;
                 });
 
                 // Process priority files first
@@ -999,7 +1024,6 @@ namespace EasySaveV3._0.Managers
                                 
                                 return result;
                             }
-
                             finally
                             {
                                 ReleaseThreadSlot(false);

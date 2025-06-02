@@ -651,6 +651,19 @@ namespace EasySaveV3._0
         {
             bool hasBackups = _backupListView.Items.Count > 0;
             bool hasSelection = _backupListView.SelectedItems.Count > 0;
+            bool isActive = false;
+            bool isPaused = false;
+
+            if (hasSelection)
+            {
+                var selectedItem = _backupListView.SelectedItems[0];
+                var state = _backupController.GetBackupState(selectedItem.Text);
+                if (state != null)
+                {
+                    isActive = state.Status == "Active";
+                    isPaused = state.Status == "Paused";
+                }
+            }
 
             // Update menu items
             if (_editBackupMenuItem != null)
@@ -659,6 +672,11 @@ namespace EasySaveV3._0
                 _deleteBackupMenuItem.Enabled = hasSelection;
             if (_runBackupMenuItem != null)
                 _runBackupMenuItem.Enabled = hasSelection;
+
+            // Update control buttons
+            _pauseButton.Enabled = hasSelection && isActive;
+            _resumeButton.Enabled = hasSelection && isPaused;
+            _stopButton.Enabled = hasSelection && (isActive || isPaused);
 
             // Update "Run All" menu item
             foreach (ToolStripItem item in _menuStrip.Items)
@@ -861,6 +879,14 @@ namespace EasySaveV3._0
                     var selectedBackups = selectedItems.Cast<ListViewItem>()
                         .Select(item => item.Text)
                         .ToList();
+
+                    // Update state to Active immediately for all selected backups
+                    foreach (var backupName in selectedBackups)
+                    {
+                        var item = _backupItems[backupName];
+                        item.SubItems[4].Text = "Active";
+                        item.BackColor = Color.LightGreen;
+                    }
 
                     await _backupController.StartSelectedBackups(selectedBackups);
 
@@ -1144,6 +1170,72 @@ namespace EasySaveV3._0
                     control.Text = _languageManager.GetTranslation(translationKey);
                 }
                 UpdateControlTexts(control.Controls);
+            }
+        }
+
+        private void PauseButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_backupListView.SelectedItems.Count > 0)
+                {
+                    var selectedItem = _backupListView.SelectedItems[0];
+                    _backupController.PauseBackup(selectedItem.Text);
+                    UpdateStatus(_languageManager.GetTranslation("status.backupPaused"));
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("menu.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        private void ResumeButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_backupListView.SelectedItems.Count > 0)
+                {
+                    var selectedItem = _backupListView.SelectedItems[0];
+                    _backupController.ResumeBackup(selectedItem.Text);
+                    UpdateStatus(_languageManager.GetTranslation("status.backupInProgress"));
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("menu.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        private void StopButton_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (_backupListView.SelectedItems.Count > 0)
+                {
+                    var selectedItem = _backupListView.SelectedItems[0];
+                    _backupController.StopBackup(selectedItem.Text);
+                    UpdateStatus(_languageManager.GetTranslation("status.backupStopped"));
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    _languageManager.GetTranslation("message.error").Replace("{0}", ex.Message),
+                    _languageManager.GetTranslation("menu.title"),
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
             }
         }
     }
