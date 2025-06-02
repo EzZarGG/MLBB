@@ -14,6 +14,7 @@ namespace EasySaveV3._0.Managers
     {
         public const string NotStarted = "NotStarted";
         public const string Active = "Active";
+        public const string Paused = "Paused";
         public const string Completed = "Completed";
         public const string Error = "Error";
     }
@@ -55,6 +56,7 @@ namespace EasySaveV3._0.Managers
         public event EventHandler<FileProgressEventArgs>? FileProgressChanged;        // Fired when file operation progress changes
         public event EventHandler<EncryptionProgressEventArgs>? EncryptionProgressChanged;  // Fired when encryption progress changes
         public event EventHandler<string>? BusinessSoftwareDetected;  // Fired when business software is detected during backup
+        public event EventHandler<string>? BusinessSoftwareResumed;
 
         // Add thread pool configuration
         private static readonly SemaphoreSlim _priorityThreadPool;
@@ -664,40 +666,59 @@ namespace EasySaveV3._0.Managers
             
             return sortedFiles;
         }
-
-        // Add thread management methods
-        private async Task AcquireThreadSlotAsync(bool isPriority)
+        private class ThreadSlot : IDisposable
         {
-            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
-            await semaphore.WaitAsync();
-            
-            lock (_threadPoolLock)
+            private readonly SemaphoreSlim _semaphore;
+            private bool _acquired;
+
+            public ThreadSlot(SemaphoreSlim semaphore)
             {
-                _activeThreadCount++;
-                if (_activeThreadCount > _maxTotalThreads)
+                _semaphore = semaphore;
+                _acquired = false;
+            }
+
+            /// <summary>
+            /// Attend asynchronement l’acquisition d’un slot dans le sémaphore.
+            /// Si le token est annulé, retourne false et n’appelle pas Release plus tard.
+            /// Si l’attente réussit, marque _acquired=true pour que le Dispose() relâche.
+            /// </summary>
+            public async Task<bool> AcquireAsync(CancellationToken cancellationToken)
+            {
+                try
                 {
-                    // Log warning if we exceed max threads
-                    _logger.AddLogEntry(new LogEntry
-                    {
-                        Timestamp = DateTime.Now,
-                        Message = $"Warning: Active thread count ({_activeThreadCount}) exceeds maximum ({_maxTotalThreads})",
-                        LogType = "WARNING",
-                        ActionType = "THREAD_POOL"
-                    });
+                    await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+                    _acquired = true;
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    // L'attente a été annulée : on ne libèrera pas car on a pas réellement acquis
+                    _acquired = false;
+                    return false;
+                }
+            }
+
+            /// <summary>
+            /// Libère le slot si et seulement si AcquireAsync avait réussi.
+            /// </summary>
+            public void Dispose()
+            {
+                if (_acquired)
+                {
+                    // On sait que ce ThreadSlot avait obtenu un WaitAsync(), donc on libère
+                    _semaphore.Release();
+                    _acquired = false;
                 }
             }
         }
-
-        private void ReleaseThreadSlot(bool isPriority)
+        private ThreadSlot GetThreadSlot(bool isPriority)
         {
-            var semaphore = isPriority ? _priorityThreadPool : _normalThreadPool;
-            semaphore.Release();
-            
-            lock (_threadPoolLock)
-            {
-                _activeThreadCount--;
-            }
+            return isPriority
+                ? new ThreadSlot(_priorityThreadPool)
+                : new ThreadSlot(_normalThreadPool);
         }
+
+        
 
         // Create a struct to hold file processing results
         private struct FileProcessingResult
@@ -824,7 +845,7 @@ namespace EasySaveV3._0.Managers
             Backup? backup = null;  // Declare backup variable outside try block
             try
             {
-                CheckForBusinessSoftware(name);  // Check for business software before starting backup
+                 
                 backup = GetJob(name);
                 if (backup == null)
                     throw new InvalidOperationException($"Backup job '{name}' not found");
@@ -905,46 +926,89 @@ namespace EasySaveV3._0.Managers
                         {
                             try
                             {
-                                await AcquireThreadSlotAsync(true);
-                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
-                                
-                                lock (jobLock)
+                                bool alreadySignaledPause = false;
+                                while (_settingsController.IsBusinessSoftwareRunning())
                                 {
-                                    if (result.WasProcessed)
+                                    if (!alreadySignaledPause)
                                     {
-                                        filesProcessed++;
-                                        bytesTransferred += result.BytesTransferred;
-                                        if (backup.Encrypt)
-                                        {
-                                            totalEncryptionTime += result.EncryptionTime;
-                                        }
-                                        processedFilesOrder.Add(sourceFile);
-                                        
-                                        if (result.HasError)
-                                        {
-                                            hasErrors = true;
-                                            errorMessages.Add(result.ErrorMessage!);
-                                        }
-
-                                        // Update progress
-                                        var progress = (int)((filesProcessed * 100.0) / totalFiles);
-                                        UpdateJobState(name, state =>
-                                        {
-                                            state.ProgressPercentage = progress;
-                                            state.FilesRemaining = totalFiles - filesProcessed;
-                                            state.BytesRemaining = totalBytes - bytesTransferred;
-                                            state.CurrentSourceFile = sourceFile;
-                                            state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
-                                        });
+                                        BusinessSoftwareDetected?.Invoke(this, name);
+                                        alreadySignaledPause = true;
                                     }
+
+                                    UpdateJobState(name, state =>
+                                    {
+                                        if (state.Status != JobStatus.Paused)
+                                        {
+                                            state.Status = JobStatus.Paused;
+                                            _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                                  "Backup job paused (business software detected)");
+                                        }
+                                    });
+
+                                    await Task.Delay(500, cancellationToken);
                                 }
-                                
-                                return result;
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+
+                                using (var slot = GetThreadSlot(true))  // true = priorité
+                                {
+                                    bool acquired = await slot.AcquireAsync(cancellationToken);
+                                    if (!acquired)
+                                    {
+                                        // Si l'attente a été annulée, abandonne la copie de ce fichier
+                                        return new FileProcessingResult { WasProcessed = false, HasError = false };
+                                    }
+
+                                    // 3) Traiter le fichier maintenant que l'on a le slot
+                                    var result = await ProcessFileAsync(
+                                        sourceFile, backup, name, jobLock, cancellationToken);
+
+
+                                    lock (jobLock)
+                                    {
+                                        if (result.WasProcessed)
+                                        {
+                                            filesProcessed++;
+                                            bytesTransferred += result.BytesTransferred;
+                                            if (backup.Encrypt)
+                                            {
+                                                totalEncryptionTime += result.EncryptionTime;
+                                            }
+                                            processedFilesOrder.Add(sourceFile);
+
+                                            if (result.HasError)
+                                            {
+                                                hasErrors = true;
+                                                errorMessages.Add(result.ErrorMessage!);
+                                            }
+
+                                            // Update progress
+                                            var progress = (int)((filesProcessed * 100.0) / totalFiles);
+                                            UpdateJobState(name, state =>
+                                            {
+                                                state.ProgressPercentage = progress;
+                                                state.FilesRemaining = totalFiles - filesProcessed;
+                                                state.BytesRemaining = totalBytes - bytesTransferred;
+                                                state.CurrentSourceFile = sourceFile;
+                                                state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
+                                            });
+                                        }
+                                    }
+
+                                    return result;
+                                }
                             }
-                            finally
+                            catch
                             {
-                                ReleaseThreadSlot(true);
+                                // Même en cas d’exception, using garantit que slot.Dispose() libère le sémaphore si AcquireAsync() avait réussi
+                                throw;
                             }
+
                         })
                     );
                 }
@@ -952,58 +1016,96 @@ namespace EasySaveV3._0.Managers
                 // Process normal files
                 if (normalFiles.Any())
                 {
-                    var normalOptions = new ParallelOptions
-                    {
-                        MaxDegreeOfParallelism = _maxNormalThreads,
-                        CancellationToken = cancellationToken
-                    };
+
+                    
 
                     var normalResults = await Task.WhenAll(
                         normalFiles.Select(async sourceFile =>
                         {
                             try
                             {
-                                await AcquireThreadSlotAsync(false);
-                                var result = await ProcessFileAsync(sourceFile, backup, name, jobLock, cancellationToken);
-                                
-                                lock (jobLock)
+                                bool alreadySignaledPause = false;
+                                while (_settingsController.IsBusinessSoftwareRunning())
                                 {
-                                    if (result.WasProcessed)
+                                    if (!alreadySignaledPause)
                                     {
-                                        filesProcessed++;
-                                        bytesTransferred += result.BytesTransferred;
-                                        if (backup.Encrypt)
-                                        {
-                                            totalEncryptionTime += result.EncryptionTime;
-                                        }
-                                        processedFilesOrder.Add(sourceFile);
-                                        
-                                        if (result.HasError)
-                                        {
-                                            hasErrors = true;
-                                            errorMessages.Add(result.ErrorMessage!);
-                                        }
-
-                                        // Update progress
-                                        var progress = (int)((filesProcessed * 100.0) / totalFiles);
-                                        UpdateJobState(name, state =>
-                                        {
-                                            state.ProgressPercentage = progress;
-                                            state.FilesRemaining = totalFiles - filesProcessed;
-                                            state.BytesRemaining = totalBytes - bytesTransferred;
-                                            state.CurrentSourceFile = sourceFile;
-                                            state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
-                                        });
+                                        BusinessSoftwareDetected?.Invoke(this, name);
+                                        alreadySignaledPause = true;
                                     }
+
+                                    UpdateJobState(name, state =>
+                                    {
+                                        if (state.Status != JobStatus.Paused)
+                                        {
+                                            state.Status = JobStatus.Paused;
+                                            _logger.LogAdminAction(name, "BACKUP_PAUSED",
+                                                                  "Backup job paused (business software detected)");
+                                        }
+                                    });
+
+                                    await Task.Delay(500, cancellationToken);
                                 }
-                                
-                                return result;
+
+                                UpdateJobState(name, state =>
+                                {
+                                    state.Status = JobStatus.Active;
+                                    _logger.LogAdminAction(name, "BACKUP_RESUMED",
+                                                          "Backup job resumed (business software stopped)");
+                                });
+                                BusinessSoftwareResumed?.Invoke(this, name);
+                                using (var slot = GetThreadSlot(false))  // false = normal
+                                {
+                                    bool acquired = await slot.AcquireAsync(cancellationToken);
+                                    if (!acquired)
+                                    {
+                                        return new FileProcessingResult { WasProcessed = false, HasError = false };
+                                    }
+
+                                    var result = await ProcessFileAsync(
+                                        sourceFile, backup, name, jobLock, cancellationToken);
+
+
+                                    lock (jobLock)
+                                    {
+                                        if (result.WasProcessed)
+                                        {
+                                            filesProcessed++;
+                                            bytesTransferred += result.BytesTransferred;
+                                            if (backup.Encrypt)
+                                            {
+                                                totalEncryptionTime += result.EncryptionTime;
+                                            }
+                                            processedFilesOrder.Add(sourceFile);
+
+                                            if (result.HasError)
+                                            {
+                                                hasErrors = true;
+                                                errorMessages.Add(result.ErrorMessage!);
+                                            }
+
+                                            // Update progress
+                                            var progress = (int)((filesProcessed * 100.0) / totalFiles);
+                                            UpdateJobState(name, state =>
+                                            {
+                                                state.ProgressPercentage = progress;
+                                                state.FilesRemaining = totalFiles - filesProcessed;
+                                                state.BytesRemaining = totalBytes - bytesTransferred;
+                                                state.CurrentSourceFile = sourceFile;
+                                                state.CurrentTargetFile = Path.Combine(backup.TargetPath, Path.GetRelativePath(backup.SourcePath, sourceFile));
+                                            });
+                                        }
+                                    }
+
+                                    return result;
+                                }
+                            }
+                            catch
+                            {
+                                // Même en cas d’exception, using garantit que slot.Dispose() libère le sémaphore si AcquireAsync() avait réussi
+                                throw;
                             }
 
-                            finally
-                            {
-                                ReleaseThreadSlot(false);
-                            }
+
                         })
                     );
                 }
